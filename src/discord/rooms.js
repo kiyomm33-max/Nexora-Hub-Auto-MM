@@ -32,12 +32,14 @@ export async function staffLog(ctx, embed) {
 }
 
 /** Re-render the live status message in the deal room. */
-export async function refreshStatus(ctx, deal) {
+export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   const ch = await fetchChannel(ctx, deal.channel_id);
   if (!ch) return;
-  const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: { parse: [] } };
+  const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: bump ? { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } : { parse: [] } };
   if (deal.status_message_id) {
-    try { return await (await ch.messages.fetch(deal.status_message_id)).edit(payload); } catch { /* fall through to resend */ }
+    // bump = repost at the bottom of the room (and ping) so the buttons are never buried under notices
+    if (bump) { try { await (await ch.messages.fetch(deal.status_message_id)).delete(); } catch { /* already gone */ } }
+    else { try { return await (await ch.messages.fetch(deal.status_message_id)).edit(payload); } catch (e) { log.error('status edit failed, reposting', e); } }
   }
   const m = await ch.send(payload);
   ctx.deals.setChannel(deal.id, 'status_message_id', m.id);
@@ -68,9 +70,9 @@ const NOTICE = {
 
 export async function syncDeal(ctx, deal, change) {
   if (change === 'activated' || change === 'confirmed') return;
-  await refreshStatus(ctx, deal);
+  await refreshStatus(ctx, deal, { bump: ['escrow', 'released'].includes(change) });
   const room = await fetchChannel(ctx, deal.channel_id);
-  if (room && NOTICE[change]) await room.send({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } }).catch(() => {});
+  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change)) await room.send({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } }).catch(() => {});
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
   if (change === 'completed') await publishCompleted(ctx, deal);
   if (['disputed', 'completed', 'cancelled'].includes(change))
