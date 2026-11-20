@@ -60,7 +60,7 @@ export async function publishCompleted(ctx, deal) {
 const NOTICE = {
   observed: (d) => `Provider reported a payment observation (${d.confirmations} conf.). This is a blockchain observation, **not** escrow confirmation.`,
   escrow: () => 'The escrow provider has **confirmed the funds are held in escrow**.',
-  completed: () => 'The escrow provider confirmed completion. This deal is **complete**.',
+  completed: () => 'The payout was sent and this deal is **complete**. This room closes automatically in 5 minutes and a transcript is saved.',
   cancelled: () => 'This deal was cancelled.',
   claimed: (d) => `<@${d.middleman_id}> is now the assigned middleman.`,
   evidence: () => 'New evidence was added to the deal record.',

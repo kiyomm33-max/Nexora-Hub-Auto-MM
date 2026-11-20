@@ -91,7 +91,7 @@ const text = (t) => new TextDisplayBuilder().setContent(t);
 import { emojiMap } from './emojis.js';
 export const coinIcon = (c) => emojiMap.get(c.asset) ?? c.mark;
 const section = (t, key) => new SectionBuilder().addTextDisplayComponents(text(t))
-  .setButtonAccessory(new ButtonBuilder().setCustomId(`nx:am-start:${key}`).setLabel('Start').setStyle(ButtonStyle.Success));
+  .setButtonAccessory(new ButtonBuilder().setCustomId(`nx:am-start:${key}`).setLabel('Start').setStyle(ButtonStyle.Primary));
 
 /** Components V2 panel: one row per coin with its own Start button. */
 export function panelPayload(cfg, mode) {
