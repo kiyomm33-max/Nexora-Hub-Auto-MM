@@ -1,0 +1,19 @@
+{
+  "name": "nexora-hub",
+  "version": "1.0.0",
+  "description": "Nexora Hub - automated middleman Discord bot (demo mode by default)",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/",
+    "deploy-commands": "node src/discord/register.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "qrcode": "^1.5.4"
+  }
+}
