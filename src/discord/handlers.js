@@ -4,7 +4,7 @@ import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { addVouch } from '../core/vouches.js';
 import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
-import { staffRole, can, CAPS } from '../core/permissions.js';
+import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
 import { backupNow } from '../jobs/backup.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
@@ -107,7 +107,7 @@ async function openTicket(i, ctx, subject, details) {
   limit(ctx, i, 'ticket', 3, 600e3);
   subject = V.text(subject, { min: 3, max: 80, label: 'Subject' }); details = V.text(details, { min: 10, max: 1000, label: 'Details' });
   const id = rooms.newTicketId();
-  const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: CAPS['ticket.handle'], topic: `Support ticket ${id}` });
+  const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: LEVELS.admin, topic: `Support ticket ${id}` });
   ctx.db.prepare('INSERT INTO tickets(id,kind,opener,channel_id,subject,created_at) VALUES(?,?,?,?,?,?)').run(id, 'support', i.user.id, ch.id, subject, new Date().toISOString());
   audit(ctx.db, { actor: i.user.id, action: 'ticket.opened', detail: { id } });
   await ch.send({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } });

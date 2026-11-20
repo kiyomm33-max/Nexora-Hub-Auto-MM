@@ -5,7 +5,7 @@ import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { audit } from '../core/audit.js';
 import { calcFee, calcTotals } from '../core/fees.js';
-import { CAPS } from '../core/permissions.js';
+import { CAPS, LEVELS } from '../core/permissions.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
 import * as rooms from './rooms.js';
@@ -67,7 +67,7 @@ export async function startAuto(i, ctx, key) {
   const deal = ctx.deals.createAuto({ creator: i.user.id, asset: coin.asset, network: coin.network, channelId: null });
   let ch;
   try {
-    ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `${key.toLowerCase()}-${deal.id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.dealCategory, members: [i.user.id], minStaff: CAPS['dispute.review'], topic: `Nexora Hub deal ${deal.id}` });
+    ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `${key.toLowerCase()}-${deal.id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.dealCategory, members: [i.user.id], minStaff: LEVELS.admin, topic: `Nexora Hub deal ${deal.id}` });
   } catch (e) { ctx.deals.cancel(deal.id, 'system', 'room creation failed', { staff: true }); throw e; }
   ctx.deals.db.prepare('UPDATE deals SET channel_id=? WHERE id=?').run(ch.id, deal.id);
   const d = ctx.deals.get(deal.id);
