@@ -13,14 +13,39 @@ import * as rooms from './rooms.js';
 export class UserError extends Error {}
 const EPH = MessageFlags.Ephemeral;
 
+/** Who gets pinged when this deal's message is (re)posted. */
+export function pingIds(ctx, d) {
+  const ids = (...x) => x.filter(Boolean);
+  if (d.status === 'waiting_parties') {
+    const set = ctx.deals.setup(d);
+    switch (set.step) {
+      case 'type': case 'partner': return ids(d.party_a);
+      case 'accept': return ids(d.desc_by === d.party_a ? d.party_b : d.party_a);
+      case 'fee': return ids(d.sender_id);
+      case 'fee_confirm': return ids(d.receiver_id);
+      default: return ids(d.party_a, d.party_b);
+    }
+  }
+  const ph = ui.phaseOf(d);
+  if (ph === 'invoice') return ids(d.sender_id);
+  if (ph === 'payout') return ids(d.receiver_id);
+  if (['detected', 'received', 'paying'].includes(ph)) return ids(d.sender_id, d.receiver_id);
+  return [];
+}
+
+export const markPosted = (id, p) => posted.set(id, sigOf(p));
 export async function payloadFor(ctx, d) {
-  if (d.status === 'waiting_parties') return { files: [], ...ui.stepPayload(ctx.cfg, d, ctx.deals.setup(d)) };
+  if (d.status === 'waiting_parties') {
+    const p = { files: [], ...ui.stepPayload(ctx.cfg, d, ctx.deals.setup(d)) };
+    if (!((p.flags ?? 0) & (1 << 15))) p.content = pingIds(ctx, d).map((x) => `<@${x}>`).join(' ') || undefined;
+    return p;
+  }
   const embeds = ui.statusEmbeds(ctx.cfg, d); const files = [];
   if (ui.phaseOf(d) === 'invoice' && d.pay_address) {
     try { files.push(new AttachmentBuilder(await QRCode.toBuffer(d.pay_address, { margin: 1, width: 220 }), { name: 'qr.png' })); embeds[1].setThumbnail('attachment://qr.png'); }
     catch (e) { log.error('qr failed', e); }
   }
-  const ping = ui.phaseOf(d) === 'invoice' ? `<@${d.sender_id}>` : ui.phaseOf(d) === 'received' ? `<@${d.sender_id}> <@${d.receiver_id}>` : ui.phaseOf(d) === 'payout' ? `<@${d.receiver_id}>` : null;
+  const ping = pingIds(ctx, d).map((x) => `<@${x}>`).join(' ') || null;
   return { content: ping, embeds, files, components: ui.roomButtons(d, ctx.cfg) };
 }
 
@@ -40,19 +65,21 @@ async function locked(ctx, id, fn) {
 }
 const V2 = 1 << 15;
 const editable = (p) => ((p.flags ?? 0) & V2 ? { ...p, allowedMentions: { parse: [] } } : { ...p, content: p.content ?? null, allowedMentions: { parse: [] } });
-/** Show a deal's current payload on its step message. Components V2 and embed messages cannot be converted into each other, so a switch deletes the old message and posts a new one. */
-export async function putStep(ctx, channel, msg, d, p) {
-  const was = !!(msg.flags?.bitfield & V2); const now = !!((p.flags ?? 0) & V2);
-  if (was === now) return msg.edit(editable(p));
-  const m = await channel.send({ ...editable(p), content: now ? undefined : (p.content ?? undefined) });
+/** Post a deal's current payload as a NEW message that pings the people who need to act, then delete the previous one. */
+const posted = new Map();
+export const sigOf = (p) => JSON.stringify({ c: p.content ?? null, e: p.embeds, k: p.components, f: p.flags ?? 0 });
+export async function putStep(ctx, channel, msg, d, p, { force = false } = {}) {
+  const sig = sigOf(p);
+  if (!force && msg && posted.get(d.id) === sig) return msg; // the same state was just posted (button handler and room sync both ask)
+  posted.set(d.id, sig);
+  const m = await channel.send({ ...p, content: (p.flags ?? 0) & V2 ? undefined : (p.content ?? undefined), allowedMentions: { users: pingIds(ctx, d) } });
   ctx.deals.setChannel(d.id, 'status_message_id', m.id);
-  await msg.delete().catch(() => {});
+  const prev = d.status_message_id && d.status_message_id !== msg?.id ? await channel.messages.fetch(d.status_message_id).catch(() => null) : null;
+  for (const x of [msg, prev]) if (x && x.id !== m.id) await x.delete?.().catch(() => {});
   return m;
 }
 const done = async (i, ctx, d) => {
   const p = await payloadFor(ctx, d);
-  const was = !!(i.message?.flags?.bitfield & V2); const now = !!((p.flags ?? 0) & V2);
-  if (was === now) return i.update(editable(p));
   await i.deferUpdate(); return putStep(ctx, i.channel, i.message, d, p);
 };
 const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, votes });

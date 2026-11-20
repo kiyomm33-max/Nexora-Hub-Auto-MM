@@ -5,8 +5,8 @@ import { ChannelType, PermissionFlagsBits as P, AttachmentBuilder, ActionRowBuil
 import { LEVELS, CAPS } from '../core/permissions.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
-import { base, dealEmbed, completedEmbed, BRAND } from './ui.js';
-import { payloadFor, putStep } from './automm.js';
+import { base, dealEmbed, completedEmbed, BRAND, phaseOf } from './ui.js';
+import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
 
@@ -34,17 +34,18 @@ export async function staffLog(ctx, embed) {
 }
 
 /** Re-render the live status message in the deal room. */
+const lastPhase = new Map();
 export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   const ch = await fetchChannel(ctx, deal.channel_id);
   if (!ch) return;
-  const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: bump ? { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } : { parse: [] } };
-  if (deal.status_message_id) {
-    // bump = repost at the bottom of the room (and ping) so the buttons are never buried under notices
-    if (bump) { try { await (await ch.messages.fetch(deal.status_message_id)).delete(); } catch { /* already gone */ } }
-    else { try { return await putStep(ctx, ch, await ch.messages.fetch(deal.status_message_id), deal, payload); } catch (e) { log.error('status edit failed, reposting', e); } }
-  }
-  const m = await ch.send(payload);
-  ctx.deals.setChannel(deal.id, 'status_message_id', m.id);
+  const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: { users: pingIds(ctx, deal) } };
+  const phase = deal.status === 'waiting_parties' ? `s:${ctx.deals.setup(deal).step}` : phaseOf(deal);
+  const changed = lastPhase.get(deal.id) !== phase; lastPhase.set(deal.id, phase);
+  let old = null;
+  if (deal.status_message_id) { try { old = await ch.messages.fetch(deal.status_message_id); } catch { /* already gone */ } }
+  // progress ticks inside one phase (confirmation counts) edit in place; everything else is a fresh message with a ping
+  if (old && !bump && !changed && deal.status !== 'waiting_parties' && payload.flags == null) { try { markPosted(deal.id, payload); return await old.edit({ ...payload, content: payload.content ?? null }); } catch (e) { log.error('status edit failed, reposting', e); } }
+  return putStep(ctx, ch, old, deal, payload, { force: !old || bump });
 }
 
 export async function publishCompleted(ctx, deal) {

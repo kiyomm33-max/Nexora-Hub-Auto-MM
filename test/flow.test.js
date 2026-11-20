@@ -25,7 +25,7 @@ function setup() {
   const db = openDb(':memory:'); const deals = new DealService(db, { mode: 'demo' });
   const chans = new Map(); let seq = 0;
   const mkChan = (id, name) => { const c = { id, name, sent: [], msgs: new Map(), deleted: false, perms: [], permissionOverwrites: { edit: async (id, o) => { c.perms.push([id, o]); } },
-    async send(p) { const m = { id: `m${++seq}`, ...p, edit: async (x) => Object.assign(m, x) }; c.sent.push(m); c.msgs.set(m.id, m); return m; },
+    async send(p) { const m = { id: `m${++seq}`, ...p, edit: async (x) => Object.assign(m, x), delete: async () => { c.msgs.delete(m.id); } }; c.sent.push(m); c.msgs.set(m.id, m); return m; },
     messages: { fetch: async (a) => (typeof a === 'string' ? c.msgs.get(a) : (() => { const col = new Map(); return Object.assign(col, { last: () => null }); })()) },
     delete: async () => { c.deleted = true; } }; chans.set(id, c); return c; };
   for (const id of ['completed', 'vouches', 'slog', 'tr']) mkChan(id, id);
@@ -402,4 +402,18 @@ test('rules: staff-only, posted to the rules channel as embeds within Discord li
   const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'rules' }); await route(i, ctx);
   const p = ctx.chans.get('rulesch').sent[0]; assert.ok(p.embeds.length >= 6 && p.embeds.length <= 10);
   let total = 0; for (const e of p.embeds) { const j = e.toJSON(); assert.ok(j.description.length <= 4096); total += j.title.length + j.description.length; } assert.ok(total <= 6000, `total ${total}`);
+});
+
+test('every step posts a NEW message that pings the right person, and the previous one is deleted', async () => {
+  const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
+  const live = () => [...ch.msgs.values()].filter((m) => m.id === ctx.deals.get(id).status_message_id);
+  const before = ctx.deals.get(id).status_message_id;
+  const sel = fake(ctx, 'select', A, { customId: `nx:am-type:${id}`, channel: ch, values: ['robux'] }); await route(sel, ctx);
+  const m1 = ctx.deals.get(id).status_message_id; assert.notEqual(m1, before, 'new message, not an edit'); assert.ok(!ch.msgs.has(before), 'previous message deleted');
+  assert.match(ch.msgs.get(m1).content, new RegExp(`<@${A}>`));
+  await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
+  const m2 = ctx.deals.get(id).status_message_id; assert.notEqual(m2, m1); assert.ok(!ch.msgs.has(m1));
+  assert.equal(ctx.deals.get(id).party_b, B); assert.equal(ch.sent.filter((m) => m.id === m2).length, 1, 'posted once, not twice');
+  await click(ctx, A, `nx:am-role:${id}:sender`); const m3 = ctx.deals.get(id).status_message_id; assert.notEqual(m3, m2); assert.equal(live().length, 1);
+  assert.equal(JSON.stringify(ch.msgs.get(m3).components).includes(`<@${B}>`), true, 'both traders pinged on the role card');
 });
