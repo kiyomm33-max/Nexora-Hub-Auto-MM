@@ -2,8 +2,9 @@ import { UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, TextDisplayBui
 import { STATUS } from '../core/deals.js';
 import { LABELS } from '../core/permissions.js';
 
-export const BRAND = { name: 'Nexora Hub', purple: 0x7b2ff7, deep: 0x4b1d9a, black: 0x0b0b0f, white: 0xffffff, red: 0xc0264b, green: 0x7b2ff7 };
-const STATUS_COLOR = { waiting_parties: BRAND.purple, awaiting_provider: BRAND.purple, verification_pending: 0xb98cff, disputed: BRAND.red, completed: 0xf2f2f7, cancelled: 0x3a3a45 };
+const BLUE = 0x5865f2; // same blue as the primary buttons
+export const BRAND = { name: 'Nexora Hub', blue: BLUE, purple: BLUE, deep: BLUE, black: 0x0b0b0f, white: 0xffffff, red: BLUE, green: BLUE, danger: 0xc0264b };
+const STATUS_COLOR = { waiting_parties: BLUE, awaiting_provider: BLUE, verification_pending: BLUE, disputed: BRAND.danger, completed: BLUE, cancelled: BLUE };
 const STATUS_MARK = { waiting_parties: '◌', awaiting_provider: '◔', verification_pending: '◑', disputed: '▲', completed: '●', cancelled: '✕' };
 
 export const brand = (e, cfg) => {
@@ -11,7 +12,7 @@ export const brand = (e, cfg) => {
   if (cfg?.brandLogo) e.setThumbnail(cfg.brandLogo);
   return e;
 };
-export const base = (cfg, title, desc, color = BRAND.purple) => brand(new EmbedBuilder().setColor(color).setAuthor({ name: 'NEXORA HUB' }).setTitle(title).setDescription(desc ?? null), cfg);
+export const base = (cfg, title, desc, color = BRAND.purple) => brand(new EmbedBuilder().setColor(color).setTitle(title).setDescription(desc ?? null), cfg);
 export const errorEmbed = (cfg, msg) => base(cfg, 'Action not completed', msg, BRAND.red);
 export const okEmbed = (cfg, title, msg) => base(cfg, title, msg);
 
@@ -107,8 +108,8 @@ export function panelPayload(cfg, mode) {
   ] };
 }
 export const startedEmbeds = (cfg, d) => [
-  base(cfg, `${(() => { const c = Object.values(COINS).find((x) => x.asset === d.asset && x.network === d.network); return c ? coinIcon(c) : ''; })()}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system. Deal ID \`${d.id}\`. Please contact support if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
-  base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal inside this ticket. Nobody from Nexora Hub will ask for passwords, 2FA codes, cookies, seed phrases or private keys.', BRAND.red),
+  base(cfg, `${(() => { const c = Object.values(COINS).find((x) => x.asset === d.asset && x.network === d.network); return c ? coinIcon(c) : ''; })()}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system.\n\n**Deal ID:** \`${d.id}\`\nPlease **contact support** if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
+  base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal **inside this ticket**. Nobody from Nexora Hub will ever ask for **passwords, 2FA codes, cookies, seed phrases or private keys**.', BRAND.red),
 ];
 export const closeButton = (id) => [row(btn(`nx:am-close:${id}`, 'Close'))];
 
@@ -120,23 +121,23 @@ export function stepPayload(cfg, d, set) {
   const step = set.step;
   const e = (t, desc) => base(cfg, t, desc);
   switch (step) {
-    case 'type': return { embeds: [e('Deal Type', 'To best serve you, we need to know a few deal details. Please use the dropdown menu below to select the deal type:')],
+    case 'type': return { embeds: [e('Deal Type', 'To best serve you, we need to know a few deal details. Please use the dropdown menu below to select the **deal type**:')],
       components: [row(new StringSelectMenuBuilder().setCustomId(`nx:am-type:${d.id}`).setPlaceholder('Select Deal Type').addOptions(DEAL_TYPES))] };
-    case 'partner': return { embeds: [e('Add the other trader', `<@${d.party_a}>, select the trader you are dealing with, or enter their Discord user ID.`)],
+    case 'partner': return { embeds: [e('Add the other trader', `<@${d.party_a}>, select the **trader you are dealing with**, or enter their **Discord user ID**.`)],
       components: [row(new UserSelectMenuBuilder().setCustomId(`nx:am-partner:${d.id}`).setPlaceholder('Select the other trader').setMaxValues(1)), row(btn(`nx:am-partnerid:${d.id}`, 'Enter user ID instead'))] };
     case 'roles': {
       const who = (r) => { const u = Object.keys(set.votes ?? {}).find((x) => set.votes[x] === r); return u ? `<@${u}>` : 'None'; };
       const coin = coinName(d);
-      return { content: `${parties(d)} Welcome! Select roles below.`, embeds: [e('Role Selection', `Select one of the following buttons that corresponds to your role in this deal.\n\n**Sending ${coin}:** ${who('sender')}\n**Receiving ${coin}:** ${who('receiver')}`)],
+      return { content: `${parties(d)} Welcome! Select roles below.`, embeds: [e('Role Selection', `Select the button that corresponds to **your role** in this deal.\n\n**Sending ${coin}:** ${who('sender')}\n**Receiving ${coin}:** ${who('receiver')}`)],
         components: [row(btn(`nx:am-role:${d.id}:sender`, 'Sending: Select', ButtonStyle.Success), btn(`nx:am-role:${d.id}:receiver`, 'Receiving: Select', ButtonStyle.Success)), row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Danger))] };
     }
-    case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out all deal details such as usernames, amounts, and items being traded.\n\n**Type:** ${DEAL_TYPES.find((t) => t.value === d.deal_type)?.label ?? 'Other'}\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
+    case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Type:** ${DEAL_TYPES.find((t) => t.value === d.deal_type)?.label ?? 'Other'}\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
     case 'accept': return { embeds: [e('Accept the deal description', `**Description** by <@${d.desc_by}>:\n>>> ${d.item}\n\n<@${d.desc_by === d.party_a ? d.party_b : d.party_a}>, do you accept this description?`)],
       components: [row(btn(`nx:am-accept:${d.id}`, 'Accept', ButtonStyle.Success), btn(`nx:am-decline:${d.id}`, 'Decline', ButtonStyle.Danger))] };
-    case 'amount': return { embeds: [e('Deal Amount', 'State the amount the bot is expected to receive in USD (eg. 100.59)\n\n**Ticket will be closed in 30 minutes if left unattended**')],
+    case 'amount': return { embeds: [e('Deal Amount', 'State the **amount in USD** the bot is expected to receive (eg. 100.59)\n\n**Ticket will be closed in 30 minutes if left unattended**')],
       components: [row(btn(`nx:am-amount:${d.id}`, 'Enter amount', ButtonStyle.Primary))] };
-    case 'amount_confirm': return { embeds: [e('Amount Confirmation', `Both users must confirm the USD deal amount\n\n**Amount:** \`$${d.amount}\`\n\n${votesText(d, set)}`)],
+    case 'amount_confirm': return { embeds: [e('Amount Confirmation', `**Both users** must confirm the USD deal amount\n\n**Amount:** \`$${d.amount}\`\n\n${votesText(d, set)}`)],
       components: [row(btn(`nx:am-amtok:${d.id}`, 'Correct', ButtonStyle.Success), btn(`nx:am-amtno:${d.id}`, 'Incorrect', ButtonStyle.Secondary))] };
     case 'fee': return { embeds: [e('Middleman fee', `This deal is over the fee threshold, so a **$${d.fee_usd}** fee applies. Both traders must choose who pays it.\n\n${votesText(d, set)}`)],
       components: [row(...Object.keys(FEE_LABEL).map((k) => btn(`nx:am-fee:${d.id}:${k}`, FEE_LABEL[k], ButtonStyle.Primary)))] };
@@ -192,22 +193,22 @@ export function summaryEmbed(cfg, d) {
 }
 export function invoiceEmbed(cfg, d) {
   const demo = d.mode === 'demo';
-  const e = base(cfg, 'Payment Invoice', `<@${d.sender_id}> Send the funds as part of the deal to the escrow address specified below. Please copy the amount provided.${demo ? '\n**DEMO — this address is NOT real. Do not send real funds.**' : ''}`)
+  const e = base(cfg, 'Payment Invoice', `<@${d.sender_id}> **Send the funds** to the escrow address below. Please copy the **exact amount** provided.${demo ? '\n**DEMO — this address is NOT real. Do not send real funds.**' : ''}`)
     .addFields({ name: 'Address', value: `\`${d.pay_address}\`` },
       { name: 'Amount', value: `\`${d.pay_amount}\` ${d.asset} (${usd(d.send_usd)} USD)\nExchange Rate: 1 ${d.asset} = ${d.rate_usd} USD${demo ? ' (DEMO rate)' : ''}` },
       { name: 'Network', value: d.network, inline: true });
   return e;
 }
 export function detectedEmbed(cfg, d) {
-  return base(cfg, 'Transaction Detected', 'Your payment has been detected on the network.\nPlease wait while it receives the required confirmations.\n*Blockchain observation only — not escrow confirmation.*', 0xf0a020)
+  return base(cfg, 'Transaction Detected', 'Your payment has been **detected** on the network.\nPlease wait while it receives the **required confirmations**.\n*Blockchain observation only — not escrow confirmation.*', BLUE)
     .addFields({ name: 'Transaction', value: txLink(d.tx_hash) }, { name: 'Amount Received', value: d.received_crypto ? `\`${d.received_crypto}\` ${d.asset} ≈ ${usd(d.send_usd)} USD` : 'Pending' },
       { name: 'Required Confirmations', value: `\`${d.required_conf}\` (seen: \`${d.confirmations}\`)` });
 }
 export function receivedEmbeds(cfg, d) {
   return [
-    base(cfg, 'Payment Received', 'The payment is now secured by the escrow provider and has reached the required amount of confirmations.', 0x3ddc84)
+    base(cfg, 'Payment Received', 'The payment is now **secured** and has reached the **required confirmations**.', BLUE)
       .addFields({ name: 'Transaction', value: txLink(d.tx_hash) }, { name: 'Confirmations', value: `\`${d.confirmations}\`` }, { name: 'Amount Received', value: `\`${d.received_crypto ?? d.pay_amount}\` ${d.asset} (${usd(d.send_usd)} USD)` }),
-    base(cfg, 'You may now proceed with the deal', `The receiver (<@${d.receiver_id}>) may now provide the goods to the sender (<@${d.sender_id}>).\n\nOnce the deal is complete, the sender must click the **Release** button below to release the funds to the receiver & complete the deal.${d.release_at ? `\n\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R> — <@${d.release_by}> can cancel before it ends.` : ''}`),
+    base(cfg, 'You may now proceed with the deal', `The receiver (<@${d.receiver_id}>) may now provide the goods to the sender (<@${d.sender_id}>).\n\nOnce the deal is complete, the sender must click the **Release** button below to release the funds to the receiver and complete the deal.${d.release_at ? `\n\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R> — <@${d.release_by}> can cancel before it ends.` : ''}`),
   ];
 }
 export const payoutEmbed = (cfg, d) => base(cfg, `Provide your ${coinName(d).replace(/ \[.*\]/, '')} (${d.asset}) address`, `<@${d.receiver_id}> the sender released the payment! Provide your ${d.asset} (${d.network}) address with the button below to start the payout from escrow.\nDouble-check it: payouts cannot be reversed.`);
