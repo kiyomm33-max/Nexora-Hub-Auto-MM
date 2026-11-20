@@ -114,6 +114,12 @@ export function panelPayload(cfg, mode) {
     ...(stable.length ? [mk('Stablecoins', 'Start a deal with USDT or USDC on the network that matches your wallet. Be sure to select the correct network.', stable)] : []),
   ] };
 }
+const usdFmt = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const statsEmbed = (name, avatarUrl, st) => new EmbedBuilder().setColor(BLUE)
+  .setTitle(`${name} - Tier ${st.tier}`)
+  .setDescription(`Global rank ${st.rank ? `\`#${st.rank}\`` : '`unranked`'} - ${st.next == null ? 'Max tier reached' : `Next tier in \`${usdFmt(st.next)}\``}\n\n## Deal Stats\n- **Completed:** ${st.completed}\n- **Total Dealt:** ${usdFmt(st.total)}\n- **Largest Deal:** ${usdFmt(st.largest)}\n- **Completion Rate:** ${st.rate}%`)
+  .setThumbnail(avatarUrl ?? null);
+
 /** Components V2 support panel: one button that opens the ticket form. */
 export function supportPanelPayload() {
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
