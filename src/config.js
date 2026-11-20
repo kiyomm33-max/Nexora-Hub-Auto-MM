@@ -35,6 +35,7 @@ export function loadConfig(e = env) {
     },
     ltc: {
       network: (e.LTC_NETWORK || 'testnet').toLowerCase(), // testnet until you explicitly set mainnet
+      apiUrl: e.LTC_API_URL?.trim().replace(/\/$/, '') || null,
       mnemonic: e.LTC_MNEMONIC?.trim() || null,
       treasury: e.LTC_TREASURY_ADDRESS?.trim() || null,
       confirmations: Number(e.LTC_CONFIRMATIONS || 2),
