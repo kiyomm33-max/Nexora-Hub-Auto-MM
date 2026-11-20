@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.5"
   },
   "scripts": {
     "start": "node src/index.js",
@@ -13,11 +13,13 @@
     "deploy-commands": "node src/discord/register.js"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.99.0",
     "bip32": "^4.0.0",
     "bip39": "^3.1.2",
     "bitcoinjs-lib": "^6.1.10",
     "discord.js": "^14.16.3",
     "ecpair": "^2.1.0",
+    "ethers": "^6.17.0",
     "qrcode": "^1.5.4",
     "tiny-secp256k1": "^2.2.5"
   }

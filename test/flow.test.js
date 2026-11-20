@@ -77,7 +77,7 @@ test('panel is a Components V2 message with a Start button per coin; posted to t
   const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'panel' }); await route(i, ctx);
   const p = ctx.chans.get('panelch').sent[0]; assert.equal(p.flags & 32768, 32768);
   const json = JSON.stringify(p.components.map((c) => c.toJSON()));
-  for (const k of ['BTC', 'ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']) assert.ok(json.includes(`nx:am-start:${k}`), k);
+  for (const k of ['ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']) assert.ok(json.includes(`nx:am-start:${k}`), k);
   const deny = fake(ctx, 'cmd', RND, { command: 'panel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
 

@@ -107,9 +107,11 @@ export function panelPayload(cfg, mode) {
     return c;
   };
   const demo = mode === 'demo' ? '\n**DEMO MODE** — simulated escrow, no real funds.' : '';
+  const on = (keys) => (mode === 'live' ? keys.filter((k) => cfg.coins?.enabled?.includes(k)) : keys);
+  const main = on(['ETH', 'LTC', 'SOL']); const stable = on(['USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']);
   return { flags: 1 << 15, components: [
-    mk('Start Cryptocurrency Deal', `Use the selection below to start a deal with the appropriate coin & network. Be sure all deals abide by the rules. **Nexora Hub** never asks for passwords, 2FA codes or seed phrases.${demo}`, mode === 'live' ? ['LTC'] : ['BTC', 'ETH', 'LTC', 'SOL']),
-    ...(mode === 'live' ? [] : [mk('Stablecoins', 'Start a deal with USDT or USDC on the network that matches your wallet. Be sure to select the correct network.', ['USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20'])]),
+    mk('Start Cryptocurrency Deal', `Use the selection below to start a deal with the appropriate coin & network. Be sure all deals abide by the rules. **Nexora Hub** never asks for passwords, 2FA codes or seed phrases.${demo}`, main),
+    ...(stable.length ? [mk('Stablecoins', 'Start a deal with USDT or USDC on the network that matches your wallet. Be sure to select the correct network.', stable)] : []),
   ] };
 }
 export const startedEmbeds = (cfg, d) => [

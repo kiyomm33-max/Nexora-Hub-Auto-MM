@@ -69,3 +69,6 @@ Layout: `src/core` (deal state machine, audit, validation, permissions, rate lim
 ## Tested vs not tested
 Tested (automated): state machine and every status, duplicate/replayed completion, webhook signature (bad/stale/replay/oversize), permissions for every staff command, vouch rules, audit tamper detection, backups, validation, rate limits, and the full deal → dispute → completed → vouch flow through the real handlers using **fake Discord objects**.
 **Not tested:** anything against the live Discord API (channel permissions as Discord enforces them, modal rendering, command registration) — it needs your bot token and server. No real provider is integrated or tested.
+
+## Multi-coin (live)
+Supported: LTC, ETH, USDT/USDC (ERC-20), USDT (BEP-20), SOL. All wallets derive from one recovery phrase. Set `ENABLED_COINS` (comma list of panel keys) to choose which appear; default is `LTC`. Token payouts need the gas wallet (shown by `/staff wallet`) funded with a little ETH and BNB. ETH and BSC share the same deal address, so senders must use the right network. EVM and SOL always use mainnet.

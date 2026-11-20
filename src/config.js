@@ -42,6 +42,12 @@ export function loadConfig(e = env) {
       maxDealUsd: Number(e.LTC_MAX_DEAL_USD || 100),
       tolerance: Number(e.LTC_UNDERPAY_TOLERANCE || 0.005),
     },
+    maxDealUsd: Number(e.MAX_DEAL_USD || e.LTC_MAX_DEAL_USD || 100),
+    coins: { enabled: list(e.ENABLED_COINS || 'LTC').map((x) => x.toUpperCase()) }, // panel keys, e.g. LTC,ETH,USDT-ERC20,USDC-ERC20,USDT-BEP20,SOL
+    evm: { treasury: e.EVM_TREASURY_ADDRESS?.trim() || null, tolerance: Number(e.LTC_UNDERPAY_TOLERANCE || 0.005),
+      conf: { ethereum: Number(e.ETH_CONFIRMATIONS || 6), bsc: Number(e.BSC_CONFIRMATIONS || 15) },
+      rpcs: { ...(e.ETH_RPC_URL ? { ethereum: list(e.ETH_RPC_URL) } : {}), ...(e.BSC_RPC_URL ? { bsc: list(e.BSC_RPC_URL) } : {}) } },
+    sol: { treasury: e.SOL_TREASURY_ADDRESS?.trim() || null, ...(e.SOL_RPC_URL ? { rpcs: list(e.SOL_RPC_URL) } : {}) },
     ownerUserIds: list(e.OWNER_USER_IDS),
     roles: {
       owner: list(e.ROLE_OWNER_IDS),
