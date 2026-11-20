@@ -393,3 +393,11 @@ test('stats: own embed with rank, largest deal and avatar; only in the stats cha
   assert.match(e.description, /rank `#3`/); assert.match(e.description, /Completed:\*\* 2/); assert.match(e.description, /Largest Deal:\*\* \$120\.50/); assert.match(e.description, /Completion Rate:\*\* 67%/);
   ctx.cfg.channels.stats = 'elsewhere'; const w = fake(ctx, 'cmd', A, { command: 'stats' }); await route(w, ctx); assert.match(text(w), /Use \/stats in/);
 });
+
+test('rules: staff-only, posted to the rules channel as embeds within Discord limits', async () => {
+  const ctx = setup(); ctx.cfg.channels.rules = 'rulesch'; ctx.chans.set('rulesch', { id: 'rulesch', sent: [], async send(p) { this.sent.push(p); } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'rules' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'rules' }); await route(i, ctx);
+  const p = ctx.chans.get('rulesch').sent[0]; assert.ok(p.embeds.length >= 6 && p.embeds.length <= 10);
+  let total = 0; for (const e of p.embeds) { const j = e.toJSON(); assert.ok(j.description.length <= 4096); total += j.title.length + j.description.length; } assert.ok(total <= 6000, `total ${total}`);
+});
