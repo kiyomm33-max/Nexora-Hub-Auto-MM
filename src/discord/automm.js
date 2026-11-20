@@ -44,6 +44,7 @@ const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, vo
 // ---------- start ----------
 export async function startAuto(i, ctx, key) {
   const coin = ui.COINS[key]; if (!coin) throw new UserError('Unknown coin.');
+  if (ctx.mode === 'live' && key !== 'LTC') throw new UserError('Only Litecoin (LTC) deals are available right now.');
   const r = ctx.limiter.check(`amstart:${i.user.id}`, 3, 600e3); if (!r.ok) throw new UserError('Slow down — you are opening deals too quickly.');
   if (ctx.deals.openCount(i.user.id) >= 2) throw new UserError('You already have 2 open deals. Finish or close one first.');
   await i.deferReply({ flags: EPH });
@@ -160,7 +161,8 @@ export const handlers = {
 async function finalize(ctx, deal) {
   const t = calcTotals(deal.amount, deal.fee_usd, deal.fee_payer);
   const withTotals = ctx.deals.patch(deal.id, 'system', { send_usd: t.send, receive_usd: t.receive }, 'setup.totals_calculated');
-  const escrow = await ctx.provider.createEscrow(withTotals);
+  let escrow;
+  try { escrow = await ctx.provider.createEscrow(withTotals); } catch (e) { if (e.userFacing) throw new UserError(e.message); throw e; }
   return ctx.deals.activate(deal.id, { provider: ctx.provider.name, reference: escrow.reference, channelId: deal.channel_id, address: escrow.address, payAmount: escrow.payAmount, rateUsd: escrow.rateUsd });
 }
 
@@ -239,6 +241,7 @@ export async function payAddrSubmit(i, ctx, id, raw) {
   const d = load(ctx, id);
   if (d.receiver_id !== i.user.id) throw new UserError('Only the receiver can provide the payout address.');
   const addr = V.payoutAddress(d.asset, d.network, raw);
+  try { ctx.provider.validateAddress?.(addr); } catch (e) { throw new UserError(e.message); }
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`nx:am-payyes:${id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nx:am-payno:${id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
