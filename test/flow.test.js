@@ -356,3 +356,18 @@ test('completed deal rooms are removed 5 minutes after completion, transcript sa
   assert.ok(ctx.db.prepare('SELECT 1 FROM transcripts WHERE ticket_id=?').get(id)); assert.equal(ctx.chans.get(ctx.room).deleted, true);
   assert.equal(await closeFinishedRooms(ctx, Date.now() + 7 * 60e3), 0, 'only once');
 });
+
+test('partner step: creator types @user or an ID in the room', async () => {
+  const { partnerFromMessage } = await import('../src/discord/automm.js');
+  const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
+  const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
+  await sel(A, `nx:am-type:${id}`, { values: ['in-game'] });
+  const replies = []; const msg = (author, content, mentioned) => ({ author: { id: author, bot: false }, guild: ctx.guild, channel: ch, channelId: ch.id, content, mentions: { users: { first: () => (mentioned ? { id: mentioned } : undefined) } },
+    reply: async (o) => { replies.push(o.content); }, delete: async () => {} });
+  ch.messages = { fetch: async () => ({ edit: async () => {} }) };
+  await partnerFromMessage(msg(B, `${B}`), ctx); assert.equal(ctx.deals.get(id).party_b, null, 'only the creator counts');
+  await partnerFromMessage(msg(A, 'hello'), ctx); assert.match(replies.at(-1), /Mention the other trader/);
+  await partnerFromMessage(msg(A, `<@${A}>`, A), ctx); assert.match(replies.at(-1), /yourself/);
+  await partnerFromMessage(msg(A, `<@${B}>`, B), ctx); assert.equal(ctx.deals.get(id).party_b, B);
+  assert.ok(ch.perms.some(([u]) => u === B));
+});

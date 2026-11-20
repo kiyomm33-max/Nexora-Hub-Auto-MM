@@ -9,7 +9,7 @@ import { selectProvider } from './providers/index.js';
 import { createServer } from './web/server.js';
 import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
-import { recoverReleases } from './discord/automm.js';
+import { recoverReleases, partnerFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
 import { syncDeal, publishCompleted, refreshStatus } from './discord/rooms.js';
@@ -27,8 +27,8 @@ setInterval(() => limiter.sweep(), 600e3).unref();
 audit(db, { category: 'system', actor: 'system', action: 'bot.started', detail: { mode } });
 scheduleBackups(db, cfg);
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-const ctx = { cfg, db, deals, provider, mode, limiter, client };
+let client;
+const ctx = { cfg, db, deals, provider, mode, limiter, client: null };
 let ready = false;
 const hasToken = !!cfg.token;
 
@@ -41,7 +41,10 @@ deals.on('update', (deal, change) => {
 createServer({ cfg, db, deals, mode, health: () => ({ discordReady: hasToken ? ready : undefined, discord: hasToken ? undefined : 'disabled (no DISCORD_TOKEN)' }) })
   .listen(cfg.port, '0.0.0.0', () => log.info(`HTTP listening on :${cfg.port}`));
 
-if (hasToken) {
+function boot(withMessages) {
+  client = new Client({ intents: withMessages ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : [GatewayIntentBits.Guilds] });
+  ctx.client = client; cfg.messageContent = withMessages;
+  if (withMessages) client.on(Events.MessageCreate, (m) => partnerFromMessage(m, ctx).catch((e) => log.error('message handler failed', e)));
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));
   client.once(Events.ClientReady, async () => {
@@ -61,8 +64,12 @@ if (hasToken) {
     if (provider.live) provider.start((ev) => { try { deals.applyProviderEvent(ev); } catch (e) { log.error('applyProviderEvent failed', e); } });
     for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
   });
-  client.login(cfg.token).catch((e) => { log.error('discord login failed', e); process.exit(1); });
-} else log.warn('DISCORD_TOKEN not set: running HTTP/health only');
+  client.login(cfg.token).catch((e) => {
+    if (withMessages && /disallowed intents/i.test(String(e?.message))) { log.warn('Message Content intent is not enabled in the Discord Developer Portal; falling back to the user ID button'); client.destroy(); boot(false); return; }
+    log.error('discord login failed', e); process.exit(1);
+  });
+}
+if (hasToken) boot(true); else log.warn('DISCORD_TOKEN not set: running HTTP/health only');
 
 // Fail fast on unknown errors so Railway restarts the process.
 process.on('unhandledRejection', (e) => log.error('unhandledRejection', e));
