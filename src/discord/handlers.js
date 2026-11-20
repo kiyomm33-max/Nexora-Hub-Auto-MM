@@ -4,6 +4,7 @@ import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { addVouch } from '../core/vouches.js';
 import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
+import { rulesPayload } from './rules.js';
 import { userStats } from '../core/stats.js';
 import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
 import { backupNow } from '../jobs/backup.js';
@@ -155,6 +156,13 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.statsEmbed(name, u.displayAvatarURL?.({ size: 256 }), userStats(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async rules(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;
+    await target.send(rulesPayload());
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'rules.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Rules posted', `Posted in <#${target.id}>.`);
   },
   async supportpanel(i, ctx) {
     need(i, ctx, 'panel.post');

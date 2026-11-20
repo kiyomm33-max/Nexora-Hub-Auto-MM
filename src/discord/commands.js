@@ -20,6 +20,7 @@ export const definitions = [
   new SlashCommandBuilder().setName('mydeals').setDescription('List your recent deals').setDMPermission(false),
   new SlashCommandBuilder().setName('dealinfo').setDescription('Show the live status of a deal').setDMPermission(false).addStringOption(dealId),
   new SlashCommandBuilder().setName('panel').setDescription('Post the Nexora Hub deal panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
+  new SlashCommandBuilder().setName('rules').setDescription('Post the server rules (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('supportpanel').setDescription('Post the Nexora Hub support panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('staff').setDescription('Staff tools').setDMPermission(false).setDefaultMemberPermissions(0)
     .addSubcommand((s) => s.setName('history').setDescription('Append-only audit history of a deal').addStringOption(dealId))
