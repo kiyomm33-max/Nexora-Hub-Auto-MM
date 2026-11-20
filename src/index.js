@@ -47,6 +47,7 @@ if (hasToken) {
   client.on(Events.Error, (e) => log.error('discord client error', e));
   client.once(Events.ClientReady, async () => {
     ready = true; log.info('Discord ready', { tag: client.user.tag });
+    try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
     for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
