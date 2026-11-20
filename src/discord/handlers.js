@@ -1,0 +1,257 @@
+import crypto from 'node:crypto';
+import { MessageFlags, UserSelectMenuBuilder, ActionRowBuilder } from 'discord.js';
+import * as V from '../core/validate.js';
+import { DealError } from '../core/deals.js';
+import { addVouch } from '../core/vouches.js';
+import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
+import { staffRole, can, CAPS } from '../core/permissions.js';
+import { backupNow } from '../jobs/backup.js';
+import { log } from '../logger.js';
+import * as ui from './ui.js';
+import * as rooms from './rooms.js';
+import path from 'node:path';
+import * as am from './automm.js';
+
+export { UserError } from './automm.js';
+import { UserError } from './automm.js';
+const isUserErr = (e) => e instanceof UserError || e instanceof DealError || e instanceof V.ValidationError;
+const EPH = MessageFlags.Ephemeral;
+
+// ---------- helpers ----------
+export function staffOf(i, ctx) {
+  const r = i.member?.roles;
+  const ids = r?.cache ? [...r.cache.keys()] : Array.isArray(r) ? r : [];
+  return staffRole(ids, ctx.cfg.roles, { isGuildOwner: !!i.guild && i.guild.ownerId === i.user.id });
+}
+function need(i, ctx, cap) {
+  const role = staffOf(i, ctx);
+  if (!can(role, cap)) {
+    audit(ctx.db, { category: 'security', actor: i.user.id, action: 'permission.denied', detail: { cap, where: i.commandName ?? i.customId } });
+    throw new UserError('You do not have permission to do that.');
+  }
+  return role;
+}
+function accessDeal(i, ctx, rawId) {
+  const d = ctx.deals.get(V.dealId(rawId));
+  if (!d) throw new UserError('Deal not found.');
+  const staff = can(staffOf(i, ctx), 'dispute.review');
+  if (!ctx.deals.isParty(d, i.user.id) && !staff) {
+    audit(ctx.db, { category: 'security', actor: i.user.id, action: 'permission.denied', dealId: d.id, detail: { where: i.customId ?? i.commandName } });
+    throw new UserError('Only the participants of this deal and staff can do that.');
+  }
+  return { deal: d, staff };
+}
+const limit = (ctx, i, key, max, ms) => {
+  const r = ctx.limiter.check(`${key}:${i.user.id}`, max, ms);
+  if (!r.ok) throw new UserError(`Slow down — try again in ${Math.ceil(r.retryMs / 1000)}s.`);
+};
+async function reply(i, payload) {
+  const p = { flags: EPH, allowedMentions: { parse: [] }, ...payload };
+  if (i.deferred || i.replied) { delete p.flags; return i.followUp({ ...p, flags: EPH }); }
+  return i.reply(p);
+}
+const say = (ctx, i, title, msg) => reply(i, { embeds: [ui.okEmbed(ctx.cfg, title, msg)] });
+
+// ---------- deal room actions ----------
+async function cancelDeal(i, ctx, id) {
+  const { deal, staff } = accessDeal(i, ctx, id);
+  const isStaffCancel = !ctx.deals.isParty(deal, i.user.id);
+  if (isStaffCancel) need(i, ctx, 'deal.cancel');
+  ctx.deals.cancel(deal.id, i.user.id, 'cancelled via button', { staff: isStaffCancel });
+  try { await ctx.provider.cancelEscrow?.(deal); } catch (e) { log.error('provider cancel failed', e); }
+  return say(ctx, i, 'Deal cancelled', `\`${deal.id}\` was cancelled.`);
+}
+async function openDispute(i, ctx, dealId, reason) {
+  limit(ctx, i, 'dispute', 3, 600e3);
+  const { deal } = accessDeal(i, ctx, dealId);
+  const staffOpen = !ctx.deals.isParty(deal, i.user.id);
+  reason = V.text(reason, { min: 10, max: 1000, label: 'Reason' });
+  ctx.deals.dispute(deal.id, i.user.id, reason, { staff: staffOpen });
+  ctx.deals.addEvidence(deal.id, i.user.id, `Dispute reason: ${reason}`, null);
+  let note = 'Referral recorded.';
+  try { note = (await ctx.provider.referDispute(deal, reason))?.note ?? note; } catch (e) { log.error('provider dispute referral failed', e); note = 'Provider referral could not be confirmed automatically — staff have been notified.'; }
+  audit(ctx.db, { actor: 'system', action: 'dispute.provider_referral', dealId: deal.id, detail: { note } });
+  return say(ctx, i, 'Dispute opened', `\`${deal.id}\` is now **Disputed**. ${note}\nStaff review it privately; **the escrow provider decides any release**. Add proof with **Submit evidence**.`);
+}
+async function submitEvidence(i, ctx, dealId, note, url) {
+  limit(ctx, i, 'evidence', 10, 600e3);
+  const { deal } = accessDeal(i, ctx, dealId);
+  ctx.deals.addEvidence(deal.id, i.user.id, V.text(note, { min: 5, max: 1000, label: 'Description' }), V.evidenceUrl(url));
+  return say(ctx, i, 'Evidence recorded', `Saved to \`${deal.id}\` for staff and provider review. Evidence never releases funds.`);
+}
+async function vouch(i, ctx, dealId, rating, text) {
+  limit(ctx, i, 'vouch', 5, 3600e3);
+  const id = V.dealId(dealId);
+  const r = addVouch(ctx.db, { dealId: id, author: i.user.id, rating: V.rating(rating), text: V.text(text, { min: 5, max: 500, label: 'Feedback' }) });
+  const emb = ui.vouchEmbed(ctx.cfg, { dealId: id, author: `<@${i.user.id}>`, target: `<@${r.target}>`, rating: Number(rating), text: V.text(text, { min: 5, max: 500 }), createdAt: r.createdAt });
+  const ch = await rooms.fetchChannel(ctx, ctx.cfg.channels.vouches);
+  if (ch) await ch.send({ embeds: [emb], allowedMentions: { parse: [] } });
+  return reply(i, { embeds: [emb] });
+}
+async function callStaff(i, ctx, key, label) {
+  const r = ctx.limiter.check(`callstaff:${key}`, 1, 300e3);
+  if (!r.ok) throw new UserError(`Staff were already called. You can call again in ${Math.ceil(r.retryMs / 1000)}s.`);
+  const ids = rooms.staffIds(ctx.cfg, CAPS['dispute.review']);
+  await i.channel.send({ content: ids.map((x) => `<@&${x}>`).join(' ') || undefined, embeds: [ui.base(ctx.cfg, 'Staff assistance requested', `<@${i.user.id}> asked for help with ${label}.`)], allowedMentions: { roles: ids } });
+  audit(ctx.db, { actor: i.user.id, action: 'staff.requested', detail: { label } });
+  return say(ctx, i, 'Staff notified', 'A staff member will join shortly.');
+}
+
+// ---------- tickets ----------
+async function openTicket(i, ctx, subject, details) {
+  limit(ctx, i, 'ticket', 3, 600e3);
+  subject = V.text(subject, { min: 3, max: 80, label: 'Subject' }); details = V.text(details, { min: 10, max: 1000, label: 'Details' });
+  const id = rooms.newTicketId();
+  const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: CAPS['ticket.handle'], topic: `Support ticket ${id}` });
+  ctx.db.prepare('INSERT INTO tickets(id,kind,opener,channel_id,subject,created_at) VALUES(?,?,?,?,?,?)').run(id, 'support', i.user.id, ch.id, subject, new Date().toISOString());
+  audit(ctx.db, { actor: i.user.id, action: 'ticket.opened', detail: { id } });
+  await ch.send({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } });
+  return say(ctx, i, 'Ticket opened', `Head to <#${ch.id}>.`);
+}
+async function closeTicket(i, ctx, id) {
+  const t = ctx.db.prepare('SELECT * FROM tickets WHERE id=?').get(id);
+  if (!t || t.status === 'closed') throw new UserError('Ticket not found or already closed.');
+  const role = staffOf(i, ctx);
+  const allowed = t.kind === 'support' ? (t.opener === i.user.id || can(role, 'ticket.handle')) : can(role, 'dispute.review');
+  if (!allowed) { audit(ctx.db, { category: 'security', actor: i.user.id, action: 'permission.denied', detail: { where: 'ticket.close', id } }); throw new UserError('You cannot close this ticket.'); }
+  const r = await ctx.limiter.once(`close:${id}`, async () => {
+    await i.deferReply({ flags: EPH });
+    const sha = await rooms.saveTranscript(ctx, id, i.channel, i.user.id);
+    ctx.db.prepare("UPDATE tickets SET status='closed', closed_at=?, closed_by=?, transcript_sha256=? WHERE id=? AND status='open'").run(new Date().toISOString(), i.user.id, sha, id);
+    audit(ctx.db, { category: t.kind === 'dispute' || can(role, 'ticket.handle') ? 'staff' : 'deal', actor: i.user.id, action: 'ticket.closed', dealId: t.deal_id, detail: { id, sha256: sha } });
+    await say(ctx, i, 'Ticket closed', 'Transcript saved. This channel will be removed shortly.');
+    setTimeout(() => i.channel.delete('Ticket closed').catch(() => {}), 8000).unref?.();
+  });
+  if (r.duplicate) throw new UserError('Already closing.');
+}
+// ---------- slash commands ----------
+const commands = {
+  vouch: (i, ctx) => vouch(i, ctx, i.options.getString('deal_id', true), i.options.getInteger('rating', true), i.options.getString('feedback', true)),
+  ticket: (i) => i.showModal(ui.ticketModal()),
+  dispute: (i, ctx) => openDispute(i, ctx, i.options.getString('deal_id', true), i.options.getString('reason', true)),
+  evidence: (i, ctx) => {
+    const att = i.options.getAttachment('file');
+    const note = i.options.getString('note', true);
+    return submitEvidence(i, ctx, i.options.getString('deal_id', true), note, att?.url);
+  },
+  async mydeals(i, ctx) {
+    const rows = ctx.deals.forUser(i.user.id);
+    return reply(i, { embeds: [ui.base(ctx.cfg, 'Your deals', rows.map((d) => `\`${d.id}\`  •  ${ui.statusText(d.status)}${d.channel_id ? `  •  <#${d.channel_id}>` : ''}`).join('\n') || 'No deals yet. Use /deal to start one.')] });
+  },
+  async dealinfo(i, ctx) {
+    const { deal } = accessDeal(i, ctx, i.options.getString('deal_id', true));
+    return reply(i, { embeds: [ui.dealEmbed(ctx.cfg, deal)] });
+  },
+  async panel(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.panel)) ?? i.channel;
+    await target.send(ui.panelPayload(ctx.cfg, ctx.mode));
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'panel.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Panel posted', `Posted in <#${target.id}>.`);
+  },
+  async staff(i, ctx) {
+    const sub = i.options.getSubcommand();
+    const staffAudit = (action, dealId, detail) => audit(ctx.db, { category: 'staff', actor: i.user.id, action, dealId, detail });
+    if (sub === 'history') {
+      need(i, ctx, 'history.view'); const id = V.dealId(i.options.getString('deal_id', true));
+      if (!ctx.deals.get(id)) throw new UserError('Deal not found.');
+      staffAudit('staff.viewed_history', id, {});
+      return reply(i, { embeds: [ui.historyEmbed(ctx.cfg, id, dealHistory(ctx.db, id))] });
+    }
+    if (sub === 'activity') {
+      const target = i.options.getUser('member');
+      if (target && target.id !== i.user.id) need(i, ctx, 'activity.view'); else need(i, ctx, 'ticket.handle');
+      const uid = target?.id ?? i.user.id; const rows = staffActivity(ctx.db, uid);
+      return reply(i, { embeds: [ui.base(ctx.cfg, 'Staff activity', rows.map((r) => `<t:${Math.floor(Date.parse(r.ts) / 1000)}:R> \`${r.action}\` ${r.deal_id ?? ''}`).join('\n') || `No recorded actions for <@${uid}>.`)] });
+    }
+    if (sub === 'cancel') {
+      need(i, ctx, 'deal.cancel'); const id = V.dealId(i.options.getString('deal_id', true));
+      const reason = V.text(i.options.getString('reason', true), { min: 5, max: 300, label: 'Reason' });
+      const d = ctx.deals.cancel(id, i.user.id, reason, { staff: true });
+      try { await ctx.provider.cancelEscrow?.(d); } catch (e) { log.error('provider cancel failed', e); }
+      return say(ctx, i, 'Deal cancelled', `\`${id}\` cancelled. Logged with your ID and reason.`);
+    }
+    if (sub === 'simulate') {
+      need(i, ctx, 'simulate');
+      if (ctx.mode !== 'demo') throw new UserError('Simulation is only available in demo mode.');
+      const id = V.dealId(i.options.getString('deal_id', true)); const type = i.options.getString('event', true);
+      const d = ctx.deals.get(id); if (!d?.provider_ref) throw new UserError('Deal has no provider reference yet.');
+      staffAudit('staff.simulated_provider_event', id, { type, staff: true });
+      const res = ctx.deals.applyProviderEvent({ id: `sim-${crypto.randomUUID()}`, type, reference: d.provider_ref, confirmations: type === 'funds.confirmed_on_chain' ? 6 : 1, ...(type.startsWith('funds.') ? { txid: d.tx_hash ?? `DEMO-TX-${crypto.randomBytes(8).toString('hex')}`, amount: d.pay_amount ?? undefined, required_confirmations: 1 } : {}) }, { simulated: true });
+      return say(ctx, i, 'Simulated provider event', `\`${type}\` → **${res.outcome}** (DEMO, flagged simulated in the audit log).`);
+    }
+    if (sub === 'audit') {
+      need(i, ctx, 'audit.verify'); const r = verifyAuditChain(ctx.db);
+      return say(ctx, i, r.ok ? 'Audit chain intact' : 'AUDIT CHAIN BROKEN', r.ok ? `${r.checked} entries verified.` : `Tampering detected at entry #${r.brokenAt}.`);
+    }
+    if (sub === 'backup') {
+      need(i, ctx, 'backup'); const f = backupNow(ctx.db, path.join(ctx.cfg.dataDir, 'backups'), ctx.cfg.backupKeep);
+      staffAudit('staff.backup', null, {});
+      return say(ctx, i, 'Backup created', `\`${path.basename(f)}\``);
+    }
+    if (sub === 'claim') {
+      need(i, ctx, 'deal.claim'); const d = ctx.deals.claim(V.dealId(i.options.getString('deal_id', true)), i.user.id);
+      return say(ctx, i, 'Deal claimed', `You are the middleman for \`${d.id}\`.`);
+    }
+  },
+};
+
+// ---------- components ----------
+const buttons = {
+  'am-start': (i, ctx, [key]) => am.startAuto(i, ctx, key),
+  'am-close': (i, ctx, [id]) => am.closeDeal(i, ctx, id, { staffCan: (cap) => can(staffOf(i, ctx), cap) }),
+  'am-release': (i, ctx, [id]) => am.releaseAsk(i, ctx, id),
+  'am-relyes': (i, ctx, [id]) => am.releaseYes(i, ctx, id),
+  'am-relno': (i) => am.releaseNo(i),
+  'am-payaddr': (i, ctx, [id]) => am.payAddr(i, ctx, id),
+  'am-payyes': (i, ctx, [id, addr]) => am.payAddrConfirm(i, ctx, id, addr),
+  'am-payno': (i) => i.update({ content: 'Cancelled. Press Provide address to try again.', embeds: [], components: [] }),
+  'am-cancelpaid': (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.disputeModal(id)); },
+  'am-relcancel': (i, ctx, [id]) => am.releaseCancel(i, ctx, id),
+  'ticket-start': (i) => i.showModal(ui.ticketModal()),
+  'dispute-start': (i) => i.showModal(ui.disputeModal()),
+  async refresh(i, ctx, [id]) { const { deal } = accessDeal(i, ctx, id); return reply(i, { embeds: [ui.dealEmbed(ctx.cfg, deal)] }); },
+  staff: (i, ctx, [id]) => { const { deal } = accessDeal(i, ctx, id); return callStaff(i, ctx, deal.id, `deal \`${deal.id}\``); },
+  async claim(i, ctx, [id]) { need(i, ctx, 'deal.claim'); const d = ctx.deals.claim(V.dealId(id), i.user.id); return say(ctx, i, 'Deal claimed', `You are now the middleman for \`${d.id}\`.`); },
+  cancel: (i, ctx, [id]) => cancelDeal(i, ctx, id),
+  dispute: (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.disputeModal(id)); },
+  evidence: (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.evidenceModal(id)); },
+  vouch: (i, ctx, [id]) => { const { deal } = accessDeal(i, ctx, id); if (deal.status !== 'completed') throw new UserError('Only completed deals can be vouched.'); return i.showModal(ui.vouchModal(id)); },
+  tstaff: (i, ctx, [id]) => callStaff(i, ctx, id, `ticket \`${id}\``),
+  tclose: (i, ctx, [id]) => closeTicket(i, ctx, id),
+};
+const modals = {
+  disputemodal: (i, ctx, [id]) => openDispute(i, ctx, id === 'ask' ? i.fields.getTextInputValue('deal_id') : id, i.fields.getTextInputValue('reason')),
+  evidencemodal: (i, ctx, [id]) => submitEvidence(i, ctx, id, i.fields.getTextInputValue('note'), i.fields.getTextInputValue('url')),
+  'am-payaddrmodal': (i, ctx, [id]) => am.payAddrSubmit(i, ctx, id, i.fields.getTextInputValue('addr')),
+  ticketmodal: (i, ctx) => openTicket(i, ctx, i.fields.getTextInputValue('subject'), i.fields.getTextInputValue('details')),
+  vouchmodal: (i, ctx, [id]) => vouch(i, ctx, id, i.fields.getTextInputValue('rating'), i.fields.getTextInputValue('text')),
+};
+
+export async function route(i, ctx) {
+  try {
+    limit(ctx, i, 'global', 15, 10e3);
+    if (i.isChatInputCommand?.()) return await (commands[i.commandName] ?? (() => { throw new UserError('Unknown command.'); }))(i, ctx);
+    const [ns, action, ...args] = String(i.customId ?? '').split(':');
+    if (ns !== 'nx') return;
+    // Auto-MM setup steps (selects, buttons and modals): nx:am-<step>:<dealId>[:value]
+    if (action?.startsWith('am-') && am.handlers[action.slice(3)] && !buttons[action]) {
+      return await am.handlers[action.slice(3)](i, ctx, args);
+    }
+    // Buttons carry deal IDs; double-click guard per user+button.
+    if (i.isButton?.()) {
+      const h = buttons[action]; if (!h) return;
+      const r = await ctx.limiter.once(`btn:${i.user.id}:${i.customId}`, () => h(i, ctx, args));
+      if (r.duplicate) return reply(i, { embeds: [ui.errorEmbed(ctx.cfg, 'That action is already being processed.')] });
+      return;
+    }
+    if (i.isModalSubmit?.()) { const h = modals[action]; if (h) return await h(i, ctx, args); }
+  } catch (e) {
+    let msg;
+    if (isUserErr(e)) msg = e.message;
+    else { const ref = crypto.randomBytes(3).toString('hex'); log.error('interaction failed', { ref, id: i.customId ?? i.commandName, err: e }); msg = `Something went wrong on our side. Reference \`${ref}\`.`; }
+    try { await reply(i, { embeds: [ui.errorEmbed(ctx.cfg, msg)] }); } catch (e2) { log.error('error reply failed', e2); }
+  }
+}
+
+export const _commands = commands;
