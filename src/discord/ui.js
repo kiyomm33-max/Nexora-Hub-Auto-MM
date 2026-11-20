@@ -26,14 +26,20 @@ export function escrowLines(d) {
   return { obs: `${obs}\n*Blockchain observation only — not escrow confirmation.*`, esc: `${esc}${d.escrow_status !== 'provider_confirmed' ? '\n**Funds are NOT confirmed as secured.**' : ''}` };
 }
 
-export function completedEmbed(cfg, d, names) {
-  return base(cfg, 'Deal Completed', `${d.mode === 'demo' ? '**DEMO deal** — simulated, no real funds.\n' : ''}Completion was confirmed by the escrow provider.`, BRAND.white)
-    .addFields(
-      { name: 'Deal ID', value: `\`${d.id}\``, inline: true },
-      { name: 'Completed', value: ts(d.completed_at), inline: true },
-      { name: 'Middleman', value: names.middleman ?? 'None assigned', inline: true },
-      { name: 'Participants', value: `${names.a}\n${names.b}` },
-    );
+const shortTx = (h) => (h.length > 16 ? `${h.slice(0, 6)}…${h.slice(-8)}` : h);
+/** `info` = { txid, url, amount } from the provider when a real payout happened. */
+export function completedEmbed(cfg, d, names, info) {
+  const coin = Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network);
+  const coinLabel = (coin?.label ?? d.asset).replace(/ \[.*\]/, '');
+  const demo = d.mode === 'demo' ? '**DEMO deal** — simulated, no real funds.\n' : '';
+  const e = base(cfg, `${coinLabel} Deal Complete`, demo || null, BLUE);
+  const amount = info?.amount ? `\`${info.amount}\` ${d.asset} (**$${d.receive_usd ?? d.amount} USD**)` : `**$${d.receive_usd ?? d.amount} USD** in ${d.asset}`;
+  e.addFields({ name: 'Amount', value: amount },
+    { name: 'Sender', value: names.sender ?? names.a, inline: true }, { name: 'Receiver', value: names.receiver ?? names.b, inline: true });
+  if (info?.txid) e.addFields({ name: 'Transaction', value: `\`${shortTx(info.txid)}\` ([View Transaction](${info.url}))` });
+  e.addFields({ name: 'Deal ID', value: `\`${d.id}\``, inline: true }, { name: 'Completed', value: ts(d.completed_at), inline: true });
+  if (names.middleman) e.addFields({ name: 'Middleman', value: names.middleman, inline: true });
+  return e;
 }
 
 export function vouchEmbed(cfg, { dealId, author, target, rating, text, createdAt }) {

@@ -267,7 +267,7 @@ test('full lifecycle: simulate provider -> completed -> published -> vouch', asy
   const pub = ctx.chans.get('completed').sent; assert.equal(pub.length, 1, 'published exactly once');
   const pj = JSON.stringify(pub[0].embeds[0].data);
   assert.ok(pj.includes(id) && pj.includes('user111') && pj.includes('user222') && pj.includes('user333'));
-  assert.ok(!/Dominus|25\.00|LTC|litecoin|DEMO-/.test(pj), 'no private financial info published');
+  assert.ok(!/Dominus|DEMO-/.test(pj), 'no item description or wallet/provider data published'); assert.match(pj, /Litecoin Deal Complete/); assert.ok(pub[0].files.length === 1, 'coin thumbnail attached');
   const v = fake(ctx, 'cmd', A, { command: 'vouch', opts: { deal_id: id, rating: 5, feedback: 'Smooth trade!' } }); await route(v, ctx);
   assert.match(text(v), /Verified Vouch/); assert.equal(ctx.chans.get('vouches').sent.length, 1);
   const v2 = fake(ctx, 'cmd', A, { command: 'vouch', opts: { deal_id: id, rating: 3, feedback: 'again again' } }); await route(v2, ctx); assert.match(text(v2), /already/);
