@@ -123,3 +123,25 @@ test('mainnet: falls back to Blockbook when the primary chain API is down, inclu
   const tx = bitcoin.Transaction.fromHex(sent[0]); assert.equal(tx.outs.length, 1);
   assert.equal(bitcoin.address.fromOutputScript(tx.outs[0].script, NETWORKS.mainnet.net), RECV_MAIN);
 });
+
+test('mainnet: falls back to BlockCypher when Esplora and Blockbook are both down', async () => {
+  const sent = [];
+  const fetchImpl = async (url, opts = {}) => {
+    const u = String(url); const ok = (b) => ({ ok: true, status: 200, json: async () => b, text: async () => String(b) });
+    if (u.includes('litecoinspace.org')) return { ok: false, status: 525, json: async () => ({}), text: async () => 'ssl' };
+    if (u.includes('litecoinblockexplorer.net')) return { ok: false, status: 502, json: async () => ({}), text: async () => 'bad gateway' };
+    if (u.endsWith('/v1/ltc/main')) return ok({ height: 2000 });
+    if (u.includes('/addrs/')) return ok({ txrefs: [{ tx_hash: 'd'.repeat(64), tx_output_n: 0, value: 100000, confirmations: 3, block_height: 1998, double_spend: false }] });
+    if (u.endsWith('/txs/push')) { sent.push(JSON.parse(opts.body).tx); return ok({ tx: { hash: 'b'.repeat(64) } }); }
+    if (u.includes('coinbase')) return ok({ data: { amount: '50.00' } });
+    throw new Error(`unmocked ${u}`);
+  };
+  const cfg = loadConfig({ NEXORA_MODE: 'live', LIVE_MODE_ACK: LIVE_ACK, LTC_NETWORK: 'mainnet', LTC_TREASURY_ADDRESS: 'LQmitT8afJrMAiRV8XGm1EtCP5TpiKuLnU', LTC_MAX_DEAL_USD: '3' });
+  const db = openDb(':memory:'); const svc = new DealService(db, { mode: 'live' });
+  const w = new LtcWallet(cfg, db, { fetchImpl, mnemonic: { mnemonic: MN, source: 'env' } });
+  const c = { db, svc, w, emit: (e) => svc.applyProviderEvent(e) };
+  const d = await newDeal(c, { send: '2.00', receive: '2.00' });
+  await w.scan(c.emit);
+  assert.equal(svc.get(d.id).confirmations, 3); assert.equal(svc.get(d.id).tx_hash, 'd'.repeat(64));
+  assert.equal(await w.sweep(d.id, w.treasury), 'b'.repeat(64)); assert.equal(sent.length, 1);
+});
