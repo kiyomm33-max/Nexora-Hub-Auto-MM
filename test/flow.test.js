@@ -164,8 +164,7 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   const early = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(early), /has not confirmed/);
   // 3. Payment Received + proceed + Release/Cancel
   await sim('escrow.funded'); assert.match(status(), /Payment Received[\s\S]*secured[\s\S]*You may now proceed with the deal[\s\S]*Release/);
-  assert.match(comps(), /nx:am-release[\s\S]*nx:am-cancelpaid/);
-  const cp = await click(ctx, B, `nx:am-cancelpaid:${id}`); assert.ok(cp.modal, 'Cancel after payment goes to dispute/provider'); assert.equal(ctx.deals.get(id).status, 'verification_pending');
+  assert.match(comps(), /nx:am-release/); assert.doesNotMatch(comps(), /dispute|cancelpaid/);
   assert.match(text(await click(ctx, B, `nx:am-release:${id}`)), /Only the sender/);
   assert.match(text(await click(ctx, RND, `nx:am-release:${id}`)), /Only the sender/);
   const ask = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(ask), /Are you sure/); assert.equal(ctx.deals.get(id).release_at, null, 'asking does not release');
@@ -183,7 +182,7 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   await new Promise((r) => setTimeout(r, 1500)); await ctx.settle();
   // 4. Provide your address
   let x = ctx.deals.get(id); assert.ok(x.released_at); assert.equal(x.status, 'verification_pending', 'release alone does not complete the deal');
-  assert.match(status(), /Provide your Litecoin \(LTC\) address/); assert.match(comps(), /nx:am-payaddr/);
+  assert.match(status(), /Send your Litecoin \(LTC\) address/); assert.match(comps(), /nx:am-payaddr/);
   assert.equal(ctx.chans.get('completed').sent.length, 0);
   assert.match(text(await click(ctx, A, `nx:am-payaddr:${id}`)), /Only the receiver/);
   const m = await click(ctx, B, `nx:am-payaddr:${id}`); assert.ok(m.modal);
@@ -192,6 +191,12 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   assert.match(text(await submit(ctx, A, `nx:am-payaddrmodal:${id}`, { addr: LTC })), /Only the receiver/);
   const conf = await submit(ctx, B, `nx:am-payaddrmodal:${id}`, { addr: LTC }); assert.match(text(conf), /Confirm your address[\s\S]*Payouts cannot be reversed/);
   assert.equal(ctx.deals.get(id).payout_address, null, 'nothing stored before confirmation');
+  { const { payoutFromMessage } = await import('../src/discord/automm.js'); const room = ctx.chans.get(ctx.room); const replies = []; const before = room.sent.length; let deleted = 0;
+    const msg = (author, content) => ({ author: { id: author, bot: false }, guild: ctx.guild, channel: room, channelId: room.id, content, reply: async (o) => { replies.push(o.content); }, delete: async () => { deleted++; } });
+    await payoutFromMessage(msg(A, LTC), ctx); assert.equal(room.sent.length, before, 'only the receiver counts');
+    await payoutFromMessage(msg(B, 'not-an-address'), ctx); assert.match(replies.at(-1), /valid LTC address/);
+    await payoutFromMessage(msg(B, LTC), ctx); assert.equal(room.sent.length, before + 1); assert.equal(deleted, 1);
+    assert.match(JSON.stringify(room.sent.at(-1).components.map((c) => c.toJSON())), new RegExp(`nx:am-payyes:${id}:${LTC}`)); assert.equal(ctx.deals.get(id).payout_address, null); }
   assert.match(text(await click(ctx, A, `nx:am-payyes:${id}:${LTC}`)), /Only the receiver/);
   await click(ctx, B, `nx:am-payyes:${id}:${LTC}`); await ctx.settle();
   x = ctx.deals.get(id); assert.equal(x.status, 'completed'); assert.equal(x.payout_address, LTC);

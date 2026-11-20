@@ -216,7 +216,7 @@ export function receivedEmbeds(cfg, d) {
     base(cfg, 'You may now proceed with the deal', `The receiver (<@${d.receiver_id}>) may now provide the goods to the sender (<@${d.sender_id}>).\n\nOnce the deal is complete, the sender must click the **Release** button below to release the funds to the receiver and complete the deal.${d.release_at ? `\n\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R> — <@${d.release_by}> can cancel before it ends.` : ''}`),
   ];
 }
-export const payoutEmbed = (cfg, d) => base(cfg, `Provide your ${coinName(d).replace(/ \[.*\]/, '')} (${d.asset}) address`, `<@${d.receiver_id}> the sender released the payment! Provide your ${d.asset} (${d.network}) address with the button below to start the payout from escrow.\nDouble-check it: payouts cannot be reversed.`);
+export const payoutEmbed = (cfg, d) => base(cfg, `Send your ${coinName(d).replace(/ \[.*\]/, '')} (${d.asset}) address`, `<@${d.receiver_id}> the sender **released the payment**.\n**Send your ${d.asset} (${d.network}) address in this channel** as a message. You will be asked to confirm it before the payout starts.\nDouble-check it: **payouts cannot be reversed**.`);
 
 /** Everything the single status message shows for the current phase. */
 export function statusEmbeds(cfg, d) {
@@ -230,16 +230,16 @@ export function statusEmbeds(cfg, d) {
   }
 }
 
-export function roomButtons(d) {
-  const closed = ['completed', 'cancelled'].includes(d.status);
+export function roomButtons(d, cfg) {
   const phase = phaseOf(d);
   const rows = [];
-  if (phase === 'received') rows.push(row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Success).setDisabled(!!d.release_at), btn(`nx:am-cancelpaid:${d.id}`, 'Cancel')));
-  if (phase === 'payout') rows.push(row(btn(`nx:am-payaddr:${d.id}`, 'Provide address', ButtonStyle.Success)));
+  if (phase === 'received') rows.push(row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Primary).setDisabled(!!d.release_at)));
+  // The receiver normally just types their address in the room; the button is only a fallback when the bot cannot read messages.
+  if (phase === 'payout') { if (!cfg?.messageContent) rows.push(row(btn(`nx:am-payaddr:${d.id}`, 'Provide address', ButtonStyle.Primary))); return rows; }
+  if (phase === 'paying') return rows;
   const last = [];
   if (d.status === 'completed') last.push(btn(`nx:vouch:${d.id}`, 'Leave a vouch', ButtonStyle.Primary));
-  if (!closed && d.status !== 'disputed') last.push(btn(`nx:dispute:${d.id}`, 'Open dispute', ButtonStyle.Danger));
-  last.push(btn(`nx:am-close:${d.id}`, closed ? 'Save transcript & close' : 'Close'));
+  last.push(btn(`nx:am-close:${d.id}`, ['completed', 'cancelled'].includes(d.status) ? 'Save transcript & close' : 'Close'));
   rows.push(row(...last));
   return rows;
 }

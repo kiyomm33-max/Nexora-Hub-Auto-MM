@@ -228,7 +228,7 @@ const buttons = {
   'am-relno': (i) => am.releaseNo(i),
   'am-payaddr': (i, ctx, [id]) => am.payAddr(i, ctx, id),
   'am-payyes': (i, ctx, [id, addr]) => am.payAddrConfirm(i, ctx, id, addr),
-  'am-payno': (i) => i.update({ content: 'Cancelled. Press Provide address to try again.', embeds: [], components: [] }),
+  'am-payno': async (i, ctx, [id]) => { if (ctx.deals.get(id)?.receiver_id !== i.user.id) throw new UserError('Only the receiver can do that.'); return i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', '**Send your address again** in this channel.')], components: [] }); },
   'am-cancelpaid': (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.disputeModal(id)); },
   'am-relcancel': (i, ctx, [id]) => am.releaseCancel(i, ctx, id),
   'ticket-start': (i) => i.showModal(ui.ticketModal()),

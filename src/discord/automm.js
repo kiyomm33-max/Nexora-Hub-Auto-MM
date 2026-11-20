@@ -21,7 +21,7 @@ export async function payloadFor(ctx, d) {
     catch (e) { log.error('qr failed', e); }
   }
   const ping = ui.phaseOf(d) === 'invoice' ? `<@${d.sender_id}>` : ui.phaseOf(d) === 'received' ? `<@${d.sender_id}> <@${d.receiver_id}>` : ui.phaseOf(d) === 'payout' ? `<@${d.receiver_id}>` : null;
-  return { content: ping, embeds, files, components: ui.roomButtons(d) };
+  return { content: ping, embeds, files, components: ui.roomButtons(d, ctx.cfg) };
 }
 
 const load = (ctx, id) => { const d = ctx.deals.get(V.dealId(id)); if (!d) throw new UserError('Deal not found.'); return d; };
@@ -290,9 +290,11 @@ export async function payAddrSubmit(i, ctx, id, raw) {
 }
 export async function payAddrConfirm(i, ctx, id, raw) {
   const d = load(ctx, id);
+  if (d.receiver_id !== i.user.id) throw new UserError('Only the receiver can confirm the payout address.');
+  if (d.payout_address) throw new UserError('The payout address is already confirmed.');
   const addr = V.payoutAddress(d.asset, d.network, raw);
   await locked(ctx, id, async () => ctx.deals.setPayout(id, i.user.id, addr));
-  await i.update({ content: 'Address confirmed. Payout requested from the provider.', embeds: [], components: [] });
+  await i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address confirmed', `Payout address: \`${addr}\`\nThe payout is being sent.`)], components: [] });
   const fresh = ctx.deals.get(id);
   await rooms.refreshStatus(ctx, fresh);
   const res = await ctx.provider.requestPayout(fresh);
@@ -301,4 +303,25 @@ export async function payAddrConfirm(i, ctx, id, raw) {
 }
 export function recoverReleases(ctx) {
   for (const d of ctx.db.prepare("SELECT id FROM deals WHERE release_at IS NOT NULL AND status='verification_pending'").all()) armRelease(ctx, d.id);
+}
+
+/** The receiver types their payout address in the room after the sender released. The bot checks it and asks them to confirm. */
+export async function payoutFromMessage(msg, ctx) {
+  if (msg.author.bot || !msg.guild) return;
+  const d = ctx.db.prepare("SELECT * FROM deals WHERE channel_id=? AND status='verification_pending' AND released_at IS NOT NULL AND payout_address IS NULL").get(msg.channelId);
+  if (!d || d.receiver_id !== msg.author.id) return;
+  const raw = msg.content.trim().split(/\s+/)[0];
+  if (!raw) return;
+  try {
+    const addr = V.payoutAddress(d.asset, d.network, raw);
+    try { ctx.provider.validateAddress?.(addr); } catch (e) { throw new UserError(e.message); }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`nx:am-payyes:${d.id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`nx:am-payno:${d.id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
+    await msg.channel.send({ content: `<@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your address', `**Payout address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Payouts cannot be reversed.** Confirm only if this is **exactly your address**.`)], components: [row], allowedMentions: { users: [d.receiver_id] } });
+    await msg.delete().catch(() => {});
+  } catch (e) {
+    if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your ${d.asset} address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
+    else log.error('payout address message failed', e);
+  }
 }
