@@ -4,7 +4,7 @@ import { LEVELS, CAPS } from '../core/permissions.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import { base, dealEmbed, completedEmbed, BRAND } from './ui.js';
-import { payloadFor } from './automm.js';
+import { payloadFor, putStep } from './automm.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
 
@@ -39,7 +39,7 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   if (deal.status_message_id) {
     // bump = repost at the bottom of the room (and ping) so the buttons are never buried under notices
     if (bump) { try { await (await ch.messages.fetch(deal.status_message_id)).delete(); } catch { /* already gone */ } }
-    else { try { return await (await ch.messages.fetch(deal.status_message_id)).edit(payload); } catch (e) { log.error('status edit failed, reposting', e); } }
+    else { try { return await putStep(ctx, ch, await ch.messages.fetch(deal.status_message_id), deal, payload); } catch (e) { log.error('status edit failed, reposting', e); } }
   }
   const m = await ch.send(payload);
   ctx.deals.setChannel(deal.id, 'status_message_id', m.id);

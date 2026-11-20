@@ -38,7 +38,23 @@ async function locked(ctx, id, fn) {
   if (r.duplicate) throw new UserError('Another action on this deal is still processing. Try again in a moment.');
   return r.value;
 }
-const done = async (i, ctx, d) => { const p = await payloadFor(ctx, d); return i.update({ ...p, content: p.content ?? null, allowedMentions: { parse: [] } }); };
+const V2 = 1 << 15;
+const editable = (p) => ((p.flags ?? 0) & V2 ? { ...p, allowedMentions: { parse: [] } } : { ...p, content: p.content ?? null, allowedMentions: { parse: [] } });
+/** Show a deal's current payload on its step message. Components V2 and embed messages cannot be converted into each other, so a switch deletes the old message and posts a new one. */
+export async function putStep(ctx, channel, msg, d, p) {
+  const was = !!(msg.flags?.bitfield & V2); const now = !!((p.flags ?? 0) & V2);
+  if (was === now) return msg.edit(editable(p));
+  const m = await channel.send({ ...editable(p), content: now ? undefined : (p.content ?? undefined) });
+  ctx.deals.setChannel(d.id, 'status_message_id', m.id);
+  await msg.delete().catch(() => {});
+  return m;
+}
+const done = async (i, ctx, d) => {
+  const p = await payloadFor(ctx, d);
+  const was = !!(i.message?.flags?.bitfield & V2); const now = !!((p.flags ?? 0) & V2);
+  if (was === now) return i.update(editable(p));
+  await i.deferUpdate(); return putStep(ctx, i.channel, i.message, d, p);
+};
 const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, votes });
 
 // ---------- start ----------
@@ -84,7 +100,7 @@ export async function partnerFromMessage(msg, ctx) {
   try {
     const nd = await addPartner(ctx, d.id, msg.author.id, u, msg.guild, msg.channel);
     const sm = await msg.channel.messages.fetch(d.status_message_id).catch(() => null);
-    if (sm) { const p = await payloadFor(ctx, nd); await sm.edit({ ...p, content: p.content ?? null, allowedMentions: { parse: [] } }); }
+    if (sm) await putStep(ctx, msg.channel, sm, nd, await payloadFor(ctx, nd));
     await msg.delete().catch(() => {});
   } catch (e) {
     if (e instanceof UserError) await msg.reply({ content: e.message, allowedMentions: { repliedUser: false } }).catch(() => {});

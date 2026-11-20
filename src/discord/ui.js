@@ -129,8 +129,12 @@ export function stepPayload(cfg, d, set) {
     case 'roles': {
       const who = (r) => { const u = Object.keys(set.votes ?? {}).find((x) => set.votes[x] === r); return u ? `<@${u}>` : 'None'; };
       const coin = coinName(d);
-      return { content: `${parties(d)} Welcome! Select roles below.`, embeds: [e('Role Selection', `Select the button that corresponds to **your role** in this deal.\n\n**Sending ${coin}:** ${who('sender')}\n**Receiving ${coin}:** ${who('receiver')}`)],
-        components: [row(btn(`nx:am-role:${d.id}:sender`, 'Sending: Select', ButtonStyle.Success), btn(`nx:am-role:${d.id}:receiver`, 'Receiving: Select', ButtonStyle.Success)), row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Danger))] };
+      const pick = (label, r) => new SectionBuilder().addTextDisplayComponents(text(`**${label} ${coin}:** ${who(r)}`)).setButtonAccessory(btn(`nx:am-role:${d.id}:${r}`, 'Select', ButtonStyle.Primary));
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addTextDisplayComponents(text('## Role Selection\nSelect **one of the following buttons** that corresponds to **your role** in this deal.'))
+        .addSeparatorComponents(new SeparatorBuilder()).addSectionComponents(pick('Sending', 'sender'))
+        .addSeparatorComponents(new SeparatorBuilder()).addSectionComponents(pick('Receiving', 'receiver'));
+      return { flags: 1 << 15, components: [text(`${parties(d)} Welcome! Select roles below.`), box, row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Danger))] };
     }
     case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Type:** ${DEAL_TYPES.find((t) => t.value === d.deal_type)?.label ?? 'Other'}\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
