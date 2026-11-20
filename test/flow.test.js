@@ -285,14 +285,15 @@ test('dispute: opens private staff channel, referred to provider, evidence saved
   assert.match(text(sub), /external|provider/); const d = ctx.deals.get(id); assert.equal(d.status, 'disputed');
   const dc = ctx.chans.get(d.dispute_channel_id);
   assert.ok(!dc.opts.permissionOverwrites.some((o) => o.id === A || o.id === B), 'parties not in staff review channel');
-  assert.ok(dc.opts.permissionOverwrites.some((o) => o.id === ROLE.sup));
+  assert.ok(!dc.opts.permissionOverwrites.some((o) => o.id === ROLE.sup), 'support role has no access'); assert.ok(dc.opts.permissionOverwrites.some((o) => o.id === ROLE.adm), 'admin role has access');
   assert.match(JSON.stringify(dc.sent[0].embeds.map((e) => e.data)), /Seller went silent/);
   const ev = fake(ctx, 'cmd', B, { command: 'evidence', opts: { deal_id: id, note: 'chat log', file: { url: 'https://cdn.discordapp.com/x.png' } } }); await route(ev, ctx);
   assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM evidence WHERE deal_id=?').get(id).n, 2);
   const evBad = fake(ctx, 'cmd', B, { command: 'evidence', opts: { deal_id: id, note: 'chat log', file: { url: 'http://evil' } } }); await route(evBad, ctx); assert.match(text(evBad), /https/);
   const t = ctx.db.prepare("SELECT id FROM tickets WHERE kind='dispute'").get().id;
   const nope = fake(ctx, 'btn', A, { customId: `nx:tclose:${t}`, channel: dc }); await route(nope, ctx); assert.match(text(nope), /cannot close/);
-  const cl = fake(ctx, 'btn', SUP, { roles: [ROLE.sup], customId: `nx:tclose:${t}`, channel: dc }); await route(cl, ctx);
+  const low = fake(ctx, 'btn', SUP, { roles: [ROLE.sup], customId: `nx:tclose:${t}`, channel: dc }); await route(low, ctx); assert.match(text(low), /cannot close/);
+  const cl = fake(ctx, 'btn', ADM, { roles: [ROLE.adm], customId: `nx:tclose:${t}`, channel: dc }); await route(cl, ctx);
   assert.match(text(cl), /Transcript saved/); assert.ok(ctx.db.prepare('SELECT sha256 FROM transcripts WHERE ticket_id=?').get(t));
   assert.equal(ctx.db.prepare('SELECT status FROM tickets WHERE id=?').get(t).status, 'closed');
   assert.equal(ctx.deals.get(id).status, 'disputed', 'closing a ticket never resolves the dispute');

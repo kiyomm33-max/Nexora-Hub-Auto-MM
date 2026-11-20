@@ -91,7 +91,7 @@ export async function ensureDisputeChannel(ctx, deal) {
   if (deal.dispute_channel_id) return;
   const guild = await ctx.client.guilds.fetch(ctx.cfg.guildId);
   const id = newTicketId();
-  const ch = await createPrivateChannel(guild, ctx.cfg, { name: `dispute-${deal.id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.disputeCategory, minStaff: CAPS['dispute.review'], topic: `Staff review for ${deal.id}` });
+  const ch = await createPrivateChannel(guild, ctx.cfg, { name: `dispute-${deal.id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.disputeCategory, minStaff: LEVELS.admin, topic: `Staff review for ${deal.id}` });
   ctx.deals.setChannel(deal.id, 'dispute_channel_id', ch.id);
   ctx.db.prepare("INSERT INTO tickets(id,kind,opener,deal_id,channel_id,subject,created_at) VALUES(?,?,?,?,?,?,?)").run(id, 'dispute', 'system', deal.id, ch.id, `Dispute ${deal.id}`, new Date().toISOString());
   const ev = ctx.db.prepare('SELECT author,note,url,created_at FROM evidence WHERE deal_id=? ORDER BY id').all(deal.id);
@@ -126,4 +126,22 @@ export async function saveTranscript(ctx, refId, channel, by) {
   const out = await fetchChannel(ctx, ctx.cfg.channels.transcripts);
   if (out) await out.send({ embeds: [base(ctx.cfg, `Transcript  •  ${refId}`, `SHA-256 \`${sha}\``)], files: [new AttachmentBuilder(Buffer.from(body), { name: `${refId}.txt` })], allowedMentions: { parse: [] } });
   return sha;
+}
+
+/** Re-apply the privacy rules to rooms that already exist: nobody below admin level keeps a role overwrite. Returns how many channels were changed. */
+export async function lockRooms(ctx) {
+  const low = new Set(staffIds(ctx.cfg, 0)); for (const id of staffIds(ctx.cfg, LEVELS.admin)) low.delete(id);
+  const rows = [
+    ...ctx.db.prepare("SELECT channel_id c FROM tickets WHERE status='open' AND channel_id IS NOT NULL").all(),
+    ...ctx.db.prepare("SELECT channel_id c FROM deals WHERE status NOT IN ('completed','cancelled') AND channel_id IS NOT NULL").all(),
+    ...ctx.db.prepare("SELECT dispute_channel_id c FROM deals WHERE dispute_channel_id IS NOT NULL AND status!='completed'").all(),
+  ];
+  let n = 0;
+  for (const { c } of rows) {
+    const ch = await fetchChannel(ctx, c); if (!ch?.permissionOverwrites) continue;
+    await ch.permissionOverwrites.edit(ch.guild.roles.everyone.id, { ViewChannel: false }).catch(() => {});
+    for (const id of low) if (ch.permissionOverwrites.cache?.has(id)) { await ch.permissionOverwrites.delete(id).catch(() => {}); }
+    n++;
+  }
+  return n;
 }
