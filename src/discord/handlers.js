@@ -98,7 +98,7 @@ async function vouch(i, ctx, dealId, rating, text) {
 async function callStaff(i, ctx, key, label) {
   const r = ctx.limiter.check(`callstaff:${key}`, 1, 300e3);
   if (!r.ok) throw new UserError(`Staff were already called. You can call again in ${Math.ceil(r.retryMs / 1000)}s.`);
-  const ids = rooms.staffIds(ctx.cfg, CAPS['dispute.review']);
+  const ids = rooms.staffIds(ctx.cfg, LEVELS.admin);
   await i.channel.send({ content: ids.map((x) => `<@&${x}>`).join(' ') || undefined, embeds: [ui.base(ctx.cfg, 'Staff assistance requested', `<@${i.user.id}> asked for help with ${label}.`)], allowedMentions: { roles: ids } });
   audit(ctx.db, { actor: i.user.id, action: 'staff.requested', detail: { label } });
   return say(ctx, i, 'Staff notified', 'A staff member will join shortly.');
@@ -119,7 +119,7 @@ async function closeTicket(i, ctx, id) {
   const t = ctx.db.prepare('SELECT * FROM tickets WHERE id=?').get(id);
   if (!t || t.status === 'closed') throw new UserError('Ticket not found or already closed.');
   const role = staffOf(i, ctx);
-  const allowed = t.kind === 'support' ? (t.opener === i.user.id || can(role, 'ticket.handle')) : can(role, 'dispute.review');
+  const allowed = t.kind === 'support' ? (t.opener === i.user.id || LEVELS[role] >= LEVELS.admin) : LEVELS[role] >= LEVELS.admin;
   if (!allowed) { audit(ctx.db, { category: 'security', actor: i.user.id, action: 'permission.denied', detail: { where: 'ticket.close', id } }); throw new UserError('You cannot close this ticket.'); }
   const r = await ctx.limiter.once(`close:${id}`, async () => {
     await i.deferReply({ flags: EPH });
@@ -225,6 +225,11 @@ const commands = {
       const w = ctx.provider;
       const lines = (w.describe?.() ?? [{ label: 'Fee address', value: w.treasury }]).map((x) => `**${x.label}**\n\`${x.value}\``).join('\n');
       return reply(i, { embeds: [ui.base(ctx.cfg, 'Wallet (owner only)', `LTC network: **${ctx.cfg.ltc.network}**\nKey source: **${w.source}**\nCoins on the panel: **${ctx.cfg.coins.enabled.join(', ')}**\n\n${lines}\n\n**Recovery phrase** — write it down offline, never share it, and delete this message:\n||${w.mnemonic}||\n${w.source === 'generated' ? '\nThis phrase lives on the data volume. Store it, then add it as the LTC_MNEMONIC variable so the key does not depend on the volume.' : ''}`)] });
+    }
+    if (sub === 'lockrooms') {
+      need(i, ctx, 'wallet'); await i.deferReply({ flags: EPH });
+      const n = await rooms.lockRooms(ctx); audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'rooms.locked', detail: { staff: true, rooms: n } });
+      return say(ctx, i, 'Rooms locked', `Checked **${n}** open rooms. Only the parties and admin-level roles can see them.`);
     }
     if (sub === 'refund') {
       need(i, ctx, 'refund');

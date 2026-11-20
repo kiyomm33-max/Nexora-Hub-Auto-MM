@@ -32,6 +32,7 @@ export const definitions = [
     .addSubcommand((s) => s.setName('audit').setDescription('Verify the audit log hash chain'))
     .addSubcommand((s) => s.setName('backup').setDescription('Create a database backup now'))
     .addSubcommand((s) => s.setName('wallet').setDescription('Owner only: wallet network, fee address and recovery phrase (only shown to you)'))
+    .addSubcommand((s) => s.setName('lockrooms').setDescription('Owner only: hide all open deal and ticket rooms from roles below admin'))
     .addSubcommand((s) => s.setName('refund').setDescription('Owner only: send a deal\'s funds to an address (disputes/refunds)').addStringOption(dealId)
       .addStringOption((o) => o.setName('address').setDescription('LTC address to send everything to').setRequired(true).setMaxLength(100))),
 ].map((c) => c.toJSON());
