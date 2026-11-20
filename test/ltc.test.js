@@ -97,3 +97,29 @@ test('owner refund sweeps the deal address once; paid-out deals cannot be swept'
   const tx = bitcoin.Transaction.fromHex(c.state.broadcasts[0]); assert.equal(tx.outs.length, 1);
   await assert.rejects(() => c.w.sweep(id, RECV), /already/);
 });
+test('mainnet: falls back to Blockbook when the primary chain API is down, including broadcast', async () => {
+  const sent = [];
+  const fetchImpl = async (url, opts = {}) => {
+    const u = String(url); const ok = (b) => ({ ok: true, status: 200, json: async () => b, text: async () => String(b) });
+    if (u.includes('litecoinspace.org')) return { ok: false, status: 525, json: async () => ({}), text: async () => 'ssl' };
+    if (u.endsWith('/api/v2')) return ok({ blockbook: { bestHeight: 2000 } });
+    if (u.includes('/utxo/')) return ok([{ txid: 'e'.repeat(64), vout: 0, value: '100000', confirmations: 3 }]);
+    if (u.includes('/estimatefee/')) return ok({ result: '0.00000986' });
+    if (u.includes('/sendtx/')) { sent.push(u.split('/sendtx/')[1]); return ok({ result: 'a'.repeat(64) }); }
+    if (u.includes('coinbase')) return ok({ data: { amount: '50.00' } });
+    throw new Error(`unmocked ${u}`);
+  };
+  const cfg = loadConfig({ NEXORA_MODE: 'live', LIVE_MODE_ACK: LIVE_ACK, LTC_NETWORK: 'mainnet', LTC_TREASURY_ADDRESS: 'LQmitT8afJrMAiRV8XGm1EtCP5TpiKuLnU', LTC_MAX_DEAL_USD: '3' });
+  const db = openDb(':memory:'); const svc = new DealService(db, { mode: 'live' });
+  const w = new LtcWallet(cfg, db, { fetchImpl, mnemonic: { mnemonic: MN, source: 'env' } });
+  assert.equal(w.treasury, 'LQmitT8afJrMAiRV8XGm1EtCP5TpiKuLnU');
+  const c = { db, svc, w, emit: (e) => svc.applyProviderEvent(e) };
+  const d = await newDeal(c, { send: '2.00', receive: '2.00' }); assert.match(d.esc.address, /^ltc1q/);
+  await assert.rejects(() => c.w.createEscrow({ id: 'NXH-BIG00001', send_usd: '10' }), /limited to \$3/);
+  const RECV_MAIN = 'ltc1q6rz28mcfaxtmd6v789l9rrlrusdprr9pesrjxk'.replace(/^ltc1q6rz.*/, c.w.treasury);
+  await c.w.scan(c.emit); const row = svc.get(d.id); assert.equal(row.confirmations, 3);
+  assert.equal(svc.get(d.id).tx_hash, 'e'.repeat(64));
+  assert.equal(await c.w.sweep(d.id, RECV_MAIN), 'a'.repeat(64)); assert.equal(sent.length, 1);
+  const tx = bitcoin.Transaction.fromHex(sent[0]); assert.equal(tx.outs.length, 1);
+  assert.equal(bitcoin.address.fromOutputScript(tx.outs[0].script, NETWORKS.mainnet.net), RECV_MAIN);
+});
