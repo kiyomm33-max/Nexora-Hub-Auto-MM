@@ -60,7 +60,7 @@ const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, vo
 // ---------- start ----------
 export async function startAuto(i, ctx, key) {
   const coin = ui.COINS[key]; if (!coin) throw new UserError('Unknown coin.');
-  if (ctx.mode === 'live' && key !== 'LTC') throw new UserError('Only Litecoin (LTC) deals are available right now.');
+  if (ctx.mode === 'live' && !ctx.cfg.coins.enabled.includes(key)) throw new UserError(`${coin.label} deals are not available right now.`);
   const r = ctx.limiter.check(`amstart:${i.user.id}`, 3, 600e3); if (!r.ok) throw new UserError('Slow down — you are opening deals too quickly.');
   if (ctx.deals.openCount(i.user.id) >= 2) throw new UserError('You already have 2 open deals. Finish or close one first.');
   await i.deferReply({ flags: EPH });
@@ -282,7 +282,7 @@ export async function payAddrSubmit(i, ctx, id, raw) {
   const d = load(ctx, id);
   if (d.receiver_id !== i.user.id) throw new UserError('Only the receiver can provide the payout address.');
   const addr = V.payoutAddress(d.asset, d.network, raw);
-  try { ctx.provider.validateAddress?.(addr); } catch (e) { throw new UserError(e.message); }
+  try { ctx.provider.validateAddress?.(addr, d); } catch (e) { throw new UserError(e.message); }
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`nx:am-payyes:${id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nx:am-payno:${id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
@@ -314,7 +314,7 @@ export async function payoutFromMessage(msg, ctx) {
   if (!raw) return;
   try {
     const addr = V.payoutAddress(d.asset, d.network, raw);
-    try { ctx.provider.validateAddress?.(addr); } catch (e) { throw new UserError(e.message); }
+    try { ctx.provider.validateAddress?.(addr, d); } catch (e) { throw new UserError(e.message); }
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`nx:am-payyes:${d.id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`nx:am-payno:${d.id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));

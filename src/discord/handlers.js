@@ -199,18 +199,20 @@ const commands = {
       if (!ctx.provider.live) throw new UserError('The wallet only exists in live mode.');
       staffAudit('staff.viewed_wallet', null, {});
       const w = ctx.provider;
-      return reply(i, { embeds: [ui.base(ctx.cfg, 'LTC wallet (owner only)', `Network: **${ctx.cfg.ltc.network}**\nFee address: \`${w.treasury}\`\nKey source: **${w.source}**\n\n**Recovery phrase** — write it down offline, never share it, and delete this message:\n||${w.mnemonic}||\n${w.source === 'generated' ? '\nThis phrase lives on the data volume. Store it, then add it as the LTC_MNEMONIC variable so the key does not depend on the volume.' : ''}`, ui.BRAND.red)] });
+      const lines = (w.describe?.() ?? [{ label: 'Fee address', value: w.treasury }]).map((x) => `**${x.label}**\n\`${x.value}\``).join('\n');
+      return reply(i, { embeds: [ui.base(ctx.cfg, 'Wallet (owner only)', `LTC network: **${ctx.cfg.ltc.network}**\nKey source: **${w.source}**\nCoins on the panel: **${ctx.cfg.coins.enabled.join(', ')}**\n\n${lines}\n\n**Recovery phrase** — write it down offline, never share it, and delete this message:\n||${w.mnemonic}||\n${w.source === 'generated' ? '\nThis phrase lives on the data volume. Store it, then add it as the LTC_MNEMONIC variable so the key does not depend on the volume.' : ''}`)] });
     }
     if (sub === 'refund') {
       need(i, ctx, 'refund');
       if (!ctx.provider.sweep) throw new UserError('Refunds are only available in live mode.');
       const id = V.dealId(i.options.getString('deal_id', true)); const to = i.options.getString('address', true).trim();
-      try { ctx.provider.validateAddress(to); } catch (e) { throw new UserError(e.message); }
+      const dealRow = ctx.db.prepare('SELECT asset, network FROM deals WHERE id=?').get(id);
+      try { ctx.provider.validateAddress(to, dealRow); } catch (e) { throw new UserError(e.message); }
       await i.deferReply({ flags: EPH });
       let txid;
       try { txid = await ctx.provider.sweep(id, to); } catch (e) { throw new UserError(String(e.message ?? e).slice(0, 200)); }
       staffAudit('staff.refund_sent', id, { to, txid });
-      return i.editReply({ embeds: [ui.okEmbed(ctx.cfg, 'Refund broadcast', `Deal \`${id}\` funds sent to \`${to}\`.\n${ctx.provider.explorerTx(txid)}`)] });
+      return i.editReply({ embeds: [ui.okEmbed(ctx.cfg, 'Refund broadcast', `Deal \`${id}\` funds sent to \`${to}\`.\n${ctx.provider.explorerTx(txid, dealRow)}`)] });
     }
     if (sub === 'claim') {
       need(i, ctx, 'deal.claim'); const d = ctx.deals.claim(V.dealId(i.options.getString('deal_id', true)), i.user.id);
