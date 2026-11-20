@@ -267,6 +267,7 @@ export async function releaseAsk(i, ctx, id) {
   if (d.sender_id !== i.user.id) throw new UserError('Only the sender can release the payment.');
   if (d.status !== 'verification_pending' || d.escrow_status !== 'provider_confirmed') throw new UserError('The provider has not confirmed the payment yet.');
   if (d.release_at) throw new UserError('A release is already in progress.');
+  if (ctx.db.prepare('SELECT 1 FROM cancel_req WHERE deal_id=?').get(id)) throw new UserError('A cancel request is open. Finish or decline it before releasing.');
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`nx:am-relyes:${id}`).setLabel('Yes, release').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nx:am-relno:${id}`).setLabel('No, go back').setStyle(ButtonStyle.Secondary));
@@ -360,4 +361,100 @@ export async function payoutFromMessage(msg, ctx) {
     if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your ${d.asset} address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
     else log.error('payout address message failed', e);
   }
+}
+
+// ---------- mutual cancel + refund (funds in escrow, before any release) ----------
+const cancelRow = (ctx, id) => ctx.db.prepare('SELECT * FROM cancel_req WHERE deal_id=?').get(id);
+const other = (d, u) => (u === d.party_a ? d.party_b : d.party_a);
+function cancelable(d) {
+  if (d.status !== 'verification_pending' || d.escrow_status !== 'provider_confirmed') throw new UserError('Cancel & refund is only available once your payment is confirmed in escrow.');
+  if (d.release_at || d.released_at) throw new UserError('The release already started. Cancel the release first, or ask staff.');
+}
+export async function cancelAsk(i, ctx, id) {
+  const d = load(ctx, id);
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
+  cancelable(d);
+  const r = await locked(ctx, id, async () => {
+    if (cancelRow(ctx, id)) return false;
+    ctx.db.prepare("INSERT INTO cancel_req(deal_id, requested_by, agreed, state, created_at) VALUES(?,?,?,?,?)").run(id, i.user.id, JSON.stringify([i.user.id]), 'asking', new Date().toISOString());
+    audit(ctx.db, { actor: i.user.id, action: 'cancel.requested', dealId: id, detail: {} });
+    return true;
+  });
+  if (!r) throw new UserError('A cancel request is already open.');
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`nx:am-cancelyes:${id}`).setLabel('Agree to cancel').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`nx:am-cancelno:${id}`).setLabel('Decline').setStyle(ButtonStyle.Secondary));
+  const o = other(d, i.user.id);
+  const m = await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Cancel request', `<@${i.user.id}> wants to **cancel this deal and refund the sender**.\n\n**Both traders must agree.** <@${o}>, do you agree?\nThe funds go back to the sender, the receiver gets nothing.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [o] } });
+  ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
+  return i.reply({ flags: EPH, content: 'Cancel request sent. The other trader must agree.' });
+}
+async function dropRequestMessage(ctx, i, c) {
+  if (c?.message_id) await i.channel.messages.fetch(c.message_id).then((m) => m.delete()).catch(() => {});
+}
+export async function cancelYes(i, ctx, id) {
+  const d = load(ctx, id); const c = cancelRow(ctx, id);
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
+  if (!c || c.state !== 'asking') throw new UserError('There is no open cancel request.');
+  if (c.requested_by === i.user.id) throw new UserError('You already asked to cancel. The other trader must agree.');
+  cancelable(d);
+  await locked(ctx, id, async () => {
+    ctx.db.prepare("UPDATE cancel_req SET state='address', agreed=? WHERE deal_id=? AND state='asking'").run(JSON.stringify([c.requested_by, i.user.id]), id);
+    audit(ctx.db, { actor: i.user.id, action: 'cancel.agreed', dealId: id, detail: {} });
+  });
+  await i.deferUpdate(); await dropRequestMessage(ctx, i, c);
+  const m = await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Both traders agreed to cancel', `<@${d.sender_id}>, **type your ${d.asset} address in this room** to get your funds back.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+  ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
+}
+export async function cancelNo(i, ctx, id) {
+  const d = load(ctx, id); const c = cancelRow(ctx, id);
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
+  if (!c || c.state === 'refunding') throw new UserError('There is no open cancel request.');
+  await locked(ctx, id, async () => { ctx.db.prepare('DELETE FROM cancel_req WHERE deal_id=?').run(id); audit(ctx.db, { actor: i.user.id, action: 'cancel.declined', dealId: id, detail: {} }); });
+  await i.deferUpdate(); await dropRequestMessage(ctx, i, c);
+  await i.channel.send({ embeds: [ui.base(ctx.cfg, 'Cancel request closed', `<@${i.user.id}> declined. **The deal continues** and the funds stay in escrow.`)], allowedMentions: { parse: [] } });
+}
+/** After both agreed, the sender types their refund address in the room. The bot validates it and asks for confirmation. */
+export async function refundFromMessage(msg, ctx) {
+  if (msg.author.bot || !msg.guild) return;
+  const d = ctx.db.prepare("SELECT d.* FROM deals d JOIN cancel_req c ON c.deal_id=d.id WHERE d.channel_id=? AND c.state='address'").get(msg.channelId);
+  if (!d || d.sender_id !== msg.author.id) return;
+  const raw = msg.content.trim().split(/\s+/)[0]; if (!raw) return;
+  try {
+    const addr = V.payoutAddress(d.asset, d.network, raw);
+    try { ctx.provider.validateAddress?.(addr, d); } catch (e) { throw new UserError(e.message); }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`nx:am-refyes:${d.id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`nx:am-refno:${d.id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
+    await msg.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your refund address', `**Refund address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Refunds cannot be reversed.** Confirm only if this is **exactly your address**.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [d.sender_id] } });
+    await msg.delete().catch(() => {});
+  } catch (e) {
+    if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your ${d.asset} address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
+    else log.error('refund address message failed', e);
+  }
+}
+export async function refundYes(i, ctx, id, raw) {
+  const d = load(ctx, id);
+  if (d.sender_id !== i.user.id) throw new UserError('Only the sender can confirm the refund address.');
+  const addr = V.payoutAddress(d.asset, d.network, raw);
+  const claim = ctx.db.prepare("UPDATE cancel_req SET state='refunding', address=? WHERE deal_id=? AND state='address'").run(addr, id);
+  if (!claim.changes) throw new UserError('This refund is already being processed, or was not agreed by both traders.');
+  await i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Sending your refund', `Sending the funds to \`${addr}\`...`)], components: [], allowedMentions: { parse: [] } });
+  try {
+    cancelable(d);
+    const txid = await ctx.provider.sweep(id, addr);
+    ctx.db.prepare('DELETE FROM cancel_req WHERE deal_id=?').run(id);
+    ctx.deals.refundCancel(id, i.user.id, { txid, address: addr });
+    const url = ctx.provider.explorerTx?.(txid, d);
+    await i.channel.send({ content: `<@${d.sender_id}> <@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Deal cancelled and refunded', `Both traders agreed to cancel. The funds were sent back to the sender.\n\n**Refund address:** \`${addr}\`\n**TXID:** \`${txid}\`${url ? `\n[View on explorer](${url})` : ''}`)], allowedMentions: { users: [d.sender_id, d.receiver_id] } });
+  } catch (e) {
+    ctx.db.prepare("UPDATE cancel_req SET state='address', address=NULL WHERE deal_id=? AND state='refunding'").run(id);
+    log.error('refund failed', { deal: id, err: String(e?.message ?? e) });
+    await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Refund failed', `${e instanceof UserError || e?.userFacing ? e.message : 'The refund could not be sent. Nothing was moved. Type your address again to retry, or ask an admin.'}`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+  }
+}
+export async function refundNo(i, ctx, id) {
+  const d = load(ctx, id);
+  if (d.sender_id !== i.user.id) throw new UserError('Only the sender can do that.');
+  return i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', `Type your ${d.asset} refund address in the room again.`)], components: [], allowedMentions: { parse: [] } });
 }

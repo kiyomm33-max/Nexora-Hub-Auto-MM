@@ -264,7 +264,7 @@ export function statusEmbeds(cfg, d) {
 export function roomButtons(d, cfg) {
   const phase = phaseOf(d);
   const rows = [];
-  if (phase === 'received') rows.push(row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Primary).setDisabled(!!d.release_at)));
+  if (phase === 'received') return [row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Primary).setDisabled(!!d.release_at), btn(`nx:am-cancelask:${d.id}`, 'Cancel & refund').setDisabled(!!d.release_at))];
   // The receiver normally just types their address in the room; the button is only a fallback when the bot cannot read messages.
   if (phase === 'payout') { if (!cfg?.messageContent) rows.push(row(btn(`nx:am-payaddr:${d.id}`, 'Provide address', ButtonStyle.Primary))); return rows; }
   if (phase === 'paying') return rows;

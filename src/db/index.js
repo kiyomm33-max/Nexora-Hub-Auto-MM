@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS tickets(
   status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
   created_at TEXT NOT NULL, closed_at TEXT, closed_by TEXT, transcript_sha256 TEXT
 );
+CREATE TABLE IF NOT EXISTS cancel_req(
+  deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, agreed TEXT NOT NULL DEFAULT '[]',
+  state TEXT NOT NULL CHECK(state IN ('asking','address','refunding')), address TEXT, message_id TEXT, created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS transcripts(
   ticket_id TEXT PRIMARY KEY, body TEXT NOT NULL, sha256 TEXT NOT NULL, created_at TEXT NOT NULL
 );
