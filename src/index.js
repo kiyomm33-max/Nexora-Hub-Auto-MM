@@ -12,7 +12,7 @@ import { audit } from './core/audit.js';
 import { recoverReleases } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
-import { syncDeal, publishCompleted } from './discord/rooms.js';
+import { syncDeal, publishCompleted, refreshStatus } from './discord/rooms.js';
 import { registerCommands } from './discord/register.js';
 
 const cfg = loadConfig();
@@ -56,6 +56,8 @@ if (hasToken) {
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
+    // After a restart, put the live status message (with its buttons) back at the bottom of rooms that are waiting on a person.
+    for (const d of db.prepare("SELECT * FROM deals WHERE status='verification_pending' AND mode='live' AND escrow_status='provider_confirmed' AND release_at IS NULL AND (released_at IS NULL OR payout_address IS NULL)").all()) await refreshStatus(ctx, d, { bump: true }).catch((e) => log.error('status repost failed', e));
     if (provider.live) provider.start((ev) => { try { deals.applyProviderEvent(ev); } catch (e) { log.error('applyProviderEvent failed', e); } });
     for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
   });
