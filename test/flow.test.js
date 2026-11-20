@@ -417,3 +417,33 @@ test('every step posts a NEW message that pings the right person, and the previo
   await click(ctx, A, `nx:am-role:${id}:sender`); const m3 = ctx.deals.get(id).status_message_id; assert.notEqual(m3, m2); assert.equal(live().length, 1);
   assert.equal(JSON.stringify(ch.msgs.get(m3).components).includes(`<@${B}>`), true, 'both traders pinged on the role card');
 });
+
+test('cancel & refund: both traders must agree, the sender types an address, funds are swept back, deal is cancelled', async () => {
+  const { refundFromMessage } = await import('../src/discord/automm.js');
+  const ctx = setup(); const id = await runToRoom(ctx, { amount: '2' }); const room = ctx.chans.get(ctx.room);
+  const sim = async (event) => { const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'staff', sub: 'simulate', opts: { deal_id: id, event } }); await route(i, ctx); await ctx.settle(); };
+  const swept = []; ctx.provider.sweep = async (d, to) => { swept.push([d, to]); return 'c'.repeat(64); }; ctx.provider.explorerTx = (t) => `https://x/${t}`;
+  assert.match(text(await click(ctx, A, `nx:am-cancelask:${id}`)), /only available once/, 'not before payment is confirmed');
+  await sim('funds.observed'); await sim('escrow.funded');
+  assert.match(JSON.stringify(room.msgs.get(ctx.deals.get(id).status_message_id).components.map((c) => c.toJSON())), /am-cancelask/);
+  assert.match(text(await click(ctx, RND, `nx:am-cancelask:${id}`)), /Only the two traders/);
+  assert.match(text(await click(ctx, B, `nx:am-cancelask:${id}`)) , /Cancel request sent/);
+  assert.match(text(await click(ctx, A, `nx:am-release:${id}`)), /cancel request is open/);
+  assert.match(text(await click(ctx, B, `nx:am-cancelyes:${id}`)), /already asked/);
+  assert.match(text(await click(ctx, B, `nx:am-cancelask:${id}`)), /already open/);
+  // decline keeps the deal alive
+  await click(ctx, A, `nx:am-cancelno:${id}`); assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM cancel_req').get().n, 0); assert.equal(ctx.deals.get(id).status, 'verification_pending');
+  // ask again and agree
+  await click(ctx, A, `nx:am-cancelask:${id}`); await click(ctx, B, `nx:am-cancelyes:${id}`);
+  assert.equal(ctx.db.prepare('SELECT state FROM cancel_req').get().state, 'address');
+  const say = async (u, content) => { const sent = []; const m = { author: { id: u, bot: false }, guild: {}, channelId: room.id, content, channel: room, delete: async () => {}, reply: async (x) => sent.push(x) }; await refundFromMessage(m, ctx); return sent; };
+  assert.equal((await say(B, LTC)).length, 0); const before = room.sent.length; await say(B, LTC); assert.equal(room.sent.length, before, 'only the sender is listened to');
+  const bad = await say(A, 'not-an-address'); assert.match(bad[0].content, /valid LTC address/);
+  await say(A, LTC); assert.match(JSON.stringify(room.sent.at(-1).embeds.map((e) => e.toJSON())), /Confirm your refund address/);
+  assert.match(text(await click(ctx, B, `nx:am-refyes:${id}:${LTC}`)), /Only the sender/);
+  await click(ctx, A, `nx:am-refyes:${id}:${LTC}`); await ctx.settle();
+  assert.deepEqual(swept, [[id, LTC]]); assert.equal(ctx.deals.get(id).status, 'cancelled'); assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM cancel_req').get().n, 0);
+  assert.match(JSON.stringify(room.sent.map((m) => (m.embeds ?? []).map((e) => e.toJSON ? e.toJSON() : e))), /refunded[\s\S]*c{64}/);
+  assert.match(text(await click(ctx, A, `nx:am-refyes:${id}:${LTC}`)), /already being processed|agreed/);
+  assert.equal(swept.length, 1, 'never refunded twice');
+});

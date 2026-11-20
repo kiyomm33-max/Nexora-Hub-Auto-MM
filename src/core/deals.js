@@ -83,6 +83,7 @@ export class DealService extends EventEmitter {
     if (d.sender_id !== user) throw new DealError('Only the sender can release the payment.');
     if (d.status !== 'verification_pending' || d.escrow_status !== 'provider_confirmed') throw new DealError('Payment has not been confirmed by the provider yet.');
     if (d.release_at) return { deal: d, started: false };
+    if (this.db.prepare('SELECT 1 FROM cancel_req WHERE deal_id=?').get(id)) throw new DealError('A cancel request is open. Finish or decline it before releasing.');
     const at = new Date(Date.now() + seconds * 1000).toISOString();
     this.db.tx(() => {
       const r = this.db.prepare('UPDATE deals SET release_at=?, release_by=?, updated_at=? WHERE id=? AND release_at IS NULL').run(at, user, now(), id);
@@ -179,6 +180,15 @@ export class DealService extends EventEmitter {
     if (d.escrow_status === 'provider_confirmed' || d.observed_status !== 'none')
       throw new DealError('Funds have been observed or secured by the provider. Cancellation must go through the provider; open a dispute or contact staff.');
     const nd = this.#transition(id, 'cancelled', actor, 'deal.cancelled', { reason, staff }, { cancelled_at: now() });
+    this.#emit(id, 'cancelled'); return nd;
+  }
+
+  /** Both traders agreed to cancel and the funds were returned to the sender on-chain. Only possible before any release. */
+  refundCancel(id, actor, { txid, address }) {
+    const d = this.get(id);
+    if (!d) throw new DealError('Deal not found.');
+    if (d.status !== 'verification_pending' || d.release_at || d.released_at) throw new DealError('This deal can no longer be cancelled with a refund.');
+    const nd = this.#transition(id, 'cancelled', actor, 'deal.refunded', { reason: 'both traders agreed to cancel', refundTx: txid, refundTo: address }, { cancelled_at: now() });
     this.#emit(id, 'cancelled'); return nd;
   }
 
