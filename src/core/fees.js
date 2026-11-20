@@ -4,8 +4,11 @@ export const FEE_PAYERS = ['sender', 'receiver', 'split'];
 const cents = (n) => Math.round(n * 100);
 const usd = (c) => (c / 100).toFixed(2);
 
-export function calcFee(amountUsd, { threshold = 50, fee = 2 } = {}) {
-  return Number(amountUsd) >= threshold ? fee : 0;
+/** Over `threshold` USD: flat `usd`. Over `percentOver` USD: `percent`% of the amount instead. Amounts at or below the threshold are free. */
+export function calcFee(amountUsd, { threshold = 50, usd = 2, percentOver = 250, percent = 2 } = {}) {
+  const a = Number(amountUsd);
+  if (a > percentOver) return cents(a * percent / 100) / 100;
+  return a > threshold ? usd : 0;
 }
 /** sender sends `send`, receiver gets `receive`, difference is the fee. */
 export function calcTotals(amountUsd, feeUsd, payer) {

@@ -6,7 +6,7 @@ Purple / black / white deal-management bot for a Roblox middleman server. **Runs
 1. `/panel` (admin) posts the coin panel (one **Start** button per coin/network) in `PANEL_CHANNEL_ID`.
 2. Start opens a private room: Deal Started, Safety Warning, Close, then **Deal Type** dropdown (In-Game, Exchange, Counter Strike, Robux, Other).
 3. Creator adds the other trader (user picker or user ID/ping) → each trader picks Sender or Receiver → one describes the deal, the other accepts/declines → USD amount → both confirm.
-4. At or above `FEE_THRESHOLD_USD` a `FEE_USD` fee applies and both traders must pick the same payer: sender (sender sends amount + fee), receiver (receiver gets amount − fee) or split.
+4. Deals over `FEE_THRESHOLD_USD` (50) pay a flat `FEE_USD` ($2); deals over `FEE_PERCENT_OVER_USD` (250) pay `FEE_PERCENT`% (2%). The sender chooses who pays and the receiver confirms: and both traders must pick the same payer: sender (sender sends amount + fee), receiver (receiver gets amount − fee) or split.
 5. **Deal Summary** + **Payment Invoice** (provider-issued address, crypto amount, exchange rate, QR). Then **Transaction Detected** (tx hash, amount, required confirmations — an on-chain observation only), then **Payment Received** ("secured" only after the provider confirms escrow) with **Release** / **Cancel**.
 6. Release (sender only) → "Are you sure?" → visible 60 s countdown the releaser can cancel → release approved at the provider.
 7. The receiver presses **Provide address** (format-checked, then an explicit confirmation) → payout requested from the provider → provider confirms completion → deal completed, published to `#completed-deals`.

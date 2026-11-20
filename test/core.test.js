@@ -193,7 +193,7 @@ test('slash command definitions and modals are valid discord.js payloads', async
 });
 test('fee maths', async () => {
   const { calcFee, calcTotals } = await import('../src/core/fees.js');
-  assert.equal(calcFee(49.99, { threshold: 50, fee: 2 }), 0); assert.equal(calcFee(50, { threshold: 50, fee: 2 }), 2);
+  assert.equal(calcFee(49.99), 0); assert.equal(calcFee(50), 0); assert.equal(calcFee(50.01), 2); assert.equal(calcFee(250), 2); assert.equal(calcFee(250.01), 5); assert.equal(calcFee(300), 6); assert.equal(calcFee(1234.56), 24.69);
   assert.deepEqual(calcTotals('100.00', '2', 'sender'), { fee: '2.00', send: '102.00', receive: '100.00' });
   assert.deepEqual(calcTotals('100.00', '2', 'receiver'), { fee: '2.00', send: '100.00', receive: '98.00' });
   assert.deepEqual(calcTotals('100.00', '2', 'split'), { fee: '2.00', send: '101.00', receive: '99.00' });

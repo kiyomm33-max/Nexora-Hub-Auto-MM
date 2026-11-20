@@ -34,7 +34,8 @@ const SECTIONS = [
     'Supported coins and networks are listed on the deal panel. **Only use what is shown.** ETH and BNB Smart Chain share the same deal address, so **choose the right network.**',
     'A deal only counts as funded after the **required blockchain confirmations**. Waiting is normal.',
     'Underpaying means the deal **does not fund.** Contact support instead of sending more on your own.',
-    '**Fees and deal limits** are shown in the deal room. Network fees are paid out of the deal amount.',
+    '**Service fee:** deals of **$50 or less are free**. Deals **over $50 pay a flat $2**. Deals **over $250 pay 2%**. The sender chooses who pays (sender, receiver or split) and the receiver confirms.',
+    '**Deal limits** are shown in the deal room. Network fees are paid out of the deal amount.',
     'Payouts are sent automatically after Release. The **transaction ID** is posted in the room and in the completed-deals channel.',
   ]],
   ['5. Tickets, Disputes and Support', [
