@@ -48,7 +48,8 @@ export class LtcWallet {
   live = true;
   constructor(cfg, db, { fetchImpl = fetch, mnemonic } = {}) {
     this.cfg = cfg; this.db = db; this.fetch = fetchImpl;
-    this.n = NETWORKS[cfg.ltc.network]; if (!this.n) throw new Error(`LTC_NETWORK must be mainnet or testnet`);
+    const base = NETWORKS[cfg.ltc.network]; if (!base) throw new Error(`LTC_NETWORK must be mainnet or testnet`);
+    this.n = { ...base, api: cfg.ltc.apiUrl || base.api }; // LTC_API_URL: any Esplora-compatible endpoint
     const m = mnemonic ?? loadMnemonic(cfg); this.mnemonic = m.mnemonic; this.source = m.source;
     this.root = bip32.fromSeed(bip39.mnemonicToSeedSync(this.mnemonic), this.n.net);
     db.exec(`CREATE TABLE IF NOT EXISTS ltc_wallet(idx INTEGER PRIMARY KEY, deal_id TEXT UNIQUE NOT NULL, address TEXT UNIQUE NOT NULL,
