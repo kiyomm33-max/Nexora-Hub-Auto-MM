@@ -9,7 +9,7 @@ import { selectProvider } from './providers/index.js';
 import { createServer } from './web/server.js';
 import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
-import { recoverReleases, partnerFromMessage } from './discord/automm.js';
+import { recoverReleases, partnerFromMessage, payoutFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
 import { syncDeal, publishCompleted, refreshStatus } from './discord/rooms.js';
@@ -44,7 +44,7 @@ createServer({ cfg, db, deals, mode, health: () => ({ discordReady: hasToken ? r
 function boot(withMessages) {
   client = new Client({ intents: withMessages ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : [GatewayIntentBits.Guilds] });
   ctx.client = client; cfg.messageContent = withMessages;
-  if (withMessages) client.on(Events.MessageCreate, (m) => partnerFromMessage(m, ctx).catch((e) => log.error('message handler failed', e)));
+  if (withMessages) client.on(Events.MessageCreate, (m) => Promise.all([partnerFromMessage(m, ctx), payoutFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)));
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));
   client.once(Events.ClientReady, async () => {
