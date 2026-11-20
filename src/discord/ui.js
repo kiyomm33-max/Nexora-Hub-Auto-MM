@@ -228,16 +228,11 @@ export function roomButtons(d) {
   const rows = [];
   if (phase === 'received') rows.push(row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Success).setDisabled(!!d.release_at), btn(`nx:am-cancelpaid:${d.id}`, 'Cancel')));
   if (phase === 'payout') rows.push(row(btn(`nx:am-payaddr:${d.id}`, 'Provide address', ButtonStyle.Success)));
-  const main = [];
-  if (d.status === 'completed') main.push(btn(`nx:vouch:${d.id}`, 'Leave a vouch', ButtonStyle.Primary));
-  main.push(btn(`nx:refresh:${d.id}`, 'Refresh status'), btn(`nx:staff:${d.id}`, 'Request staff'));
-  if (!closed) main.push(btn(`nx:claim:${d.id}`, 'Claim as middleman').setDisabled(!!d.middleman_id));
-  rows.push(row(...main.slice(0, 5)));
-  const second = [btn(`nx:evidence:${d.id}`, 'Submit evidence')];
-  if (!closed && d.status !== 'disputed') second.push(btn(`nx:dispute:${d.id}`, 'Open dispute', ButtonStyle.Danger));
-  if (d.status === 'awaiting_provider') second.push(btn(`nx:cancel:${d.id}`, 'Cancel deal'));
-  second.push(btn(`nx:am-close:${d.id}`, closed ? 'Save transcript & close' : 'Close'));
-  rows.push(row(...second));
+  const last = [];
+  if (d.status === 'completed') last.push(btn(`nx:vouch:${d.id}`, 'Leave a vouch', ButtonStyle.Primary));
+  if (!closed && d.status !== 'disputed') last.push(btn(`nx:dispute:${d.id}`, 'Open dispute', ButtonStyle.Danger));
+  last.push(btn(`nx:am-close:${d.id}`, closed ? 'Save transcript & close' : 'Close'));
+  rows.push(row(...last));
   return rows;
 }
 export const partnerIdModal = (id) => modal(`nx:am-partnermodal:${id}`, 'Add the other trader', input('uid', 'Discord user ID', { min: 15, max: 25, placeholder: '123456789012345678' }));
