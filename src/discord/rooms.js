@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
-import { ChannelType, PermissionFlagsBits as P, AttachmentBuilder } from 'discord.js';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ChannelType, PermissionFlagsBits as P, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { LEVELS, CAPS } from '../core/permissions.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
@@ -51,8 +53,14 @@ export async function publishCompleted(ctx, deal) {
   if (!ch) return;
   const name = async (id) => { try { const u = await ctx.client.users.fetch(id); return `**${u.username}** (<@${id}>)`; } catch { return `<@${id}>`; } };
   const names = { a: await name(deal.party_a), b: await name(deal.party_b), middleman: deal.middleman_id ? await name(deal.middleman_id) : null };
-  // Deliberately omits item, value, asset, network, wallet and provider data.
-  const m = await ch.send({ embeds: [completedEmbed(ctx.cfg, deal, names)], allowedMentions: { parse: [] } });
+  if (deal.sender_id && deal.receiver_id) { names.sender = await name(deal.sender_id); names.receiver = await name(deal.receiver_id); }
+  const info = ctx.provider.payoutInfo?.(deal.id) ?? null;
+  const embed = completedEmbed(ctx.cfg, deal, names, info);
+  const files = []; const components = [];
+  const icon = new URL(`../../assets/coins/done-${String(deal.asset).toLowerCase()}.png`, import.meta.url);
+  if (existsSync(icon)) { files.push(new AttachmentBuilder(fileURLToPath(icon), { name: 'coin.png' })); embed.setThumbnail('attachment://coin.png'); }
+  if (info?.url) components.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url)));
+  const m = await ch.send({ embeds: [embed], files, components, allowedMentions: { parse: [] } });
   ctx.deals.setChannel(deal.id, 'completed_message_id', m.id);
   audit(ctx.db, { actor: 'system', action: 'completed_deal.published', dealId: deal.id, detail: { messageId: m.id } });
 }

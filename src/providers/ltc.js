@@ -57,6 +57,7 @@ export class LtcWallet {
     db.exec(`CREATE TABLE IF NOT EXISTS ltc_wallet(idx INTEGER PRIMARY KEY, deal_id TEXT UNIQUE NOT NULL, address TEXT UNIQUE NOT NULL,
       expected_sat INTEGER, required_conf INTEGER, rate_usd TEXT, funded INTEGER NOT NULL DEFAULT 0, seen_txids TEXT NOT NULL DEFAULT '[]',
       payout_state TEXT, payout_txid TEXT, payout_error TEXT, created_at TEXT NOT NULL)`);
+    try { db.exec('ALTER TABLE ltc_wallet ADD COLUMN payout_sat INTEGER'); } catch { /* column already exists */ }
     this.treasury = cfg.ltc.treasury || this.#addr(this.#key(1, 0));
     this.validateAddress(this.treasury);
   }
@@ -67,7 +68,13 @@ export class LtcWallet {
     try { bitcoin.address.toOutputScript(a, this.n.net); } catch { throw new Error(`That is not a valid Litecoin ${this.cfg.ltc.network} address.`); }
     return a;
   }
-  explorerTx(txid) { return `${this.n.explorer}/tx/${txid}`; }
+  explorerTx(txid) { return this.cfg.ltc.network === 'mainnet' ? `https://live.blockcypher.com/ltc/tx/${txid}/` : `${this.n.explorer}/tx/${txid}`; }
+  /** What the completed-deals post shows: the payout transaction and what the receiver got. */
+  payoutInfo(dealId) {
+    const w = this.db.prepare('SELECT payout_txid, payout_sat FROM ltc_wallet WHERE deal_id=?').get(dealId);
+    if (!w?.payout_txid) return null;
+    return { txid: w.payout_txid, url: this.explorerTx(w.payout_txid), explorerName: this.cfg.ltc.network === 'mainnet' ? 'BlockCypher' : 'Explorer', amount: w.payout_sat ? fromSat(w.payout_sat) : null };
+  }
 
   async #get(base, p) { const r = await this.fetch(`${base}${p}`, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`chain api ${base}${p} -> ${r.status}`); return r.json(); }
   /** Run the same call against each configured backend (Esplora, then Blockbook, then BlockCypher) until one answers. */
@@ -208,7 +215,9 @@ export class LtcWallet {
     if (treasurySat) psbt.addOutput({ address: this.treasury, value: treasurySat });
     psbt.signAllInputs(kp); psbt.finalizeAllInputs();
     const hex = psbt.extractTransaction().toHex();
-    return this.#broadcast(hex);
+    const txid = await this.#broadcast(hex);
+    this.db.prepare('UPDATE ltc_wallet SET payout_sat=? WHERE deal_id=?').run(toSat, d.id);
+    return txid;
   }
 
   /** Owner-only refund/override: send everything at a deal's address (minus miner fee) to `to`. No treasury cut. */

@@ -77,6 +77,7 @@ test('payout: waits for release + address, pays receiver and fee address once, n
   const feeSat = Math.round((2 / 50) * 1e8); assert.equal(outs[1].value, feeSat, '$2 fee at the locked rate');
   const minerFee = sat - outs[0].value - outs[1].value; assert.ok(minerFee > 0 && minerFee < 20000, `miner fee sane (${minerFee})`);
   assert.equal(c.svc.get(id).status, 'completed');
+  { const info = c.w.payoutInfo(id); assert.equal(info.txid, 'f'.repeat(64)); assert.ok(Number(info.amount) > 0); assert.match(info.url, /tx\/f+/); }
   assert.equal(c.db.prepare('SELECT payout_state FROM ltc_wallet WHERE deal_id=?').get(id).payout_state, 'broadcast');
 });
 test('a failed broadcast is retried, and a crash mid-send never double pays', async () => {
