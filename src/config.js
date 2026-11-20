@@ -32,6 +32,7 @@ export function loadConfig(e = env) {
       transcripts: e.TRANSCRIPT_CHANNEL_ID,
       vouches: e.VOUCH_CHANNEL_ID,
       panel: e.PANEL_CHANNEL_ID,
+      supportPanel: e.SUPPORT_PANEL_CHANNEL_ID,
     },
     ltc: {
       network: (e.LTC_NETWORK || 'testnet').toLowerCase(), // testnet until you explicitly set mainnet

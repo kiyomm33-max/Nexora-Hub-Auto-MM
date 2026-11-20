@@ -147,6 +147,13 @@ const commands = {
     const { deal } = accessDeal(i, ctx, i.options.getString('deal_id', true));
     return reply(i, { embeds: [ui.dealEmbed(ctx.cfg, deal)] });
   },
+  async supportpanel(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.supportPanel)) ?? i.channel;
+    await target.send(ui.supportPanelPayload());
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'supportpanel.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Support panel posted', `Posted in <#${target.id}>.`);
+  },
   async panel(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.panel)) ?? i.channel;

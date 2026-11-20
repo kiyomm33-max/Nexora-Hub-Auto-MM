@@ -114,6 +114,15 @@ export function panelPayload(cfg, mode) {
     ...(stable.length ? [mk('Stablecoins', 'Start a deal with USDT or USDC on the network that matches your wallet. Be sure to select the correct network.', stable)] : []),
   ] };
 }
+/** Components V2 support panel: one button that opens the ticket form. */
+export function supportPanelPayload() {
+  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
+    .addTextDisplayComponents(text('## Nexora Hub Support\nIf anything goes wrong, **open a support ticket** and our staff will help you. Your ticket is **private**: only you and the admins can see it.\n\n**Never** share passwords, 2FA codes or seed phrases. Staff will never ask for them.'))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('**Need help?** Describe the problem and we will take it from there.'))
+      .setButtonAccessory(new ButtonBuilder().setCustomId('nx:ticket-start').setLabel('Open Ticket').setStyle(ButtonStyle.Primary)));
+  return { flags: 1 << 15, components: [c] };
+}
 export const startedEmbeds = (cfg, d) => [
   base(cfg, `${(() => { const c = Object.values(COINS).find((x) => x.asset === d.asset && x.network === d.network); return c ? coinIcon(c) : ''; })()}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system.\n\n**Deal ID:** \`${d.id}\`\nPlease **contact support** if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
   base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal **inside this ticket**. Nobody from Nexora Hub will ever ask for **passwords, 2FA codes, cookies, seed phrases or private keys**.', BRAND.red),
