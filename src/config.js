@@ -35,6 +35,7 @@ export function loadConfig(e = env) {
       vouches: e.VOUCH_CHANNEL_ID,
       panel: e.PANEL_CHANNEL_ID,
     },
+    ownerUserIds: list(e.OWNER_USER_IDS),
     roles: {
       owner: list(e.ROLE_OWNER_IDS),
       admin: list(e.ROLE_ADMIN_IDS),

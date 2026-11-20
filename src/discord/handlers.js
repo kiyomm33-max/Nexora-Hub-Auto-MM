@@ -21,7 +21,12 @@ const EPH = MessageFlags.Ephemeral;
 export function staffOf(i, ctx) {
   const r = i.member?.roles;
   const ids = r?.cache ? [...r.cache.keys()] : Array.isArray(r) ? r : [];
-  return staffRole(ids, ctx.cfg.roles, { isGuildOwner: !!i.guild && i.guild.ownerId === i.user.id });
+  const uid = i.user.id;
+  const isOwner = (i.guild?.ownerId ?? ctx.guildOwnerId) === uid || (ctx.cfg.ownerUserIds ?? []).includes(uid);
+  const role = staffRole(ids, ctx.cfg.roles, { isGuildOwner: isOwner });
+  // Server Administrators get at least Administrator rights (lower than owner).
+  if (!role && i.memberPermissions?.has?.('Administrator')) return 'admin';
+  return role;
 }
 function need(i, ctx, cap) {
   const role = staffOf(i, ctx);
