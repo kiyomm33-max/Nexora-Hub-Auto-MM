@@ -20,7 +20,7 @@ export async function payloadFor(ctx, d) {
     try { files.push(new AttachmentBuilder(await QRCode.toBuffer(d.pay_address, { margin: 1, width: 220 }), { name: 'qr.png' })); embeds[1].setThumbnail('attachment://qr.png'); }
     catch (e) { log.error('qr failed', e); }
   }
-  const ping = ui.phaseOf(d) === 'invoice' ? `<@${d.sender_id}>` : ui.phaseOf(d) === 'received' ? `<@${d.sender_id}> <@${d.receiver_id}>` : null;
+  const ping = ui.phaseOf(d) === 'invoice' ? `<@${d.sender_id}>` : ui.phaseOf(d) === 'received' ? `<@${d.sender_id}> <@${d.receiver_id}>` : ui.phaseOf(d) === 'payout' ? `<@${d.receiver_id}>` : null;
   return { content: ping, embeds, files, components: ui.roomButtons(d) };
 }
 
