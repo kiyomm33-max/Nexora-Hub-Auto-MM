@@ -8,7 +8,6 @@ const STATUS_COLOR = { waiting_parties: BLUE, awaiting_provider: BLUE, verificat
 const STATUS_MARK = { waiting_parties: '◌', awaiting_provider: '◔', verification_pending: '◑', disputed: '▲', completed: '●', cancelled: '✕' };
 
 export const brand = (e, cfg) => {
-  e.setFooter({ text: 'Nexora Hub  •  Automated Middleman Platform' }).setTimestamp();
   if (cfg?.brandLogo) e.setThumbnail(cfg.brandLogo);
   return e;
 };
