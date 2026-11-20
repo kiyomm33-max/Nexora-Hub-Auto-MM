@@ -88,6 +88,8 @@ export const DEAL_TYPES = [
 ];
 export const coinName = (d) => Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network)?.label ?? `${d.asset} (${d.network})`;
 const text = (t) => new TextDisplayBuilder().setContent(t);
+import { emojiMap } from './emojis.js';
+export const coinIcon = (c) => emojiMap.get(c.asset) ?? c.mark;
 const section = (t, key) => new SectionBuilder().addTextDisplayComponents(text(t))
   .setButtonAccessory(new ButtonBuilder().setCustomId(`nx:am-start:${key}`).setLabel('Start').setStyle(ButtonStyle.Success));
 
@@ -95,7 +97,7 @@ const section = (t, key) => new SectionBuilder().addTextDisplayComponents(text(t
 export function panelPayload(cfg, mode) {
   const mk = (title, intro, keys) => {
     const c = new ContainerBuilder().setAccentColor(BRAND.purple).addTextDisplayComponents(text(`## ${title}\n${intro}`));
-    for (const k of keys) { c.addSeparatorComponents(new SeparatorBuilder()); c.addSectionComponents(section(`**${COINS[k].mark}  ${COINS[k].label}**`, k)); }
+    for (const k of keys) { c.addSeparatorComponents(new SeparatorBuilder()); c.addSectionComponents(section(`${coinIcon(COINS[k])}  **${COINS[k].label}**`, k)); }
     return c;
   };
   const demo = mode === 'demo' ? '\n**DEMO MODE** — simulated escrow, no real funds.' : '';
@@ -105,7 +107,7 @@ export function panelPayload(cfg, mode) {
   ] };
 }
 export const startedEmbeds = (cfg, d) => [
-  base(cfg, `${Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network)?.mark ?? ''}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system. Deal ID \`${d.id}\`. Please contact support if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
+  base(cfg, `${(() => { const c = Object.values(COINS).find((x) => x.asset === d.asset && x.network === d.network); return c ? coinIcon(c) : ''; })()}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system. Deal ID \`${d.id}\`. Please contact support if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
   base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal inside this ticket. Nobody from Nexora Hub will ask for passwords, 2FA codes, cookies, seed phrases or private keys.', BRAND.red),
 ];
 export const closeButton = (id) => [row(btn(`nx:am-close:${id}`, 'Close'))];

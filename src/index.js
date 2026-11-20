@@ -53,6 +53,7 @@ if (hasToken) {
       if (existsSync(logo)) { const buf = readFileSync(logo); const h = createHash('sha256').update(buf).digest('hex');
         if (!existsSync(mark) || readFileSync(mark, 'utf8') !== h) { await client.user.setAvatar(buf); writeFileSync(mark, h); log.info('bot avatar updated'); } }
     } catch (e) { log.error('avatar update failed', e); }
+    try { (await import('./discord/emojis.js')).syncEmojis(client).catch((e) => log.error('emoji sync failed', e)); } catch (e) { log.error('emoji import failed', e); }
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
