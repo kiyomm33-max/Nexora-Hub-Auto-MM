@@ -30,7 +30,7 @@ function setup() {
     delete: async () => { c.deleted = true; } }; chans.set(id, c); return c; };
   for (const id of ['completed', 'vouches', 'slog', 'tr']) mkChan(id, id);
   const guild = { ownerId: 'owner', roles: { everyone: { id: 'ev' } }, members: { me: { id: 'bot' }, fetch: async (id) => { if (id === '000000000000000000') throw new Error('unknown'); return { user: { bot: id === BOT } }; } }, channels: { create: async (o) => { const c = mkChan(`c${++seq}`, o.name); c.opts = o; return c; } } };
-  const client = { channels: { fetch: async (id) => { const c = chans.get(id); if (!c) throw new Error('nf'); return c; } }, guilds: { fetch: async () => guild }, users: { fetch: async (id) => ({ username: `user${id.slice(0, 3)}` }) } };
+  const client = { channels: { fetch: async (id) => { const c = chans.get(id); if (!c || c.deleted) throw new Error('nf'); return c; } }, guilds: { fetch: async () => guild }, users: { fetch: async (id) => ({ username: `user${id.slice(0, 3)}` }) } };
   const limiter = new RateLimiter(); const check = limiter.check.bind(limiter); limiter.check = (k, ...r) => (k.startsWith('global:') && !process.env.TEST_GLOBAL_LIMIT ? { ok: true } : check(k, ...r));
   const ctx = { cfg, db, deals, provider: new DemoProvider(), mode: 'demo', limiter, client };
   let chain = Promise.resolve(); deals.on('update', (d, c) => { chain = chain.then(() => syncDeal(ctx, d, c)); });
@@ -344,4 +344,15 @@ test('idle setup deals are cancelled after 30 minutes; funded deals are never to
   assert.equal(await closeIdleDeals(ctx, Date.now() + 31 * 60e3), 1);
   assert.equal(ctx.deals.get(d.id).status, 'cancelled'); assert.equal(ctx.deals.get(live).status, 'awaiting_provider');
   assert.ok(ctx.db.prepare('SELECT 1 FROM transcripts WHERE ticket_id=?').get(d.id));
+});
+
+test('completed deal rooms are removed 5 minutes after completion, transcript saved first', async () => {
+  const { closeFinishedRooms } = await import('../src/jobs/idle.js');
+  const ctx = setup(); const id = await runToRoom(ctx); const ref = ctx.deals.get(id).provider_ref;
+  const ev = (type) => ctx.deals.applyProviderEvent({ id: `t-${type}`, type, reference: ref }, { simulated: true });
+  ev('escrow.funded'); payDb(ctx, id); assert.equal(ev('escrow.completed').outcome, 'applied'); await ctx.settle();
+  assert.equal(await closeFinishedRooms(ctx, Date.now() + 4 * 60e3), 0, 'not yet');
+  assert.equal(await closeFinishedRooms(ctx, Date.now() + 6 * 60e3), 1);
+  assert.ok(ctx.db.prepare('SELECT 1 FROM transcripts WHERE ticket_id=?').get(id)); assert.equal(ctx.chans.get(ctx.room).deleted, true);
+  assert.equal(await closeFinishedRooms(ctx, Date.now() + 7 * 60e3), 0, 'only once');
 });
