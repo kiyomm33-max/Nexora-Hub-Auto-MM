@@ -61,6 +61,37 @@ export async function startAuto(i, ctx, key) {
   return i.editReply({ embeds: [ui.okEmbed(ctx.cfg, 'Deal room created', `Continue in <#${ch.id}>.`)] });
 }
 
+/** Adds the other trader to a deal in the partner step. Shared by the modal fallback and the typed-message flow. */
+async function addPartner(ctx, id, by, u, guild, channel) {
+  const d = load(ctx, id); if (d.party_a !== by) throw new UserError('Only the deal creator can add the other trader.'); stepIs(ctx, d, 'partner');
+  V.snowflake(u);
+  if (u === by) throw new UserError('You cannot trade with yourself.');
+  let member; try { member = await guild.members.fetch(u); } catch { throw new UserError('That user is not in this server.'); }
+  if (member.user?.bot) throw new UserError('Bots cannot be deal partners.');
+  const nd = await locked(ctx, id, async () => ctx.deals.patch(id, by, { party_b: u, setup: setStep(ctx, d, 'roles') }, 'setup.partner_added'));
+  await channel.permissionOverwrites?.edit(u, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true, EmbedLinks: true });
+  await channel.send({ content: `<@${u}> you were invited to this deal by <@${by}>.`, allowedMentions: { users: [u] } });
+  return nd;
+}
+
+/** The creator types @user or a user ID in the room while the deal is at the partner step. */
+export async function partnerFromMessage(msg, ctx) {
+  if (msg.author.bot || !msg.guild) return;
+  const d = ctx.db.prepare("SELECT * FROM deals WHERE channel_id=? AND status='waiting_parties'").get(msg.channelId);
+  if (!d || d.party_a !== msg.author.id || ctx.deals.setup(d).step !== 'partner') return;
+  const u = msg.mentions.users.first()?.id ?? msg.content.match(/\b\d{15,25}\b/)?.[0];
+  if (!u) { await msg.reply({ content: 'Mention the other trader (**@user**) or send their **user ID**.', allowedMentions: { repliedUser: false } }).catch(() => {}); return; }
+  try {
+    const nd = await addPartner(ctx, d.id, msg.author.id, u, msg.guild, msg.channel);
+    const sm = await msg.channel.messages.fetch(d.status_message_id).catch(() => null);
+    if (sm) { const p = await payloadFor(ctx, nd); await sm.edit({ ...p, content: p.content ?? null, allowedMentions: { parse: [] } }); }
+    await msg.delete().catch(() => {});
+  } catch (e) {
+    if (e instanceof UserError) await msg.reply({ content: e.message, allowedMentions: { repliedUser: false } }).catch(() => {});
+    else log.error('partner message failed', e);
+  }
+}
+
 // ---------- steps ----------
 export const handlers = {
   async type(i, ctx, [id]) {
@@ -70,14 +101,8 @@ export const handlers = {
     return done(i, ctx, nd);
   },
   async partner(i, ctx, [id], uid) {
-    const d = load(ctx, id); if (d.party_a !== i.user.id) throw new UserError('Only the deal creator can add the other trader.'); stepIs(ctx, d, 'partner');
-    const u = uid ?? i.users?.first?.()?.id; V.snowflake(u);
-    if (u === i.user.id) throw new UserError('You cannot trade with yourself.');
-    let member; try { member = await i.guild.members.fetch(u); } catch { throw new UserError('That user is not in this server.'); }
-    if (member.user?.bot) throw new UserError('Bots cannot be deal partners.');
-    const nd = await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { party_b: u, setup: setStep(ctx, d, 'roles') }, 'setup.partner_added'));
-    await i.channel.permissionOverwrites?.edit(u, { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true, EmbedLinks: true });
-    await i.channel.send({ content: `<@${u}> you were invited to this deal by <@${i.user.id}>.`, allowedMentions: { users: [u] } });
+    const u = uid ?? i.users?.first?.()?.id;
+    const nd = await addPartner(ctx, id, i.user.id, u, i.guild, i.channel);
     return done(i, ctx, nd);
   },
   partnermodal: (i, ctx, [id]) => handlers.partner(i, ctx, [id], i.fields.getTextInputValue('uid').replace(/[<@!>\s]/g, '')),

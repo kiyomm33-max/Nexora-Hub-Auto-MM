@@ -122,8 +122,10 @@ export function stepPayload(cfg, d, set) {
   switch (step) {
     case 'type': return { embeds: [e('Deal Type', 'To best serve you, we need to know a few deal details. Please use the dropdown menu below to select the **deal type**:')],
       components: [row(new StringSelectMenuBuilder().setCustomId(`nx:am-type:${d.id}`).setPlaceholder('Select Deal Type').addOptions(DEAL_TYPES))] };
-    case 'partner': return { embeds: [e('Add the other trader', `<@${d.party_a}>, select the **trader you are dealing with**, or enter their **Discord user ID**.`)],
-      components: [row(new UserSelectMenuBuilder().setCustomId(`nx:am-partner:${d.id}`).setPlaceholder('Select the other trader').setMaxValues(1)), row(btn(`nx:am-partnerid:${d.id}`, 'Enter user ID instead'))] };
+    case 'partner': return cfg.messageContent
+      ? { embeds: [e('Add the other trader', `<@${d.party_a}>, **mention the trader** you are dealing with (**@user**) or send their **Discord user ID** in this channel.`)], components: [] }
+      : { embeds: [e('Add the other trader', `<@${d.party_a}>, press the button and enter the **Discord user ID** of the trader you are dealing with.`)],
+          components: [row(btn(`nx:am-partnerid:${d.id}`, 'Enter user ID', ButtonStyle.Primary))] };
     case 'roles': {
       const who = (r) => { const u = Object.keys(set.votes ?? {}).find((x) => set.votes[x] === r); return u ? `<@${u}>` : 'None'; };
       const coin = coinName(d);
