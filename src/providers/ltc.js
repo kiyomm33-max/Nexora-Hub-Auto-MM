@@ -20,6 +20,7 @@ export const NETWORKS = {
   mainnet: {
     net: { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'ltc', bip32: { public: 0x019da462, private: 0x019d9cfe }, pubKeyHash: 0x30, scriptHash: 0x32, wif: 0xb0 },
     coin: 2, api: 'https://litecoinspace.org/api', explorer: 'https://litecoinspace.org',
+    blockbook: 'https://litecoinblockexplorer.net/api/v2', // fallback when the primary is down
   },
   testnet: {
     net: { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'tltc', bip32: { public: 0x043587cf, private: 0x04358394 }, pubKeyHash: 0x6f, scriptHash: 0xc4, wif: 0xef },
@@ -67,7 +68,28 @@ export class LtcWallet {
   }
   explorerTx(txid) { return `${this.n.explorer}/tx/${txid}`; }
 
-  async #get(p) { const r = await this.fetch(`${this.n.api}${p}`, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`chain api ${p} -> ${r.status}`); return r.json(); }
+  async #get(base, p) { const r = await this.fetch(`${base}${p}`, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`chain api ${base}${p} -> ${r.status}`); return r.json(); }
+  /** Run the same call against each configured backend (Esplora first, Blockbook fallback) until one answers. */
+  async #chain(esplora, blockbook) {
+    const errs = [];
+    try { return await esplora(this.n.api); } catch (e) { errs.push(e.message); }
+    if (this.n.blockbook) { try { return await blockbook(this.n.blockbook); } catch (e) { errs.push(e.message); } }
+    throw new Error(errs.join(' | '));
+  }
+  #tip() { return this.#chain((b) => this.#get(b, '/blocks/tip/height'), async (b) => Number((await this.#get(b, '')).blockbook.bestHeight)); }
+  async #utxos(addr) {
+    return this.#chain((b) => this.#get(b, `/address/${addr}/utxo`), async (b) => {
+      const best = Number((await this.#get(b, '')).blockbook.bestHeight);
+      return (await this.#get(b, `/utxo/${addr}`)).map((u) => ({ txid: u.txid, vout: u.vout, value: Number(u.value),
+        status: Number(u.confirmations) > 0 ? { confirmed: true, block_height: best - Number(u.confirmations) + 1 } : { confirmed: false } }));
+    });
+  }
+  async #broadcast(hex) {
+    return this.#chain(async (b) => {
+      const r = await this.fetch(`${b}/tx`, { method: 'POST', body: hex, headers: { 'content-type': 'text/plain' }, signal: AbortSignal.timeout(20000) });
+      const body = await r.text(); if (!r.ok) throw new Error(`broadcast rejected: ${body.slice(0, 160)}`); return body.trim();
+    }, async (b) => { const j = await this.#get(b, `/sendtx/${hex}`); if (!j.result) throw new Error(`broadcast rejected: ${JSON.stringify(j).slice(0, 160)}`); return j.result; });
+  }
   async rate() {
     const sources = [
       async () => (await (await this.fetch('https://api.coinbase.com/v2/prices/LTC-USD/spot', { signal: AbortSignal.timeout(8000) })).json()).data.amount,
@@ -96,7 +118,7 @@ export class LtcWallet {
 
   /** One scan of every active deal. emit(event) feeds deals.applyProviderEvent. Returns a summary for tests/logs. */
   async scan(emit) {
-    const tip = await this.#get('/blocks/tip/height');
+    const tip = await this.#tip();
     const deals = this.db.prepare(`SELECT d.*, w.expected_sat, w.required_conf AS wreq, w.rate_usd AS wrate, w.payout_state, w.payout_txid, w.funded
       FROM deals d JOIN ltc_wallet w ON w.deal_id=d.id WHERE d.mode='live' AND d.status IN ('awaiting_provider','verification_pending')`).all();
     for (const d of deals) {
@@ -105,7 +127,7 @@ export class LtcWallet {
     return { scanned: deals.length };
   }
   async #scanDeal(d, tip, emit) {
-    const utxos = await this.#get(`/address/${d.pay_address}/utxo`);
+    const utxos = await this.#utxos(d.pay_address);
     const confOf = (u) => (u.status?.confirmed ? tip - u.status.block_height + 1 : 0);
     const total = utxos.reduce((s, u) => s + u.value, 0);
     const minConf = utxos.length ? Math.min(...utxos.map(confOf)) : 0;
@@ -147,7 +169,9 @@ export class LtcWallet {
       log.error('ltc payout failed (will retry)', { deal: d.id, err: String(e) });
     }
   }
-  async #feeRate() { try { const f = await this.#get('/v1/fees/recommended'); return Math.max(2, Number(f.halfHourFee) || 2); } catch { return 5; } }
+  async #feeRate() {
+    try { return Math.max(2, Number(await this.#chain(async (b) => (await this.#get(b, '/v1/fees/recommended')).halfHourFee, async (b) => Math.ceil(Number((await this.#get(b, '/estimatefee/2')).result) * 1e5))) || 2); } catch { return 5; }
+  }
 
   /** Spend every confirmed UTXO of the deal address: treasurySat to the treasury, the rest minus miner fee to `to`. */
   async #sendAll(d, utxos, treasurySat, to = d.payout_address) {
@@ -169,10 +193,7 @@ export class LtcWallet {
     if (treasurySat) psbt.addOutput({ address: this.treasury, value: treasurySat });
     psbt.signAllInputs(kp); psbt.finalizeAllInputs();
     const hex = psbt.extractTransaction().toHex();
-    const r = await this.fetch(`${this.n.api}/tx`, { method: 'POST', body: hex, headers: { 'content-type': 'text/plain' }, signal: AbortSignal.timeout(20000) });
-    const body = await r.text();
-    if (!r.ok) throw new Error(`broadcast rejected: ${body.slice(0, 160)}`);
-    return body.trim();
+    return this.#broadcast(hex);
   }
 
   /** Owner-only refund/override: send everything at a deal's address (minus miner fee) to `to`. No treasury cut. */
@@ -183,7 +204,7 @@ export class LtcWallet {
     const claim = this.db.prepare("UPDATE ltc_wallet SET payout_state='sweeping' WHERE deal_id=? AND (payout_state IS NULL)").run(dealId);
     if (!claim.changes) throw new Error('A payout is already in progress for this deal.');
     try {
-      const utxos = await this.#get(`/address/${d.pay_address}/utxo`);
+      const utxos = await this.#utxos(d.pay_address);
       const txid = await this.#sendAll(d, utxos, 0, to);
       this.db.prepare("UPDATE ltc_wallet SET payout_state='swept', payout_txid=? WHERE deal_id=?").run(txid, dealId);
       return txid;
