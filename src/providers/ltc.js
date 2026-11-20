@@ -21,6 +21,7 @@ export const NETWORKS = {
     net: { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'ltc', bip32: { public: 0x019da462, private: 0x019d9cfe }, pubKeyHash: 0x30, scriptHash: 0x32, wif: 0xb0 },
     coin: 2, api: 'https://litecoinspace.org/api', explorer: 'https://litecoinspace.org',
     blockbook: 'https://litecoinblockexplorer.net/api/v2', // fallback when the primary is down
+    blockcypher: 'https://api.blockcypher.com/v1/ltc/main', // second fallback (free tier: ~200 calls/hour, so it is cached)
   },
   testnet: {
     net: { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'tltc', bip32: { public: 0x043587cf, private: 0x04358394 }, pubKeyHash: 0x6f, scriptHash: 0xc4, wif: 0xef },
@@ -69,26 +70,40 @@ export class LtcWallet {
   explorerTx(txid) { return `${this.n.explorer}/tx/${txid}`; }
 
   async #get(base, p) { const r = await this.fetch(`${base}${p}`, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`chain api ${base}${p} -> ${r.status}`); return r.json(); }
-  /** Run the same call against each configured backend (Esplora first, Blockbook fallback) until one answers. */
-  async #chain(esplora, blockbook) {
+  /** Run the same call against each configured backend (Esplora, then Blockbook, then BlockCypher) until one answers. */
+  async #chain(esplora, blockbook, cypher) {
     const errs = [];
     try { return await esplora(this.n.api); } catch (e) { errs.push(e.message); }
-    if (this.n.blockbook) { try { return await blockbook(this.n.blockbook); } catch (e) { errs.push(e.message); } }
+    if (this.n.blockbook && blockbook) { try { return await blockbook(this.n.blockbook); } catch (e) { errs.push(e.message); } }
+    if (this.n.blockcypher && cypher) { try { return await cypher(this.n.blockcypher); } catch (e) { errs.push(e.message); } }
     throw new Error(errs.join(' | '));
   }
-  #tip() { return this.#chain((b) => this.#get(b, '/blocks/tip/height'), async (b) => Number((await this.#get(b, '')).blockbook.bestHeight)); }
+  #cache = new Map();
+  async #cached(key, ttlMs, fn) { const c = this.#cache.get(key); if (c && Date.now() - c.at < ttlMs) return c.v; const v = await fn(); this.#cache.set(key, { at: Date.now(), v }); return v; }
+  #tip() {
+    return this.#chain((b) => this.#get(b, '/blocks/tip/height'), async (b) => Number((await this.#get(b, '')).blockbook.bestHeight),
+      (b) => this.#cached('cy-tip', 60e3, async () => Number((await this.#get(b, '')).height)));
+  }
   async #utxos(addr) {
     return this.#chain((b) => this.#get(b, `/address/${addr}/utxo`), async (b) => {
       const best = Number((await this.#get(b, '')).blockbook.bestHeight);
       return (await this.#get(b, `/utxo/${addr}`)).map((u) => ({ txid: u.txid, vout: u.vout, value: Number(u.value),
         status: Number(u.confirmations) > 0 ? { confirmed: true, block_height: best - Number(u.confirmations) + 1 } : { confirmed: false } }));
-    });
+    }, (b) => this.#cached(`cy-utxo-${addr}`, 40e3, async () => {
+      const j = await this.#get(b, `/addrs/${addr}?unspentOnly=true&limit=200`);
+      return [...(j.txrefs ?? []), ...(j.unconfirmed_txrefs ?? [])].filter((u) => !u.double_spend).map((u) => ({ txid: u.tx_hash, vout: u.tx_output_n, value: Number(u.value),
+        status: Number(u.confirmations) > 0 ? { confirmed: true, block_height: Number(u.block_height) } : { confirmed: false } }));
+    }));
   }
   async #broadcast(hex) {
     return this.#chain(async (b) => {
       const r = await this.fetch(`${b}/tx`, { method: 'POST', body: hex, headers: { 'content-type': 'text/plain' }, signal: AbortSignal.timeout(20000) });
       const body = await r.text(); if (!r.ok) throw new Error(`broadcast rejected: ${body.slice(0, 160)}`); return body.trim();
-    }, async (b) => { const j = await this.#get(b, `/sendtx/${hex}`); if (!j.result) throw new Error(`broadcast rejected: ${JSON.stringify(j).slice(0, 160)}`); return j.result; });
+    }, async (b) => { const j = await this.#get(b, `/sendtx/${hex}`); if (!j.result) throw new Error(`broadcast rejected: ${JSON.stringify(j).slice(0, 160)}`); return j.result; },
+    async (b) => {
+      const r = await this.fetch(`${b}/txs/push`, { method: 'POST', body: JSON.stringify({ tx: hex }), headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(20000) });
+      const j = await r.json().catch(() => ({})); if (!r.ok || !j.tx?.hash) throw new Error(`broadcast rejected: ${JSON.stringify(j).slice(0, 160)}`); return j.tx.hash;
+    });
   }
   async rate() {
     const sources = [
