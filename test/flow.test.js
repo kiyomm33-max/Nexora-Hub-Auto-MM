@@ -383,3 +383,13 @@ test('support panel: staff-only, posted to the support channel with an Open Tick
   const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'supportpanel' }); await route(i, ctx);
   const p = ctx.chans.get('supch').sent[0]; assert.equal(p.flags & 32768, 32768); assert.ok(JSON.stringify(p.components.map((c) => c.toJSON())).includes('nx:ticket-start'));
 });
+
+test('stats: own embed with rank, largest deal and avatar; only in the stats channel', async () => {
+  const ctx = setup(); ctx.cfg.channels.stats = 'lobby';
+  const mk = (a, b, usd, st) => { const d = ctx.deals.create({ creator: a, partner: b, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: usd, currency: 'USD', asset: 'LTC', network: 'litecoin' }); ctx.db.prepare('UPDATE deals SET status=? WHERE id=?').run(st, d.id); };
+  mk(A, B, '40.00', 'completed'); mk(A, B, '120.50', 'completed'); mk(A, B, '10.00', 'cancelled'); mk(B, RND, '500.00', 'completed');
+  const i = fake(ctx, 'cmd', A, { command: 'stats' }); i.user.displayAvatarURL = () => 'https://x/a.png'; await route(i, ctx);
+  const e = i.out[0].embeds[0].toJSON(); assert.match(e.title, /Tier 2/); assert.equal(e.thumbnail.url, 'https://x/a.png');
+  assert.match(e.description, /rank `#3`/); assert.match(e.description, /Completed:\*\* 2/); assert.match(e.description, /Largest Deal:\*\* \$120\.50/); assert.match(e.description, /Completion Rate:\*\* 67%/);
+  ctx.cfg.channels.stats = 'elsewhere'; const w = fake(ctx, 'cmd', A, { command: 'stats' }); await route(w, ctx); assert.match(text(w), /Use \/stats in/);
+});

@@ -1,8 +1,12 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { SlashCommandBuilder as SCB, PermissionFlagsBits } from 'discord.js';
+// Every command is visible to server administrators only, except /stats.
+class SlashCommandBuilder extends SCB { constructor() { super(); this.setDefaultMemberPermissions(PermissionFlagsBits.Administrator); } }
 export const SIM_EVENTS = ['funds.observed', 'funds.confirmed_on_chain', 'escrow.funded', 'escrow.completed', 'escrow.disputed', 'escrow.cancelled'];
 const dealId = (o) => o.setName('deal_id').setDescription('Deal ID, e.g. NXH-AB12CD34').setRequired(true).setMaxLength(12).setMinLength(12);
 
 export const definitions = [
+  new SCB().setName('stats').setDescription('Show deal stats and rank').setDMPermission(false).setDefaultMemberPermissions(null)
+    .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('vouch').setDescription('Leave feedback for a completed deal').setDMPermission(false)
     .addStringOption(dealId)
     .addIntegerOption((o) => o.setName('rating').setDescription('1 to 5').setRequired(true).setMinValue(1).setMaxValue(5))

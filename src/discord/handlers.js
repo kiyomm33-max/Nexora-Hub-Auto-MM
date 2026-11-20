@@ -4,6 +4,7 @@ import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { addVouch } from '../core/vouches.js';
 import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
+import { userStats } from '../core/stats.js';
 import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
 import { backupNow } from '../jobs/backup.js';
 import { log } from '../logger.js';
@@ -146,6 +147,14 @@ const commands = {
   async dealinfo(i, ctx) {
     const { deal } = accessDeal(i, ctx, i.options.getString('deal_id', true));
     return reply(i, { embeds: [ui.dealEmbed(ctx.cfg, deal)] });
+  },
+  async stats(i, ctx) {
+    const only = ctx.cfg.channels.stats;
+    if (only && i.channel?.id !== only) throw new UserError(`Use /stats in <#${only}>.`);
+    limit(ctx, i, 'stats', 5, 60e3);
+    const u = i.options.getUser('member') ?? i.user;
+    const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
+    return i.reply({ embeds: [ui.statsEmbed(name, u.displayAvatarURL?.({ size: 256 }), userStats(ctx.db, u.id))], allowedMentions: { parse: [] } });
   },
   async supportpanel(i, ctx) {
     need(i, ctx, 'panel.post');
