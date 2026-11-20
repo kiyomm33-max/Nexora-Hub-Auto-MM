@@ -376,3 +376,10 @@ test('partner step: creator types @user or an ID in the room', async () => {
   await partnerFromMessage(msg(A, `<@${B}>`, B), ctx); assert.equal(ctx.deals.get(id).party_b, B);
   assert.ok(ch.perms.some(([u]) => u === B));
 });
+
+test('support panel: staff-only, posted to the support channel with an Open Ticket button', async () => {
+  const ctx = setup(); ctx.cfg.channels.supportPanel = 'supch'; ctx.chans.set('supch', { id: 'supch', sent: [], async send(p) { this.sent.push(p); } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'supportpanel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'supportpanel' }); await route(i, ctx);
+  const p = ctx.chans.get('supch').sent[0]; assert.equal(p.flags & 32768, 32768); assert.ok(JSON.stringify(p.components.map((c) => c.toJSON())).includes('nx:ticket-start'));
+});
