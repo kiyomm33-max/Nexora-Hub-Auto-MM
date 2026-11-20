@@ -67,7 +67,7 @@ export function evidenceUrl(s) {
 const B58 = '[1-9A-HJ-NP-Za-km-z]';
 const ADDR = {
   BTC: new RegExp(`^(bc1[a-z0-9]{25,60}|[13]${B58}{25,34})$`),
-  LTC: new RegExp(`^(ltc1[a-z0-9]{25,60}|[LM3]${B58}{26,33})$`),
+  LTC: new RegExp(`^(t?ltc1[a-z0-9]{25,60}|[LM3mn2]${B58}{26,33})$`),
   EVM: /^0x[0-9a-fA-F]{40}$/,
   SOL: new RegExp(`^${B58}{32,44}$`),
 };

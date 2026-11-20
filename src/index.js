@@ -17,11 +17,10 @@ import { registerCommands } from './discord/register.js';
 
 const cfg = loadConfig();
 cfg.warnings.forEach((w) => log.warn(w));
-const { provider, mode } = selectProvider(cfg);
-cfg.mode = mode;
-log.info(`Nexora Hub starting in ${mode.toUpperCase()} mode`, { provider: provider.name });
-
 const db = openDb(path.join(cfg.dataDir, 'nexora.sqlite'));
+const { provider, mode } = selectProvider(cfg, db);
+cfg.mode = mode;
+log.info(`Nexora Hub starting in ${mode.toUpperCase()} mode`, { provider: provider.name, ...(mode === 'live' ? { ltcNetwork: cfg.ltc.network } : {}) });
 const deals = new DealService(db, { mode });
 const limiter = new RateLimiter();
 setInterval(() => limiter.sweep(), 600e3).unref();
@@ -57,6 +56,7 @@ if (hasToken) {
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
+    if (provider.live) provider.start((ev) => { try { deals.applyProviderEvent(ev); } catch (e) { log.error('applyProviderEvent failed', e); } });
     for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
   });
   client.login(cfg.token).catch((e) => { log.error('discord login failed', e); process.exit(1); });

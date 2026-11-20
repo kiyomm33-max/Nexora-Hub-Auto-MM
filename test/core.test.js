@@ -170,13 +170,12 @@ test('backup creates a restorable snapshot and prunes', () => {
   fs.writeFileSync(path.join(bdir, 'nexora-0001.sqlite'), ''); fs.writeFileSync(path.join(bdir, 'nexora-0002.sqlite'), '');
   backupNow(db, bdir, 2); assert.equal(fs.readdirSync(bdir).filter((x) => x.endsWith('.sqlite')).length, 2);
 });
-test('config: demo by default; live needs ack and an adapter', () => {
+test('config: demo by default; live needs the self-custody acknowledgement; LTC defaults to testnet', () => {
   assert.equal(loadConfig({}).mode, 'demo');
   const c1 = loadConfig({ NEXORA_MODE: 'live' }); assert.equal(c1.mode, 'demo'); assert.ok(c1.warnings.length);
-  const full = { NEXORA_MODE: 'live', PROVIDER_NAME: 'X', PROVIDER_API_KEY: 'k', PROVIDER_WEBHOOK_SECRET: 's' };
-  assert.equal(loadConfig(full).mode, 'demo');
-  const c3 = loadConfig({ ...full, LIVE_MODE_ACK: LIVE_ACK }); assert.equal(c3.mode, 'live');
-  assert.equal(selectProvider(c3).mode, 'demo'); // no adapter bundled -> still demo
+  const c3 = loadConfig({ NEXORA_MODE: 'live', LIVE_MODE_ACK: LIVE_ACK }); assert.equal(c3.mode, 'live');
+  assert.equal(c3.ltc.network, 'testnet'); assert.equal(c3.ltc.maxDealUsd, 100);
+  assert.equal(selectProvider(loadConfig({}), openDb(':memory:')).mode, 'demo');
 });
 test('slash command definitions and modals are valid discord.js payloads', async () => {
   const { definitions } = await import('../src/discord/commands.js');
