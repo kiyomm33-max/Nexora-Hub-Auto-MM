@@ -167,8 +167,16 @@ export function stepPayload(cfg, d, set) {
       components: [row(btn(`nx:am-amount:${d.id}`, 'Enter amount', ButtonStyle.Primary))] };
     case 'amount_confirm': return { embeds: [e('Amount Confirmation', `**Both users** must confirm the USD deal amount\n\n**Amount:** \`$${d.amount}\`\n\n${votesText(d, set)}`)],
       components: [row(btn(`nx:am-amtok:${d.id}`, 'Correct', ButtonStyle.Success), btn(`nx:am-amtno:${d.id}`, 'Incorrect', ButtonStyle.Secondary))] };
-    case 'fee': return { embeds: [e('Middleman fee', `This deal is over the fee threshold, so a **$${d.fee_usd}** fee applies. Both traders must choose who pays it.\n\n${votesText(d, set)}`)],
-      components: [row(...Object.keys(FEE_LABEL).map((k) => btn(`nx:am-fee:${d.id}:${k}`, FEE_LABEL[k], ButtonStyle.Primary)))] };
+    case 'fee': {
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addTextDisplayComponents(text('## Service Fee Selection\nOnly the **sender** can choose how the middleman service fee will be handled for this deal. The receiver will confirm the selection.\n\nThe selected option will be applied after the deal is completed.'))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`**Fee:**\n\`$${Number(d.fee_usd).toFixed(2)}\``));
+      return { flags: 1 << 15, components: [text(`<@${d.sender_id}>, choose who pays the fee.`), box,
+        row(btn(`nx:am-fee:${d.id}:sender`, 'Sender', ButtonStyle.Secondary), btn(`nx:am-fee:${d.id}:receiver`, 'Receiver', ButtonStyle.Secondary), btn(`nx:am-fee:${d.id}:split`, 'Split', ButtonStyle.Success))] };
+    }
+    case 'fee_confirm': return { embeds: [e('Confirm the service fee', `<@${d.sender_id}> chose: **${FEE_LABEL[set.pending] ?? set.pending}**\n\n**Fee:** \`$${Number(d.fee_usd).toFixed(2)}\`\n\n<@${d.receiver_id}>, do you agree?`)],
+      components: [row(btn(`nx:am-feeok:${d.id}`, 'Agree', ButtonStyle.Success), btn(`nx:am-feeno:${d.id}`, 'Disagree', ButtonStyle.Secondary))] };
     default: return { embeds: [e('Deal', 'Setting up…')], components: [] };
   }
 }

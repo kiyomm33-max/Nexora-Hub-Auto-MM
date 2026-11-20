@@ -183,17 +183,26 @@ export const handlers = {
   },
   async fee(i, ctx, [id, choice]) {
     const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'fee');
+    if (i.user.id !== d.sender_id) throw new UserError('Only the **sender** can choose how the fee is handled.');
     if (!['sender', 'receiver', 'split'].includes(choice)) throw new UserError('Invalid choice.');
-    let mismatch = false;
+    const nd = await locked(ctx, id, async () => { const cur = load(ctx, id); return ctx.deals.patch(id, i.user.id, { setup: { ...setStep(ctx, cur, 'fee_confirm'), pending: choice } }, 'setup.fee_chosen'); });
+    return done(i, ctx, nd);
+  },
+  async feeno(i, ctx, [id]) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'fee_confirm');
+    if (i.user.id !== d.receiver_id) throw new UserError('Only the **receiver** can answer this.');
+    const nd = await locked(ctx, id, async () => { const cur = load(ctx, id); return ctx.deals.patch(id, i.user.id, { setup: { ...setStep(ctx, cur, 'fee'), pending: null } }, 'setup.fee_rejected'); });
+    return done(i, ctx, nd);
+  },
+  async feeok(i, ctx, [id]) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'fee_confirm');
+    if (i.user.id !== d.receiver_id) throw new UserError('Only the **receiver** can answer this.');
     const nd = await locked(ctx, id, async () => {
-      const cur = load(ctx, id); const set = ctx.deals.setup(cur); const votes = { ...set.votes, [i.user.id]: choice };
-      const vals = Object.values(votes);
-      if (vals.length < 2) return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes } }, 'setup.fee_vote', { silent: true });
-      if (vals[0] !== vals[1]) { mismatch = true; return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes: {} } }, 'setup.fee_disagreement', { silent: true }); }
+      const cur = load(ctx, id); const choice = ctx.deals.setup(cur).pending;
+      if (!['sender', 'receiver', 'split'].includes(choice)) throw new UserError('No fee option was chosen yet.');
       const p = ctx.deals.patch(id, i.user.id, { fee_payer: choice, setup: setStep(ctx, cur, 'payment') }, 'setup.fee_agreed');
       return finalize(ctx, p);
     });
-    if (mismatch) await i.channel.send({ content: 'The two fee choices did not match, so both were reset. Please choose again.', allowedMentions: { parse: [] } }).catch(() => {});
     return done(i, ctx, nd);
   },
 };

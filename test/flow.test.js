@@ -68,7 +68,7 @@ async function runToRoom(ctx, { amount = '20', feeChoice = 'receiver' } = {}) {
   await click(ctx, B, `nx:am-accept:${id}`);
   await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount });
   await click(ctx, A, `nx:am-amtok:${id}`); await click(ctx, B, `nx:am-amtok:${id}`);
-  if (Number(amount) >= 50) { await click(ctx, A, `nx:am-fee:${id}:${feeChoice}`); await click(ctx, B, `nx:am-fee:${id}:${feeChoice}`); }
+  if (Number(amount) >= 50) { await click(ctx, A, `nx:am-fee:${id}:${feeChoice}`); await click(ctx, B, `nx:am-feeok:${id}`); }
   return id;
 }
 
@@ -128,7 +128,7 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   assert.ok(verifyAuditChain(ctx.db).ok);
 });
 
-test('fee: under threshold none; over threshold both must agree on who pays (sender / receiver / split)', async () => {
+test('fee: under threshold none; over threshold only the sender chooses who pays and the receiver confirms (sender / receiver / split)', async () => {
   for (const [choice, send, recv] of [['sender', '102.00', '100.00'], ['receiver', '100.00', '98.00'], ['split', '101.00', '99.00']]) {
     const ctx = setup(); const id = await runToRoom(ctx, { amount: '100', feeChoice: choice });
     const d = ctx.deals.get(id); assert.equal(d.status, 'awaiting_provider'); assert.equal(d.fee_usd, '2.00'); assert.equal(d.fee_payer, choice);
@@ -137,9 +137,10 @@ test('fee: under threshold none; over threshold both must agree on who pays (sen
   }
   const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   ctx.deals.patch(id, A, { party_b: B, sender_id: A, receiver_id: B, item: 'x trade', amount: '100.00', fee_usd: '2.00', setup: { step: 'fee', votes: {} } }, 'test');
-  const sent = ch.sent.length; await click(ctx, A, `nx:am-fee:${id}:sender`); assert.equal(ctx.deals.get(id).status, 'waiting_parties');
-  await click(ctx, B, `nx:am-fee:${id}:receiver`);
-  assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'fee'); assert.deepEqual(ctx.deals.setup(ctx.deals.get(id)).votes, {}); assert.ok(ch.sent.length > sent, 'mismatch notice sent');
+  const card = JSON.stringify((await click(ctx, B, `nx:am-fee:${id}:split`)).out); assert.match(card, /Only the \*\*sender\*\*/); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'fee');
+  await click(ctx, A, `nx:am-fee:${id}:split`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'fee_confirm'); assert.equal(ctx.deals.get(id).status, 'waiting_parties');
+  assert.match(text(await click(ctx, A, `nx:am-feeok:${id}`)), /Only the \*\*receiver\*\*/);
+  await click(ctx, B, `nx:am-feeno:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'fee', 'receiver can send it back');
   assert.match(text(await click(ctx, A, `nx:am-fee:${id}:free`)), /Invalid choice/);
   const at = fake(ctx, 'btn', RND, { customId: `nx:am-fee:${id}:split`, channel: ch }); await route(at, ctx); assert.match(text(at), /Only the two traders/);
 });
