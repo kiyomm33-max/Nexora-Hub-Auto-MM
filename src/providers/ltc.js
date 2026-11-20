@@ -100,7 +100,7 @@ export class LtcWallet {
     const deals = this.db.prepare(`SELECT d.*, w.expected_sat, w.required_conf AS wreq, w.rate_usd AS wrate, w.payout_state, w.payout_txid, w.funded
       FROM deals d JOIN ltc_wallet w ON w.deal_id=d.id WHERE d.mode='live' AND d.status IN ('awaiting_provider','verification_pending')`).all();
     for (const d of deals) {
-      try { await this.#scanDeal(d, tip, emit); } catch (e) { log.error('ltc scan failed', { deal: d.id, err: String(e) }); }
+      try { await this.#scanDeal(d, tip, emit); } catch (e) { log.error(`ltc scan failed for ${d.id}: ${e?.message ?? e}`); }
     }
     return { scanned: deals.length };
   }
@@ -191,7 +191,7 @@ export class LtcWallet {
   }
 
   start(emit, everyMs = 20000) {
-    const tick = () => this.scan(emit).catch((e) => log.error('ltc scan error', { err: String(e) }));
+    const tick = () => this.scan(emit).catch((e) => log.error(`ltc scan error: ${e?.cause?.code ?? ''} ${e?.message ?? e}`));
     this.timer = setInterval(tick, everyMs); this.timer.unref?.(); tick();
   }
 }
