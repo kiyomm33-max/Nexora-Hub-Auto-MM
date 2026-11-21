@@ -85,13 +85,6 @@ export const COINS = {
   'USDC-ERC20': { label: 'USDC [ERC-20]', mark: '$', asset: 'USDC', network: 'ethereum' },
   'USDT-BEP20': { label: 'USDT [BEP-20]', mark: '₮', asset: 'USDT', network: 'bsc' },
 };
-export const DEAL_TYPES = [
-  { value: 'in-game', label: 'In-Game', description: 'Deal involving Roblox in-game items' },
-  { value: 'exchange', label: 'Exchange', description: 'Deal involving currency exchange' },
-  { value: 'counter-strike', label: 'Counter Strike', description: 'Deal involving CS' },
-  { value: 'robux', label: 'Robux', description: 'Deal involving Roblox Robux' },
-  { value: 'other', label: 'Other', description: 'Deal involves something else' },
-];
 export const coinName = (d) => Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network)?.label ?? `${d.asset} (${d.network})`;
 const text = (t) => new TextDisplayBuilder().setContent(t);
 import { emojiMap } from './emojis.js';
@@ -143,8 +136,7 @@ export function stepPayload(cfg, d, set) {
   const step = set.step;
   const e = (t, desc) => base(cfg, t, desc);
   switch (step) {
-    case 'type': return { embeds: [e('Deal Type', 'To best serve you, we need to know a few deal details. Please use the dropdown menu below to select the **deal type**:')],
-      components: [row(new StringSelectMenuBuilder().setCustomId(`nx:am-type:${d.id}`).setPlaceholder('Select Deal Type').addOptions(DEAL_TYPES))] };
+    case 'type': // legacy rooms created before the Deal Type step was removed: skip straight to adding the trader
     case 'partner': return cfg.messageContent
       ? { embeds: [e('Add the other trader', `<@${d.party_a}>, **mention the trader** you are dealing with (**@user**) or send their **Discord user ID** in this channel.`)], components: [] }
       : { embeds: [e('Add the other trader', `<@${d.party_a}>, press the button and enter the **Discord user ID** of the trader you are dealing with.`)],
@@ -159,7 +151,7 @@ export function stepPayload(cfg, d, set) {
         .addSeparatorComponents(new SeparatorBuilder()).addSectionComponents(pick('Receiving', 'receiver'));
       return { flags: 1 << 15, components: [text(`${parties(d)} Welcome! Select roles below.`), box, row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Danger))] };
     }
-    case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Type:** ${DEAL_TYPES.find((t) => t.value === d.deal_type)?.label ?? 'Other'}\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
+    case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
     case 'accept': return { embeds: [e('Accept the deal description', `**Description** by <@${d.desc_by}>:\n>>> ${d.item}\n\n<@${d.desc_by === d.party_a ? d.party_b : d.party_a}>, do you accept this description?`)],
       components: [row(btn(`nx:am-accept:${d.id}`, 'Accept', ButtonStyle.Success), btn(`nx:am-decline:${d.id}`, 'Decline', ButtonStyle.Danger))] };
@@ -190,7 +182,7 @@ export function dealEmbed(cfg, d) {
     { name: 'Sender', value: d.sender_id ? `<@${d.sender_id}>` : '—', inline: true },
     { name: 'Receiver', value: d.receiver_id ? `<@${d.receiver_id}>` : '—', inline: true },
     { name: 'Middleman', value: d.middleman_id ? `<@${d.middleman_id}>` : 'Not yet claimed', inline: true },
-    { name: 'Deal', value: `${d.deal_type ?? '—'}: ${d.item || '—'}` },
+    { name: 'Deal', value: d.item || '—' },
     { name: 'Crypto', value: coinName(d), inline: true },
     { name: 'Amount', value: `$${d.amount} USD`, inline: true },
     { name: 'Fee', value: Number(d.fee_usd) ? `$${d.fee_usd} — ${FEE_LABEL[d.fee_payer] ?? 'not chosen'}` : 'None', inline: true },
@@ -220,12 +212,11 @@ export const phaseOf = (d) => {
 };
 
 export function summaryEmbed(cfg, d) {
-  const type = DEAL_TYPES.find((t) => t.value === d.deal_type)?.label ?? 'Other';
   const e = base(cfg, 'Deal Summary', `Refer to this deal summary for any reaffirmations. Notify staff for any support required.${d.mode === 'demo' ? '\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`)
     .addFields({ name: 'Sender', value: `<@${d.sender_id}>` }, { name: 'Receiver', value: `<@${d.receiver_id}>` }, { name: 'Coin', value: coinName(d) },
       { name: 'Deal Amount', value: `\`${usd(d.amount)}\`` });
   if (Number(d.fee_usd)) e.addFields({ name: 'Fee', value: `\`${usd(d.fee_usd)}\` — ${FEE_LABEL[d.fee_payer]}\nSender sends \`${usd(d.send_usd)}\`, receiver gets \`${usd(d.receive_usd)}\`` });
-  return e.addFields({ name: 'Deal', value: `${type} - ${d.item}` });
+  return e.addFields({ name: 'Deal', value: d.item });
 }
 export function invoiceEmbed(cfg, d) {
   const demo = d.mode === 'demo';
