@@ -230,7 +230,7 @@ export function invoiceEmbed(cfg, d) {
 }
 export function shortEmbed(cfg, d) {
   const got = usdWorth(d, d.short_crypto);
-  return base(cfg, 'Warning: payment is less than the deal amount', `<@${d.sender_id}> only sent **${usd(got)} USD** (\`${d.short_crypto}\` ${d.asset}), but the deal needs **${usd(d.send_usd)} USD**.\n\n**Do you still want to continue** with the smaller amount, or **cancel** and get exactly what you sent back?\n*Only the sender can choose. If you send the rest to the same address, it is added automatically.*`, BRAND.red)
+  return base(cfg, 'Warning: payment is less than the deal amount', `<@${d.sender_id}> only sent **${usd(got)} USD** (\`${d.short_crypto}\` ${d.asset}), but the deal needs **${usd(d.send_usd)} USD**.\n\n**Do you still want to continue** with the smaller amount? **Both traders must agree** (press Continue). Or the **sender** can **cancel** and get exactly what they sent back.\n*If you send the rest to the same address, it is added automatically.*`, BRAND.red)
     .addFields({ name: 'Needed', value: `\`${d.pay_amount}\` ${d.asset} (${usd(d.send_usd)} USD)`, inline: true }, { name: 'Received', value: `\`${d.short_crypto}\` ${d.asset} (${usd(got)} USD)`, inline: true },
       { name: 'Transaction', value: txLink(d.tx_hash) });
 }

@@ -403,9 +403,16 @@ export async function payoutFromMessage(msg, ctx) {
 // ---------- short payment: continue with what arrived, or get exactly that back ----------
 export async function shortYes(i, ctx, id) {
   const d = load(ctx, id);
-  if (d.sender_id !== i.user.id) throw new UserError('Only the sender can choose.');
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
   if (d.short_state !== 'pending') throw new UserError('This choice was already made.');
   if (cancelRow(ctx, id)) throw new UserError('A refund is already in progress for this deal.');
+  const votes = await locked(ctx, id, async () => ctx.deals.voteShort(id, i.user.id));
+  const o = other(d, i.user.id);
+  if (!votes.includes(o)) {
+    await i.deferUpdate();
+    await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Waiting for the other trader', `<@${i.user.id}> agreed to **continue with the smaller amount**.\n<@${o}>, **both traders must agree**. Press **Continue** above to agree, or ask the sender to cancel and refund.`)], allowedMentions: { users: [o] } });
+    return;
+  }
   await i.deferUpdate();
   const nd = await locked(ctx, id, async () => {
     let r;

@@ -159,7 +159,9 @@ test('short payment: the deal is flagged with the real amount, and continuing re
   const { usdWorth } = await import('../src/core/fees.js');
   const r = await c.w.acceptShort(id);
   assert.equal(r.amount, (part / 1e8).toFixed(8));
-  assert.throws(() => c.svc.acceptShort(id, B, r.amount, usdWorth(d, r.amount), c.cfg.fee), /Only the sender/);
+  assert.throws(() => c.svc.acceptShort(id, A, r.amount, usdWorth(d, r.amount), c.cfg.fee), /Both traders must agree/);
+  c.svc.voteShort(id, A); assert.throws(() => c.svc.acceptShort(id, A, r.amount, usdWorth(d, r.amount), c.cfg.fee), /Both traders must agree/, 'one vote is not enough');
+  c.svc.voteShort(id, B);
   const nd = c.svc.acceptShort(id, A, r.amount, usdWorth(d, r.amount), c.cfg.fee);
   assert.equal(nd.short_state, 'accepted'); assert.ok(Number(nd.send_usd) < 3 && Number(nd.send_usd) > 1.5, `send_usd ${nd.send_usd}`); assert.equal(nd.send_usd, nd.receive_usd); assert.equal(nd.fee_usd, '0.00');
   c.state.utxos = [{ txid: 'c'.repeat(64), vout: 0, value: part, status: { confirmed: true, block_height: 1000 } }];
