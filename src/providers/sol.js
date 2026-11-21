@@ -96,6 +96,7 @@ export class SolWallet {
       const fin = await this.rpc.balance(d.pay_address, 'finalized'); const final = fin >= seen;
       const txid = await this.rpc.latestSig(d.pay_address).catch(() => null);
       const base = { reference: d.pay_address, amount: fmtSol(seen), required_confirmations: 1, ...(txid ? { txid } : {}) };
+      if (seen < minOk) emit({ id: eid('short', d.pay_address, seen), type: 'funds.underpaid', confirmations: final ? 1 : 0, ...base });
       emit({ id: eid('obs', d.pay_address, seen), type: 'funds.observed', confirmations: final ? 1 : 0, ...base });
       if (final) emit({ id: eid('conf', d.pay_address, seen), type: 'funds.confirmed_on_chain', confirmations: 1, ...base });
       if (final && seen >= minOk && !d.funded) {
@@ -107,6 +108,14 @@ export class SolWallet {
       }
     }
     if (d.funded && d.released_at && d.payout_address && d.status === 'verification_pending' && d.payout_state == null) await this.#payout(d, seen);
+  }
+  /** The sender chose to continue with a smaller payment: the balance now on the address becomes the expected amount. */
+  async acceptShort(dealId) {
+    const d = this.db.prepare('SELECT pay_address FROM deals WHERE id=?').get(dealId);
+    const seen = await this.rpc.balance(d.pay_address, 'confirmed');
+    if (seen <= 0n) throw new Error('No payment found on the address.');
+    this.db.prepare("UPDATE xwallet SET expected=? WHERE family='sol' AND deal_id=? AND funded=0 AND payout_state IS NULL").run(seen.toString(), dealId);
+    return { amount: fmtSol(seen) };
   }
   async #confirmPayout(d, emit) {
     const st = await this.rpc.status(d.payout_txid);

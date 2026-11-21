@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { audit } from './audit.js';
+import { calcFee } from './fees.js';
 
 export const STATUS = {
   waiting_parties: 'Waiting for both parties',
@@ -183,12 +184,29 @@ export class DealService extends EventEmitter {
     this.#emit(id, 'cancelled'); return nd;
   }
 
+  /** The sender accepted a smaller payment than quoted: the deal continues with what was actually received. `usdValue` is the USD worth of the received coins. */
+  acceptShort(id, actor, receivedCrypto, usdValue, feeCfg) {
+    const d = this.get(id);
+    if (!d || d.short_state !== 'pending') throw new DealError('There is no short payment to accept.');
+    if (d.sender_id !== actor) throw new DealError('Only the sender can accept a smaller payment.');
+    const send = Math.floor(usdValue * 100) / 100;
+    const fee = calcFee(send, feeCfg);
+    const receive = Math.round((send - fee) * 100) / 100;
+    if (!(receive > 0)) throw new DealError('That amount is too small to continue with. Cancel and get it refunded.');
+    this.db.tx(() => {
+      this.db.prepare("UPDATE deals SET short_state='accepted', received_crypto=?, amount=?, send_usd=?, fee_usd=?, receive_usd=?, updated_at=? WHERE id=? AND short_state='pending'")
+        .run(receivedCrypto, receive.toFixed(2), send.toFixed(2), fee.toFixed(2), receive.toFixed(2), now(), id);
+      audit(this.db, { actor, action: 'payment.short_accepted', dealId: id, detail: { quoted: d.send_usd, received: receivedCrypto, send_usd: send.toFixed(2), fee_usd: fee.toFixed(2), receive_usd: receive.toFixed(2) } });
+    });
+    this.#emit(id, 'observed'); return this.get(id);
+  }
+
   /** Both traders agreed to cancel and the funds were returned to the sender on-chain. Only possible before any release. */
-  refundCancel(id, actor, { txid, address }) {
+  refundCancel(id, actor, { txid, address, short = false }) {
     const d = this.get(id);
     if (!d) throw new DealError('Deal not found.');
     if (d.status !== 'verification_pending' || d.release_at || d.released_at) throw new DealError('This deal can no longer be cancelled with a refund.');
-    const nd = this.#transition(id, 'cancelled', actor, 'deal.refunded', { reason: 'both traders agreed to cancel', refundTx: txid, refundTo: address }, { cancelled_at: now() });
+    const nd = this.#transition(id, 'cancelled', actor, 'deal.refunded', { reason: short ? 'sender cancelled after a short payment' : 'both traders agreed to cancel', refundTx: txid, refundTo: address }, { cancelled_at: now() });
     this.#emit(id, 'cancelled'); return nd;
   }
 
@@ -230,7 +248,7 @@ export class DealService extends EventEmitter {
    * Idempotent on event.id. Returns {outcome}.
    */
   applyProviderEvent(ev, { simulated = false } = {}) {
-    const known = ['funds.observed', 'funds.confirmed_on_chain', 'escrow.funded', 'escrow.completed', 'escrow.disputed', 'escrow.cancelled'];
+    const known = ['funds.underpaid', 'funds.observed', 'funds.confirmed_on_chain', 'escrow.funded', 'escrow.completed', 'escrow.disputed', 'escrow.cancelled'];
     if (!ev || typeof ev.id !== 'string' || ev.id.length > 100 || !known.includes(ev.type) || typeof ev.reference !== 'string')
       return { outcome: 'invalid' };
     let outcome = 'applied'; let dealId = null; let change = null;
@@ -252,6 +270,14 @@ export class DealService extends EventEmitter {
         if (Number.isInteger(ev.required_confirmations) && ev.required_confirmations >= 1 && ev.required_confirmations <= 1000) txd.required_conf = ev.required_confirmations;
         const setTx = () => { const k = Object.keys(txd); if (k.length) this.db.prepare(`UPDATE deals SET ${k.map((c) => `${c}=?`).join(',')} WHERE id=?`).run(...k.map((c) => txd[c]), dealId); };
         switch (ev.type) {
+          case 'funds.underpaid':
+            if (terminal || d.escrow_status === 'provider_confirmed' || d.released_at) { outcome = 'ignored_state'; break; }
+            if (typeof ev.amount !== 'string' || !txd.received_crypto) { outcome = 'invalid'; break; }
+            setTx();
+            if (d.status === 'awaiting_provider') this.#move(d, 'verification_pending', ev, simulated);
+            set('short_state=?, short_crypto=?', 'pending', ev.amount);
+            act('payment.underpaid', { received: ev.amount, note: 'Less than the quoted amount; waiting for the sender to continue or cancel' });
+            change = 'short'; break;
           case 'funds.observed':
             if (terminal) { outcome = 'ignored_final'; break; }
             setTx();
@@ -268,7 +294,7 @@ export class DealService extends EventEmitter {
             change = 'observed'; break;
           case 'escrow.funded':
             if (terminal) { outcome = 'ignored_final'; break; }
-            set('escrow_status=?', 'provider_confirmed');
+            set('escrow_status=?, short_state=NULL', 'provider_confirmed');
             if (d.status === 'awaiting_provider') this.#move(d, 'verification_pending', ev, simulated);
             act('escrow.provider_confirmed', { note: 'Escrow funds confirmed by provider' });
             change = 'escrow'; break;

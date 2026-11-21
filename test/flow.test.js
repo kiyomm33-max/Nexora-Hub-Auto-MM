@@ -446,6 +446,33 @@ test('cancel & refund: both traders must agree, the sender types an address, fun
   assert.equal(swept.length, 1, 'never refunded twice');
 });
 
+test('short payment: warning with the real amount; sender continues or cancels and gets the exact amount back', async () => {
+  const { refundFromMessage } = await import('../src/discord/automm.js');
+  const mk = async () => { const ctx = setup(); const id = await runToRoom(ctx, { amount: '10' }); const room = ctx.chans.get(ctx.room);
+    const d0 = ctx.deals.get(id); const ref = d0.provider_ref;
+    ctx.deals.applyProviderEvent({ id: `short-${id}`, type: 'funds.underpaid', reference: ref, amount: '0.2', txid: 'f'.repeat(64), confirmations: 0 }, { simulated: true }); await ctx.settle();
+    return { ctx, id, room }; };
+  // continue
+  { const { ctx, id, room } = await mk(); const d = ctx.deals.get(id); assert.equal(d.short_state, 'pending');
+    const msg = room.msgs.get(d.status_message_id); const body = JSON.stringify(msg.embeds.map((e) => e.toJSON ? e.toJSON() : e));
+    assert.match(body, /less than the deal amount/); assert.match(body, /only sent \*\*\$/); assert.match(JSON.stringify(msg.components.map((c) => c.toJSON())), /am-shortyes[\s\S]*am-shortno/);
+    ctx.provider.acceptShort = async () => ({ amount: '0.2' });
+    assert.match(text(await click(ctx, B, `nx:am-shortyes:${id}`)), /Only the sender/);
+    await click(ctx, A, `nx:am-shortyes:${id}`); await ctx.settle();
+    const nd = ctx.deals.get(id); assert.equal(nd.short_state, 'accepted'); assert.equal(nd.received_crypto, '0.2'); assert.ok(Number(nd.send_usd) > 0 && Number(nd.send_usd) < 10);
+    assert.match(text(await click(ctx, A, `nx:am-shortyes:${id}`)), /already made/); }
+  // cancel: exact refund
+  { const { ctx, id, room } = await mk(); const swept = []; ctx.provider.sweep = async (d, to) => { swept.push([d, to]); return 'e'.repeat(64); }; ctx.provider.explorerTx = (t) => `https://x/${t}`;
+    assert.match(text(await click(ctx, B, `nx:am-shortno:${id}`)), /Only the sender/);
+    await click(ctx, A, `nx:am-shortno:${id}`);
+    assert.equal(ctx.db.prepare('SELECT state FROM cancel_req').get().state, 'address');
+    assert.match(text(await click(ctx, A, `nx:am-shortyes:${id}`)), /refund is already in progress/);
+    const say = async (u, content) => { const m = { author: { id: u, bot: false }, guild: {}, channelId: room.id, content, channel: room, delete: async () => {}, reply: async () => {} }; await refundFromMessage(m, ctx); };
+    await say(A, LTC); await click(ctx, A, `nx:am-refyes:${id}:${LTC}`); await ctx.settle();
+    assert.deepEqual(swept, [[id, LTC]]); assert.equal(ctx.deals.get(id).status, 'cancelled');
+    assert.match(JSON.stringify(room.sent.map((m) => (m.embeds ?? []).map((e) => e.toJSON ? e.toJSON() : e))), /sender cancelled after sending less/); }
+});
+
 test('welcome: posts to the welcome channel, mentions rules and auto MM channels; preview command is staff-only', async () => {
   const { welcomePayload, sendWelcome } = await import('../src/discord/welcome.js');
   const ctx = setup(); ctx.cfg.channels.welcome = 'wch'; ctx.cfg.channels.rules = '111'; ctx.cfg.channels.panel = '222';

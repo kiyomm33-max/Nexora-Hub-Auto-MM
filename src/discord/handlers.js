@@ -271,6 +271,8 @@ const buttons = {
   'am-payyes': (i, ctx, [id, addr]) => am.payAddrConfirm(i, ctx, id, addr),
   'am-payno': async (i, ctx, [id]) => { if (ctx.deals.get(id)?.receiver_id !== i.user.id) throw new UserError('Only the receiver can do that.'); return i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', '**Send your address again** in this channel.')], components: [] }); },
   'am-cancelpaid': (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.disputeModal(id)); },
+  'am-shortyes': (i, ctx, [id]) => am.shortYes(i, ctx, id),
+  'am-shortno': (i, ctx, [id]) => am.shortNo(i, ctx, id),
   'am-cancelask': (i, ctx, [id]) => am.cancelAsk(i, ctx, id),
   'am-cancelyes': (i, ctx, [id]) => am.cancelYes(i, ctx, id),
   'am-cancelno': (i, ctx, [id]) => am.cancelNo(i, ctx, id),

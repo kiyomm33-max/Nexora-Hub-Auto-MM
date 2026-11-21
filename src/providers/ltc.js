@@ -133,6 +133,14 @@ export class LtcWallet {
     row.run(idx, deal.id, address, new Date().toISOString(), sat, this.cfg.ltc.confirmations, String(rate));
     return { reference: address, address, payAmount: fromSat(sat), rateUsd: rate.toFixed(2), instructions: 'Send the exact amount in ONE transaction.' };
   }
+  /** The sender chose to continue with a smaller payment: the amount now on the address becomes the expected amount. */
+  async acceptShort(dealId) {
+    const d = this.db.prepare('SELECT pay_address FROM deals WHERE id=?').get(dealId);
+    const total = (await this.#utxos(d.pay_address)).reduce((s, u) => s + u.value, 0);
+    if (!total) throw new Error('No payment found on the address.');
+    this.db.prepare('UPDATE ltc_wallet SET expected_sat=? WHERE deal_id=? AND funded=0 AND payout_state IS NULL').run(total, dealId);
+    return { amount: fromSat(total) };
+  }
   async cancelEscrow() { return { ok: true }; }
   async referDispute() { return { ok: true, note: 'Funds stay in the escrow wallet. Staff review the evidence and the owner decides any refund or payout.' }; }
   async requestRelease() { return { accepted: true }; }
@@ -156,9 +164,10 @@ export class LtcWallet {
     const need = d.wreq ?? this.cfg.ltc.confirmations;
     if (utxos.length && d.payout_state == null) {
       const first = utxos[0];
+      const enough = total >= Math.floor(d.expected_sat * (1 - this.cfg.ltc.tolerance));
+      if (!enough) emit({ id: eid('short', d.pay_address, total), type: 'funds.underpaid', reference: d.pay_address, txid: first.txid, amount: fromSat(total), confirmations: minConf, required_confirmations: need });
       emit({ id: eid('obs', d.pay_address, first.txid), type: 'funds.observed', reference: d.pay_address, txid: first.txid, amount: fromSat(total), confirmations: minConf, required_confirmations: need });
       if (minConf >= 1) emit({ id: eid('conf', d.pay_address, total, Math.min(minConf, need)), type: 'funds.confirmed_on_chain', reference: d.pay_address, txid: first.txid, amount: fromSat(total), confirmations: minConf, required_confirmations: need });
-      const enough = total >= Math.floor(d.expected_sat * (1 - this.cfg.ltc.tolerance));
       if (minConf >= need && enough && !d.funded) {
         this.db.prepare('UPDATE ltc_wallet SET funded=1 WHERE deal_id=?').run(d.id);
         emit({ id: eid('fund', d.pay_address), type: 'escrow.funded', reference: d.pay_address, txid: first.txid, amount: fromSat(total), confirmations: minConf, required_confirmations: need });

@@ -146,3 +146,31 @@ test('mainnet: falls back to BlockCypher when Esplora and Blockbook are both dow
   assert.equal(svc.get(d.id).confirmations, 3); assert.equal(svc.get(d.id).tx_hash, 'd'.repeat(64));
   assert.equal(await w.sweep(d.id, w.treasury), 'b'.repeat(64)); assert.equal(sent.length, 1);
 });
+
+test('short payment: the deal is flagged with the real amount, and continuing re-prices it so it can fund', async () => {
+  const c = setup(); const { id, esc } = await newDeal(c, { send: '10.00', receive: '10.00' }); const sat = Math.round(Number(esc.payAmount) * 1e8);
+  const part = Math.floor(sat / 5); // 20% of the quote
+  c.state.tip = 1005; c.state.utxos = [{ txid: 'c'.repeat(64), vout: 0, value: part, status: { confirmed: false } }];
+  await c.w.scan(c.emit);
+  let d = c.svc.get(id);
+  assert.equal(d.short_state, 'pending'); assert.equal(d.status, 'verification_pending');
+  assert.equal(d.short_crypto, (part / 1e8).toFixed(8));
+  await c.w.scan(c.emit); assert.equal(new Set(c.events.filter((e) => e.type === 'funds.underpaid').map((e) => e.id)).size, 1, 'one warning per amount (repeat scans are deduped by event id)');
+  const { usdWorth } = await import('../src/core/fees.js');
+  const r = await c.w.acceptShort(id);
+  assert.equal(r.amount, (part / 1e8).toFixed(8));
+  assert.throws(() => c.svc.acceptShort(id, B, r.amount, usdWorth(d, r.amount), c.cfg.fee), /Only the sender/);
+  const nd = c.svc.acceptShort(id, A, r.amount, usdWorth(d, r.amount), c.cfg.fee);
+  assert.equal(nd.short_state, 'accepted'); assert.ok(Number(nd.send_usd) < 3 && Number(nd.send_usd) > 1.5, `send_usd ${nd.send_usd}`); assert.equal(nd.send_usd, nd.receive_usd); assert.equal(nd.fee_usd, '0.00');
+  c.state.utxos = [{ txid: 'c'.repeat(64), vout: 0, value: part, status: { confirmed: true, block_height: 1000 } }];
+  await c.w.scan(c.emit); await c.w.scan(c.emit);
+  assert.equal(c.svc.get(id).escrow_status, 'provider_confirmed', 'funds with the accepted amount');
+});
+test('short payment: topping up to the full amount clears the warning and funds normally', async () => {
+  const c = setup(); const { id, esc } = await newDeal(c); const sat = Math.round(Number(esc.payAmount) * 1e8);
+  c.state.tip = 1005; c.state.utxos = [{ txid: 'd'.repeat(64), vout: 0, value: Math.floor(sat / 2), status: { confirmed: true, block_height: 1000 } }];
+  await c.w.scan(c.emit); assert.equal(c.svc.get(id).short_state, 'pending');
+  c.state.utxos.push({ txid: 'e'.repeat(64), vout: 0, value: sat, status: { confirmed: true, block_height: 1000 } });
+  await c.w.scan(c.emit); await c.w.scan(c.emit);
+  const d = c.svc.get(id); assert.equal(d.escrow_status, 'provider_confirmed'); assert.equal(d.short_state, null);
+});
