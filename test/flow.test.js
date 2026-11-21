@@ -61,7 +61,6 @@ async function startDeal(ctx, key = 'LTC', user = A) {
 async function runToRoom(ctx, { amount = '20', feeChoice = 'receiver' } = {}) {
   const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
-  await sel(A, `nx:am-type:${id}`, { values: ['robux'] });
   await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: B } }, values: [] });
   await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`);
   await submit(ctx, A, `nx:am-descmodal:${id}`, { desc: '20k Robux for $20 of LTC' });
@@ -81,7 +80,7 @@ test('panel is a Components V2 message with a Start button per coin; posted to t
   const deny = fake(ctx, 'cmd', RND, { command: 'panel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
 
-test('start: private room with Deal Started + Safety Warning + Close + deal type dropdown; max 2 open deals', async () => {
+test('start: private room with Deal Started + Safety Warning + Close + straight to adding the trader (no deal type); max 2 open deals', async () => {
   const ctx = setup(); const { d } = await startDeal(ctx, 'USDT-BEP20');
   assert.equal(d.status, 'waiting_parties'); assert.equal(d.network, 'bsc');
   const room = ctx.chans.get(d.channel_id);
@@ -89,8 +88,7 @@ test('start: private room with Deal Started + Safety Warning + Close + deal type
   assert.ok(room.opts.permissionOverwrites.some((o) => o.id === A) && !room.opts.permissionOverwrites.some((o) => o.id === ROLE.trial));
   assert.match(JSON.stringify(room.sent[0].embeds.map((e) => e.data)), /Deal Started[\s\S]*Safety Warning[\s\S]*NEVER/);
   assert.match(JSON.stringify(room.sent[0].components.map((c) => c.toJSON())), /nx:am-close/);
-  const sel = JSON.stringify(room.sent[1].components.map((c) => c.toJSON()));
-  for (const t of ['In-Game', 'Exchange', 'Counter Strike', 'Robux', 'Other']) assert.ok(sel.includes(t), t);
+  const first = JSON.stringify(room.sent[1].embeds.map((e) => e.toJSON ? e.toJSON() : e)); assert.match(first, /Add the other trader/); assert.doesNotMatch(first + JSON.stringify((room.sent[1].components ?? []).map((c) => c.toJSON())), /Deal Type|Select Deal Type/);
   await startDeal(ctx, 'BTC'); const third = fake(ctx, 'btn', A, { customId: 'nx:am-start:ETH' }); await route(third, ctx); assert.match(text(third), /2 open deals/);
 });
 
@@ -98,9 +96,7 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
   assert.match(text(await click(ctx, A, `nx:am-role:${id}:sender`)), /already done|not available/); // skipping steps
-  assert.match(text(await sel(B, `nx:am-type:${id}`, { values: ['robux'] })), /Only the traders|Only the deal creator/);
-  assert.match(text(await sel(A, `nx:am-type:${id}`, { values: ['hax'] })), /Invalid deal type/);
-  await sel(A, `nx:am-type:${id}`, { values: ['in-game'] });
+  assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'partner', 'no deal type step: the first step is adding the trader');
   assert.match(text(await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: A } }, values: [] })), /yourself/);
   assert.match(text(await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: BOT } }, values: [] })), /Bots/);
   const typed = fake(ctx, 'modal', A, { customId: `nx:am-partnermodal:${id}`, fields: { uid: '<@' + B + '>' }, channel: ch }); await route(typed, ctx); // add by ID/ping
@@ -372,7 +368,6 @@ test('partner step: creator types @user or an ID in the room', async () => {
   const { partnerFromMessage } = await import('../src/discord/automm.js');
   const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
-  await sel(A, `nx:am-type:${id}`, { values: ['in-game'] });
   const replies = []; const msg = (author, content, mentioned) => ({ author: { id: author, bot: false }, guild: ctx.guild, channel: ch, channelId: ch.id, content, mentions: { users: { first: () => (mentioned ? { id: mentioned } : undefined) } },
     reply: async (o) => { replies.push(o.content); }, delete: async () => {} });
   ch.messages = { fetch: async () => ({ edit: async () => {} }) };
@@ -412,11 +407,10 @@ test('every step posts a NEW message that pings the right person, and the previo
   const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const live = () => [...ch.msgs.values()].filter((m) => m.id === ctx.deals.get(id).status_message_id);
   const before = ctx.deals.get(id).status_message_id;
-  const sel = fake(ctx, 'select', A, { customId: `nx:am-type:${id}`, channel: ch, values: ['robux'] }); await route(sel, ctx);
-  const m1 = ctx.deals.get(id).status_message_id; assert.notEqual(m1, before, 'new message, not an edit'); assert.ok(!ch.msgs.has(before), 'previous message deleted');
-  assert.match(ch.msgs.get(m1).content, new RegExp(`<@${A}>`));
+  assert.match(ch.msgs.get(before).content, new RegExp(`<@${A}>`), 'the first step pings the creator');
   await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
-  const m2 = ctx.deals.get(id).status_message_id; assert.notEqual(m2, m1); assert.ok(!ch.msgs.has(m1));
+  const m1 = ctx.deals.get(id).status_message_id; assert.notEqual(m1, before, 'new message, not an edit'); assert.ok(!ch.msgs.has(before), 'previous message deleted');
+  const m2 = m1;
   assert.equal(ctx.deals.get(id).party_b, B); assert.equal(ch.sent.filter((m) => m.id === m2).length, 1, 'posted once, not twice');
   await click(ctx, A, `nx:am-role:${id}:sender`); const m3 = ctx.deals.get(id).status_message_id; assert.notEqual(m3, m2); assert.equal(live().length, 1);
   assert.equal(JSON.stringify(ch.msgs.get(m3).components).includes(`<@${B}>`), true, 'both traders pinged on the role card');

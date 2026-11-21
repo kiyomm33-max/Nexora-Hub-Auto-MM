@@ -53,7 +53,7 @@ export class DealService extends EventEmitter {
     const id = newId(); const t = now();
     this.db.tx(() => {
       this.db.prepare(`INSERT INTO deals(id,status,mode,party_a,asset,network,channel_id,setup,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`)
-        .run(id, 'waiting_parties', this.mode, creator, asset, network, channelId, JSON.stringify({ step: 'type', votes: {} }), t, t);
+        .run(id, 'waiting_parties', this.mode, creator, asset, network, channelId, JSON.stringify({ step: 'partner', votes: {} }), t, t);
       audit(this.db, { actor: creator, action: 'deal.created', dealId: id, detail: { mode: this.mode, asset, network } });
     });
     return this.get(id);

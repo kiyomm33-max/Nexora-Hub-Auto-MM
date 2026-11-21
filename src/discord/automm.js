@@ -106,7 +106,7 @@ export async function startAuto(i, ctx, key) {
 
 /** Adds the other trader to a deal in the partner step. Shared by the modal fallback and the typed-message flow. */
 async function addPartner(ctx, id, by, u, guild, channel) {
-  const d = load(ctx, id); if (d.party_a !== by) throw new UserError('Only the deal creator can add the other trader.'); stepIs(ctx, d, 'partner');
+  const d = load(ctx, id); if (d.party_a !== by) throw new UserError('Only the deal creator can add the other trader.'); stepIs(ctx, d, 'partner', 'type');
   V.snowflake(u);
   if (u === by) throw new UserError('You cannot trade with yourself.');
   let member; try { member = await guild.members.fetch(u); } catch { throw new UserError('That user is not in this server.'); }
@@ -137,12 +137,6 @@ export async function partnerFromMessage(msg, ctx) {
 
 // ---------- steps ----------
 export const handlers = {
-  async type(i, ctx, [id]) {
-    const d = load(ctx, id); if (d.party_a !== i.user.id) throw new UserError('Only the deal creator can pick the deal type.'); stepIs(ctx, d, 'type');
-    const v = i.values?.[0]; if (!ui.DEAL_TYPES.some((t) => t.value === v)) throw new UserError('Invalid deal type.');
-    const nd = await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { deal_type: v, setup: setStep(ctx, d, 'partner') }, 'setup.type'));
-    return done(i, ctx, nd);
-  },
   async partner(i, ctx, [id], uid) {
     const u = uid ?? i.users?.first?.()?.id;
     const nd = await addPartner(ctx, id, i.user.id, u, i.guild, i.channel);
