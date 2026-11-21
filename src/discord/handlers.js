@@ -4,6 +4,7 @@ import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { addVouch } from '../core/vouches.js';
 import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
+import { welcomePayload } from './welcome.js';
 import { rulesPayload } from './rules.js';
 import { userStats } from '../core/stats.js';
 import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
@@ -157,6 +158,13 @@ const commands = {
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.statsEmbed(name, u.displayAvatarURL?.({ size: 256 }), userStats(ctx.db, u.id))], allowedMentions: { parse: [] } });
   },
+  async welcome(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.welcome)) ?? i.channel;
+    await target.send(welcomePayload(ctx.cfg, i.user));
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'welcome.previewed', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Welcome preview posted', `Posted in <#${target.id}> with you as the new member.`);
+  },
   async rules(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;
@@ -255,6 +263,8 @@ const buttons = {
   'am-start': (i, ctx, [key]) => am.startAuto(i, ctx, key),
   'am-close': (i, ctx, [id]) => am.closeDeal(i, ctx, id, { staffCan: (cap) => can(staffOf(i, ctx), cap) }),
   'am-release': (i, ctx, [id]) => am.releaseAsk(i, ctx, id),
+  'am-closeyes': (i, ctx, [id]) => am.closeYes(i, ctx, id),
+  'am-closeno': (i, ctx, [id]) => am.closeNo(i, ctx, id),
   'am-relyes': (i, ctx, [id]) => am.releaseYes(i, ctx, id),
   'am-relno': (i) => am.releaseNo(i),
   'am-payaddr': (i, ctx, [id]) => am.payAddr(i, ctx, id),

@@ -9,6 +9,7 @@ import { selectProvider } from './providers/index.js';
 import { createServer } from './web/server.js';
 import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
+import { sendWelcome } from './discord/welcome.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
@@ -41,9 +42,13 @@ deals.on('update', (deal, change) => {
 createServer({ cfg, db, deals, mode, health: () => ({ discordReady: hasToken ? ready : undefined, discord: hasToken ? undefined : 'disabled (no DISCORD_TOKEN)' }) })
   .listen(cfg.port, '0.0.0.0', () => log.info(`HTTP listening on :${cfg.port}`));
 
-function boot(withMessages) {
-  client = new Client({ intents: withMessages ? [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : [GatewayIntentBits.Guilds] });
+// level 2 = Guilds + Messages + Message Content + Server Members (welcome); 1 = without Server Members; 0 = Guilds only.
+function boot(level) {
+  const withMessages = level >= 1;
+  const intents = [GatewayIntentBits.Guilds, ...(withMessages ? [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : []), ...(level >= 2 ? [GatewayIntentBits.GuildMembers] : [])];
+  client = new Client({ intents });
   ctx.client = client; cfg.messageContent = withMessages;
+  if (level >= 2) client.on(Events.GuildMemberAdd, (m) => sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)));
   if (withMessages) client.on(Events.MessageCreate, (m) => Promise.all([partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)));
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));
@@ -65,11 +70,14 @@ function boot(withMessages) {
     for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
   });
   client.login(cfg.token).catch((e) => {
-    if (withMessages && /disallowed intents/i.test(String(e?.message))) { log.warn('Message Content intent is not enabled in the Discord Developer Portal; falling back to the user ID button'); client.destroy(); boot(false); return; }
+    if (level > 0 && /disallowed intents/i.test(String(e?.message))) {
+      log.warn(level === 2 ? 'Server Members intent is not enabled in the Discord Developer Portal; the welcome message is off until you enable it' : 'Message Content intent is not enabled in the Discord Developer Portal; falling back to the user ID button');
+      client.destroy(); boot(level - 1); return;
+    }
     log.error('discord login failed', e); process.exit(1);
   });
 }
-if (hasToken) boot(true); else log.warn('DISCORD_TOKEN not set: running HTTP/health only');
+if (hasToken) boot(2); else log.warn('DISCORD_TOKEN not set: running HTTP/health only');
 
 // Fail fast on unknown errors so Railway restarts the process.
 process.on('unhandledRejection', (e) => log.error('unhandledRejection', e));
