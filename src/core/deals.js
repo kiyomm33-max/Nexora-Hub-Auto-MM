@@ -184,11 +184,23 @@ export class DealService extends EventEmitter {
     this.#emit(id, 'cancelled'); return nd;
   }
 
-  /** The sender accepted a smaller payment than quoted: the deal continues with what was actually received. `usdValue` is the USD worth of the received coins. */
+  shortVotes(d) { try { return JSON.parse(d.short_votes || '[]'); } catch { return []; } }
+  /** A trader agrees to continue with the smaller payment. Returns the agreeing traders so far. */
+  voteShort(id, actor) {
+    const d = this.get(id);
+    if (!d || d.short_state !== 'pending') throw new DealError('This choice was already made.');
+    if (!this.isParty(d, actor)) throw new DealError('Only the two traders in this deal can do that.');
+    const votes = [...new Set([...this.shortVotes(d), actor])];
+    this.db.prepare('UPDATE deals SET short_votes=?, updated_at=? WHERE id=?').run(JSON.stringify(votes), now(), id);
+    audit(this.db, { actor, action: 'payment.short_vote', dealId: id, detail: { received: d.short_crypto } });
+    return votes;
+  }
+  /** Both traders agreed to continue with a smaller payment than quoted: the deal continues with what was actually received. `usdValue` is the USD worth of the received coins. */
   acceptShort(id, actor, receivedCrypto, usdValue, feeCfg) {
     const d = this.get(id);
     if (!d || d.short_state !== 'pending') throw new DealError('There is no short payment to accept.');
-    if (d.sender_id !== actor) throw new DealError('Only the sender can accept a smaller payment.');
+    const votes = this.shortVotes(d);
+    if (!this.isParty(d, actor) || !votes.includes(d.sender_id) || !votes.includes(d.receiver_id)) throw new DealError('Both traders must agree to continue with the smaller amount.');
     const send = Math.floor(usdValue * 100) / 100;
     const fee = calcFee(send, feeCfg);
     const receive = Math.round((send - fee) * 100) / 100;
@@ -275,7 +287,7 @@ export class DealService extends EventEmitter {
             if (typeof ev.amount !== 'string' || !txd.received_crypto) { outcome = 'invalid'; break; }
             setTx();
             if (d.status === 'awaiting_provider') this.#move(d, 'verification_pending', ev, simulated);
-            set('short_state=?, short_crypto=?', 'pending', ev.amount);
+            set('short_state=?, short_crypto=?, short_votes=?', 'pending', ev.amount, d.short_crypto === ev.amount ? d.short_votes : null);
             act('payment.underpaid', { received: ev.amount, note: 'Less than the quoted amount; waiting for the sender to continue or cancel' });
             change = 'short'; break;
           case 'funds.observed':

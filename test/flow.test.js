@@ -457,7 +457,10 @@ test('short payment: warning with the real amount; sender continues or cancels a
     const msg = room.msgs.get(d.status_message_id); const body = JSON.stringify(msg.embeds.map((e) => e.toJSON ? e.toJSON() : e));
     assert.match(body, /less than the deal amount/); assert.match(body, /only sent \*\*\$/); assert.match(JSON.stringify(msg.components.map((c) => c.toJSON())), /am-shortyes[\s\S]*am-shortno/);
     ctx.provider.acceptShort = async () => ({ amount: '0.2' });
-    assert.match(text(await click(ctx, B, `nx:am-shortyes:${id}`)), /Only the sender/);
+    assert.match(text(await click(ctx, RND, `nx:am-shortyes:${id}`)), /Only the two traders/);
+    await click(ctx, B, `nx:am-shortyes:${id}`); await ctx.settle();
+    assert.equal(ctx.deals.get(id).short_state, 'pending', 'one trader is not enough');
+    assert.match(JSON.stringify(room.sent.at(-1).embeds.map((e) => e.toJSON ? e.toJSON() : e)), /both traders must agree/);
     await click(ctx, A, `nx:am-shortyes:${id}`); await ctx.settle();
     const nd = ctx.deals.get(id); assert.equal(nd.short_state, 'accepted'); assert.equal(nd.received_crypto, '0.2'); assert.ok(Number(nd.send_usd) > 0 && Number(nd.send_usd) < 10);
     assert.match(text(await click(ctx, A, `nx:am-shortyes:${id}`)), /already made/); }
