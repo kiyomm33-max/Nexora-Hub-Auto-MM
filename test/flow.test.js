@@ -220,11 +220,15 @@ test('dispute during the countdown stops the release', async () => {
 test('close button: cancels unfunded deal and saves transcript; blocked once funds observed', async () => {
   const ctx = setup(); const id = await runToRoom(ctx);
   const out = await click(ctx, RND, `nx:am-close:${id}`); assert.match(text(out), /Only the traders and staff/);
-  const ok = await click(ctx, B, `nx:am-close:${id}`); assert.match(text(ok), /Deal closed/);
+  const ask = await click(ctx, B, `nx:am-close:${id}`); assert.match(text(ask), /Close request sent/); assert.equal(ctx.deals.get(id).status, 'awaiting_provider', 'one trader cannot close alone');
+  assert.match(text(await click(ctx, B, `nx:am-close:${id}`)), /already asked/); assert.match(text(await click(ctx, B, `nx:am-closeyes:${id}`)), /already asked/);
+  assert.match(text(await click(ctx, RND, `nx:am-closeyes:${id}`)), /Only the two traders/);
+  await click(ctx, A, `nx:am-closeno:${id}`); assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM close_req').get().n, 0, 'declined');
+  await click(ctx, B, `nx:am-close:${id}`); const ok = await click(ctx, A, `nx:am-closeyes:${id}`); assert.match(text(ok), /Deal closed/);
   assert.equal(ctx.deals.get(id).status, 'cancelled'); assert.ok(ctx.db.prepare('SELECT 1 FROM transcripts WHERE ticket_id=?').get(id));
   const ctx2 = setup(); const id2 = await runToRoom(ctx2);
   ctx2.deals.applyProviderEvent({ id: 'o1', type: 'funds.observed', reference: ctx2.deals.get(id2).provider_ref }, { simulated: true });
-  const no = await click(ctx2, A, `nx:am-close:${id2}`); assert.match(text(no), /provider/); assert.equal(ctx2.deals.get(id2).status, 'verification_pending');
+  const no = await click(ctx2, A, `nx:am-close:${id2}`); assert.match(text(no), /provider/); assert.equal(ctx2.deals.get(id2).status, 'verification_pending'); assert.equal(ctx2.db.prepare('SELECT COUNT(*) n FROM close_req').get().n, 0);
 });
 
 test('staff permissions are enforced on every staff command/button', async () => {
@@ -446,4 +450,16 @@ test('cancel & refund: both traders must agree, the sender types an address, fun
   assert.match(JSON.stringify(room.sent.map((m) => (m.embeds ?? []).map((e) => e.toJSON ? e.toJSON() : e))), /refunded[\s\S]*c{64}/);
   assert.match(text(await click(ctx, A, `nx:am-refyes:${id}:${LTC}`)), /already being processed|agreed/);
   assert.equal(swept.length, 1, 'never refunded twice');
+});
+
+test('welcome: posts to the welcome channel, mentions rules and auto MM channels; preview command is staff-only', async () => {
+  const { welcomePayload, sendWelcome } = await import('../src/discord/welcome.js');
+  const ctx = setup(); ctx.cfg.channels.welcome = 'wch'; ctx.cfg.channels.rules = '111'; ctx.cfg.channels.panel = '222';
+  const sent = []; ctx.client = { channels: { fetch: async () => ({ send: async (p) => sent.push(p) }) } };
+  await sendWelcome(ctx, { user: { id: '555', bot: true } }); assert.equal(sent.length, 0, 'bots are not welcomed');
+  await sendWelcome(ctx, { user: { id: '555', displayAvatarURL: () => 'https://x/p.png' } });
+  const e = sent[0].embeds[0].toJSON(); assert.match(e.description, /<#111>/); assert.match(e.description, /<#222>/); assert.equal(e.thumbnail.url, 'https://x/p.png'); assert.match(sent[0].content, /<@555>/);
+  ctx.cfg.channels.welcome = 'wc2'; ctx.chans.set('wc2', { id: 'wc2', sent: [], async send(p) { this.sent.push(p); } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'welcome' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const ok = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'welcome' }); await route(ok, ctx); assert.equal(sent.length, 2, 'preview posted to the welcome channel');
 });

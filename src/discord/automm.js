@@ -244,18 +244,61 @@ async function finalize(ctx, deal) {
 }
 
 // ---------- close ----------
+/** Close a deal room. Staff close at once; the two traders must BOTH agree (one asks, the other agrees). */
 export async function closeDeal(i, ctx, id, { staffCan }) {
   const d = load(ctx, id);
   const isStaff = staffCan('dispute.review');
-  if (!ctx.deals.isParty(d, i.user.id) && !isStaff) throw new UserError('Only the traders and staff can close this deal.');
+  const party = ctx.deals.isParty(d, i.user.id);
+  if (!party && !isStaff) throw new UserError('Only the traders and staff can close this deal.');
+  if (!isStaff) {
+    const final = ['completed', 'cancelled'].includes(d.status);
+    if (!final && d.status === 'disputed') throw new UserError('Disputed deals are resolved by the provider and cannot be closed.');
+    if (!final && (d.escrow_status === 'provider_confirmed' || d.observed_status !== 'none')) throw new UserError('Funds have been seen or secured by the provider, so the room cannot just be closed. Use **Cancel & refund** or ask staff.');
+    if (!d.party_b) throw new UserError('Add the other trader first, or ask staff to close this room.');
+    const req = ctx.db.prepare('SELECT * FROM close_req WHERE deal_id=?').get(id);
+    if (req && req.requested_by !== i.user.id) return performClose(i, ctx, d, true); // the other trader pressed Close too: that is agreement
+    if (req) throw new UserError('You already asked to close. The other trader must agree.');
+    ctx.db.prepare('INSERT INTO close_req(deal_id, requested_by, created_at) VALUES(?,?,?)').run(id, i.user.id, new Date().toISOString());
+    audit(ctx.db, { actor: i.user.id, action: 'close.requested', dealId: id, detail: {} });
+    const o = other(d, i.user.id);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`nx:am-closeyes:${id}`).setLabel('Agree to close').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`nx:am-closeno:${id}`).setLabel('Decline').setStyle(ButtonStyle.Secondary));
+    const m = await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Close request', `<@${i.user.id}> wants to **close this ${final ? 'room' : 'deal'}**.\n\n**Both traders must agree.** <@${o}>, do you agree?${final ? '' : '\nThe deal will be cancelled.'}`)], components: [row], allowedMentions: { users: [o] } });
+    ctx.db.prepare('UPDATE close_req SET message_id=? WHERE deal_id=?').run(m.id, id);
+    return i.reply({ flags: EPH, content: 'Close request sent. The other trader must agree.' });
+  }
+  return performClose(i, ctx, d, false);
+}
+export async function closeYes(i, ctx, id) {
+  const d = load(ctx, id); const req = ctx.db.prepare('SELECT * FROM close_req WHERE deal_id=?').get(id);
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
+  if (!req) throw new UserError('There is no open close request.');
+  if (req.requested_by === i.user.id) throw new UserError('You already asked to close. The other trader must agree.');
+  return performClose(i, ctx, d, true);
+}
+export async function closeNo(i, ctx, id) {
+  const d = load(ctx, id); const req = ctx.db.prepare('SELECT * FROM close_req WHERE deal_id=?').get(id);
+  if (!ctx.deals.isParty(d, i.user.id)) throw new UserError('Only the two traders in this deal can do that.');
+  if (!req) throw new UserError('There is no open close request.');
+  ctx.db.prepare('DELETE FROM close_req WHERE deal_id=?').run(id);
+  audit(ctx.db, { actor: i.user.id, action: 'close.declined', dealId: id, detail: {} });
+  await i.deferUpdate();
+  if (req.message_id) await i.channel.messages.fetch(req.message_id).then((m) => m.delete()).catch(() => {});
+  await i.channel.send({ embeds: [ui.base(ctx.cfg, 'Close request declined', `<@${i.user.id}> declined. **The room stays open.**`)], allowedMentions: { parse: [] } });
+}
+async function performClose(i, ctx, d, agreed) {
   const final = ['completed', 'cancelled'].includes(d.status);
   if (!final) {
-    if (!ctx.deals.isParty(d, i.user.id) && !staffCan('deal.cancel')) throw new UserError('You cannot cancel this deal.');
     if (d.status === 'disputed') throw new UserError('Disputed deals are resolved by the provider and cannot be closed.');
-    ctx.deals.cancel(d.id, i.user.id, 'closed by user', { staff: !ctx.deals.isParty(d, i.user.id) });
+    ctx.deals.cancel(d.id, i.user.id, agreed ? 'both traders agreed to close' : 'closed by staff', { staff: !ctx.deals.isParty(d, i.user.id) });
     try { await ctx.provider.cancelEscrow?.(d); } catch (e) { log.error('provider cancel failed', e); }
-  } else if (!isStaff) throw new UserError('Staff close finished deal rooms after saving the transcript.');
+  }
+  const req = ctx.db.prepare('SELECT * FROM close_req WHERE deal_id=?').get(d.id);
+  ctx.db.prepare('DELETE FROM close_req WHERE deal_id=?').run(d.id);
+  if (req) audit(ctx.db, { actor: i.user.id, action: 'close.agreed', dealId: d.id, detail: {} });
   await i.deferReply({ flags: EPH });
+  if (req?.message_id) await i.channel.messages.fetch(req.message_id).then((m) => m.delete()).catch(() => {});
   await rooms.saveTranscript(ctx, d.id, i.channel, i.user.id);
   await i.editReply({ embeds: [ui.okEmbed(ctx.cfg, 'Deal closed', 'Transcript saved. This room will be removed shortly.')] });
   setTimeout(() => i.channel.delete('Deal closed').catch(() => {}), 8000).unref?.();
