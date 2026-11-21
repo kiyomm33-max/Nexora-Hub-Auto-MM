@@ -122,6 +122,7 @@ export class EvmWallet {
       const matured = old >= total; const conf = matured ? need : 1;
       const txid = m.token ? await rpc.findTransfer(m.token, d.pay_address, Math.max(0, tip - 5000)) : null;
       const base = { reference: d.pay_address, amount: fmt(total, m.decimals), required_confirmations: need, ...(txid ? { txid } : {}) };
+      if (total < minOk) emit({ id: eid('short', d.pay_address, total), type: 'funds.underpaid', confirmations: conf, ...base });
       emit({ id: eid('obs', d.pay_address, total), type: 'funds.observed', confirmations: conf, ...base });
       emit({ id: eid('conf', d.pay_address, total, conf), type: 'funds.confirmed_on_chain', confirmations: conf, ...base });
       if (matured && total >= minOk && !d.funded) {
@@ -133,6 +134,14 @@ export class EvmWallet {
       }
     }
     if (d.funded && d.released_at && d.payout_address && d.status === 'verification_pending' && (d.payout_state == null || d.payout_state === 'gas_pending')) await this.#payout(d, m, rpc, total);
+  }
+  /** The sender chose to continue with a smaller payment: the balance now on the address becomes the expected amount. */
+  async acceptShort(dealId) {
+    const d = this.#rows().find((x) => x.id === dealId); if (!d) throw new Error('Deal not found.');
+    const m = this.#meta(d); const total = await this.#bal(this.rpcFor(m.chain), m, d.pay_address, 'latest');
+    if (total <= 0n) throw new Error('No payment found on the address.');
+    this.db.prepare("UPDATE xwallet SET expected=? WHERE family='evm' AND deal_id=? AND funded=0 AND payout_state IS NULL").run(total.toString(), dealId);
+    return { amount: fmt(total, m.decimals) };
   }
   async #confirmPayout(d, rpc, emit) {
     const hashes = [d.payout_txid, ...(d.payout_extra ? JSON.parse(d.payout_extra) : [])];

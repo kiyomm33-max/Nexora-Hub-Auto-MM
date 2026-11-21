@@ -18,3 +18,10 @@ export function calcTotals(amountUsd, feeUsd, payer) {
   const senderPays = payer === 'sender' ? f : payer === 'split' ? Math.ceil(f / 2) : 0;
   return { fee: usd(f), send: usd(a + senderPays), receive: usd(a - (f - senderPays)) };
 }
+
+/** USD worth of `crypto` units of the deal's coin, at the rate quoted when the deal started. Stablecoins count 1:1. */
+export function usdWorth(d, crypto) {
+  const n = Number(crypto);
+  if (!(n >= 0)) return 0;
+  return ['USDT', 'USDC'].includes(d.asset) ? n : n * Number(d.rate_usd || 0);
+}

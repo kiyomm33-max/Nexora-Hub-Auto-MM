@@ -30,6 +30,7 @@ export class MultiProvider {
   requestRelease(deal) { return this.#for(deal).requestRelease(deal); }
   requestPayout(deal) { return this.#for(deal).requestPayout(deal); }
   payoutInfo(id) { return this.#byId(id).payoutInfo(id); }
+  acceptShort(id) { return this.#byId(id).acceptShort(id); }
   sweep(id, to) { return this.#byId(id).sweep(id, to); }
   explorerTx(txid, deal) { return this.#for(deal).explorerTx(txid, deal); }
   async scan(emit) { for (const w of [this.ltc, this.evm, this.sol]) await w.scan(emit); }

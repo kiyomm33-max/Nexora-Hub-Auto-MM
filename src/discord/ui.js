@@ -1,4 +1,5 @@
 import { UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { usdWorth } from '../core/fees.js';
 import { STATUS } from '../core/deals.js';
 import { LABELS } from '../core/permissions.js';
 
@@ -206,6 +207,7 @@ export const phaseOf = (d) => {
   if (d.status === 'awaiting_provider') return 'invoice';
   if (d.status === 'verification_pending') {
     if (d.released_at) return d.payout_address ? 'paying' : 'payout';
+    if (d.short_state === 'pending' && d.escrow_status !== 'provider_confirmed') return 'short';
     return d.escrow_status === 'provider_confirmed' ? 'received' : 'detected';
   }
   return d.status;
@@ -226,9 +228,15 @@ export function invoiceEmbed(cfg, d) {
       { name: 'Network', value: d.network, inline: true });
   return e;
 }
+export function shortEmbed(cfg, d) {
+  const got = usdWorth(d, d.short_crypto);
+  return base(cfg, 'Warning: payment is less than the deal amount', `<@${d.sender_id}> only sent **${usd(got)} USD** (\`${d.short_crypto}\` ${d.asset}), but the deal needs **${usd(d.send_usd)} USD**.\n\n**Do you still want to continue** with the smaller amount, or **cancel** and get exactly what you sent back?\n*Only the sender can choose. If you send the rest to the same address, it is added automatically.*`, BRAND.red)
+    .addFields({ name: 'Needed', value: `\`${d.pay_amount}\` ${d.asset} (${usd(d.send_usd)} USD)`, inline: true }, { name: 'Received', value: `\`${d.short_crypto}\` ${d.asset} (${usd(got)} USD)`, inline: true },
+      { name: 'Transaction', value: txLink(d.tx_hash) });
+}
 export function detectedEmbed(cfg, d) {
   return base(cfg, 'Transaction Detected', 'Your payment has been **detected** on the network.\nPlease wait while it receives the **required confirmations**.\n*Blockchain observation only — not escrow confirmation.*', BLUE)
-    .addFields({ name: 'Transaction', value: txLink(d.tx_hash) }, { name: 'Amount Received', value: d.received_crypto ? `\`${d.received_crypto}\` ${d.asset} ≈ ${usd(d.send_usd)} USD` : 'Pending' },
+    .addFields({ name: 'Transaction', value: txLink(d.tx_hash) }, { name: 'Amount Received', value: d.received_crypto ? `\`${d.received_crypto}\` ${d.asset} ≈ ${usd(usdWorth(d, d.received_crypto))} USD` : 'Pending' },
       { name: 'Required Confirmations', value: `\`${d.required_conf}\` (seen: \`${d.confirmations}\`)` });
 }
 export function receivedEmbeds(cfg, d) {
@@ -244,6 +252,7 @@ export const payoutEmbed = (cfg, d) => base(cfg, `Send your ${coinName(d).replac
 export function statusEmbeds(cfg, d) {
   switch (phaseOf(d)) {
     case 'invoice': return [summaryEmbed(cfg, d), invoiceEmbed(cfg, d)];
+    case 'short': return [shortEmbed(cfg, d)];
     case 'detected': return [detectedEmbed(cfg, d)];
     case 'received': return receivedEmbeds(cfg, d);
     case 'payout': return [payoutEmbed(cfg, d)];
@@ -255,6 +264,7 @@ export function statusEmbeds(cfg, d) {
 export function roomButtons(d, cfg) {
   const phase = phaseOf(d);
   const rows = [];
+  if (phase === 'short') return [row(btn(`nx:am-shortyes:${d.id}`, `Continue with ${usd(usdWorth(d, d.short_crypto))}`, ButtonStyle.Primary), btn(`nx:am-shortno:${d.id}`, 'Cancel & refund', ButtonStyle.Danger))];
   if (phase === 'received') return [row(btn(`nx:am-release:${d.id}`, 'Release', ButtonStyle.Primary).setDisabled(!!d.release_at), btn(`nx:am-cancelask:${d.id}`, 'Cancel & refund').setDisabled(!!d.release_at))];
   // The receiver normally just types their address in the room; the button is only a fallback when the bot cannot read messages.
   if (phase === 'payout') { if (!cfg?.messageContent) rows.push(row(btn(`nx:am-payaddr:${d.id}`, 'Provide address', ButtonStyle.Primary))); return rows; }

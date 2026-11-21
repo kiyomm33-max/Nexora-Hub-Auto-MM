@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { audit } from '../core/audit.js';
-import { calcFee, calcTotals } from '../core/fees.js';
+import { calcFee, calcTotals, usdWorth } from '../core/fees.js';
 import { CAPS, LEVELS } from '../core/permissions.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
@@ -29,7 +29,7 @@ export function pingIds(ctx, d) {
   const ph = ui.phaseOf(d);
   if (ph === 'invoice') return ids(d.sender_id);
   if (ph === 'payout') return ids(d.receiver_id);
-  if (['detected', 'received', 'paying'].includes(ph)) return ids(d.sender_id, d.receiver_id);
+  if (['detected', 'received', 'paying', 'short'].includes(ph)) return ids(d.sender_id, d.receiver_id);
   return [];
 }
 
@@ -400,10 +400,41 @@ export async function payoutFromMessage(msg, ctx) {
   }
 }
 
+// ---------- short payment: continue with what arrived, or get exactly that back ----------
+export async function shortYes(i, ctx, id) {
+  const d = load(ctx, id);
+  if (d.sender_id !== i.user.id) throw new UserError('Only the sender can choose.');
+  if (d.short_state !== 'pending') throw new UserError('This choice was already made.');
+  if (cancelRow(ctx, id)) throw new UserError('A refund is already in progress for this deal.');
+  await i.deferUpdate();
+  const nd = await locked(ctx, id, async () => {
+    let r;
+    try { r = await ctx.provider.acceptShort(id); } catch (e) { throw new UserError(e?.userFacing ? e.message : 'Could not read the payment from the chain right now. Try again in a minute.'); }
+    return ctx.deals.acceptShort(id, i.user.id, r.amount, usdWorth(d, r.amount), ctx.cfg.fee);
+  });
+  return nd;
+}
+export async function shortNo(i, ctx, id) {
+  const d = load(ctx, id);
+  if (d.sender_id !== i.user.id) throw new UserError('Only the sender can choose.');
+  if (d.short_state !== 'pending') throw new UserError('This choice was already made.');
+  const started = await locked(ctx, id, async () => {
+    if (cancelRow(ctx, id)) return false;
+    ctx.db.prepare("INSERT INTO cancel_req(deal_id, requested_by, agreed, state, created_at) VALUES(?,?,?,?,?)").run(id, i.user.id, JSON.stringify([i.user.id]), 'address', new Date().toISOString());
+    audit(ctx.db, { actor: i.user.id, action: 'payment.short_cancel_chosen', dealId: id, detail: { received: d.short_crypto } });
+    return true;
+  });
+  if (!started) throw new UserError('A refund is already in progress for this deal.');
+  await i.deferUpdate(); await i.message?.edit?.({ components: [] }).catch?.(() => {});
+  const m = await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Cancelled: type your address to get your money back', `<@${d.sender_id}>, **type your ${d.asset} address in this room**. The bot sends back **exactly what you sent** (\`${d.short_crypto}\` ${d.asset}), minus the network fee.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+  ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
+}
+
 // ---------- mutual cancel + refund (funds in escrow, before any release) ----------
 const cancelRow = (ctx, id) => ctx.db.prepare('SELECT * FROM cancel_req WHERE deal_id=?').get(id);
 const other = (d, u) => (u === d.party_a ? d.party_b : d.party_a);
 function cancelable(d) {
+  if (d.short_state === 'pending' && d.status === 'verification_pending' && d.escrow_status !== 'provider_confirmed' && !d.release_at && !d.released_at) return; // short payment: the sender may take it back
   if (d.status !== 'verification_pending' || d.escrow_status !== 'provider_confirmed') throw new UserError('Cancel & refund is only available once your payment is confirmed in escrow.');
   if (d.release_at || d.released_at) throw new UserError('The release already started. Cancel the release first, or ask staff.');
 }
@@ -479,11 +510,12 @@ export async function refundYes(i, ctx, id, raw) {
   await i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Sending your refund', `Sending the funds to \`${addr}\`...`)], components: [], allowedMentions: { parse: [] } });
   try {
     cancelable(d);
+    const short = d.short_state === 'pending';
     const txid = await ctx.provider.sweep(id, addr);
     ctx.db.prepare('DELETE FROM cancel_req WHERE deal_id=?').run(id);
-    ctx.deals.refundCancel(id, i.user.id, { txid, address: addr });
+    ctx.deals.refundCancel(id, i.user.id, { txid, address: addr, short });
     const url = ctx.provider.explorerTx?.(txid, d);
-    await i.channel.send({ content: `<@${d.sender_id}> <@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Deal cancelled and refunded', `Both traders agreed to cancel. The funds were sent back to the sender.\n\n**Refund address:** \`${addr}\`\n**TXID:** \`${txid}\`${url ? `\n[View on explorer](${url})` : ''}`)], allowedMentions: { users: [d.sender_id, d.receiver_id] } });
+    await i.channel.send({ content: `<@${d.sender_id}> <@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Deal cancelled and refunded', `${short ? 'The sender cancelled after sending less than the deal amount.' : 'Both traders agreed to cancel.'} The funds were sent back to the sender.\n\n**Refund address:** \`${addr}\`\n**TXID:** \`${txid}\`${url ? `\n[View on explorer](${url})` : ''}`)], allowedMentions: { users: [d.sender_id, d.receiver_id] } });
   } catch (e) {
     ctx.db.prepare("UPDATE cancel_req SET state='address', address=NULL WHERE deal_id=? AND state='refunding'").run(id);
     log.error('refund failed', { deal: id, err: String(e?.message ?? e) });
