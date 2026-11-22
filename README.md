@@ -72,3 +72,8 @@ Tested (automated): state machine and every status, duplicate/replayed completio
 
 ## Multi-coin (live)
 Supported: LTC, ETH, USDT/USDC (ERC-20), USDT (BEP-20), SOL. All wallets derive from one recovery phrase. Set `ENABLED_COINS` (comma list of panel keys) to choose which appear; default is `LTC`. Token payouts need the gas wallet (shown by `/staff wallet`) funded with a little ETH and BNB. ETH and BSC share the same deal address, so senders must use the right network. EVM and SOL always use mainnet.
+
+## Activity tracking
+- Every member message (not bots, webhooks or system messages) is counted per day. `.leaderboard [today|week|month|all]` (alias `.top`) and `.messages [@user]` are public.
+- The bot records when a member equips this server's tag, and when their custom status contains `STATUS_PHRASE` (default `.gg/nexorra`). `.tag [@user]` shows times used, total time, longest and when it started; `.tags` ranks everyone by total time (staff only).
+- Counting starts when this version is deployed; older messages are not backfilled. The status needs the **Presence Intent** enabled in the Discord Developer Portal; the tag only needs the Server Members intent. Offline members hide their status, so an offline member's status session stays open until they show a different status.

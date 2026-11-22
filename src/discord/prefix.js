@@ -4,12 +4,17 @@ import { route, staffOf, UserError } from './handlers.js';
 import * as ui from './ui.js';
 import { log } from '../logger.js';
 
-const PUBLIC = new Set(['stats', 'help']);
+const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages']);
+const ALIASES = { top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
 
 // arg: [name, type, required]. Types: string, int, user, rest (everything that is left).
 const D = ['deal_id', 'string', true];
 export const SPEC = {
   help: { desc: 'Show every command', args: [] },
+  leaderboard: { desc: 'Message leaderboard (today, week, month or all)', args: [['period', 'string', false]] },
+  messages: { desc: 'How many messages a member sent', args: [['member', 'user', false]] },
+  tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
+  tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },
   vouch: { desc: 'Leave feedback for a completed deal', args: [D, ['rating', 'int', true], ['feedback', 'rest', true]] },
   ticket: { desc: 'Open a private support ticket', args: [['text', 'rest', true]] },
@@ -110,7 +115,7 @@ export async function commandFromMessage(msg, ctx) {
   if (!msg.guild || msg.author?.bot || typeof msg.content !== 'string' || !msg.content.startsWith(prefix)) return false;
   const body = msg.content.slice(prefix.length);
   const head = /^([a-z]+)(?:\s+|$)/i.exec(body); if (!head) return false;
-  const name = head[1].toLowerCase(); const spec = SPEC[name]; if (!spec) return false; // other bots use the same prefix: stay quiet
+  const typed = head[1].toLowerCase(); const name = ALIASES[typed] ?? typed; const spec = SPEC[name]; if (!spec) return false; // other bots use the same prefix: stay quiet
   let rest = body.slice(head[0].length);
   const reply = (p) => msg.reply({ ...p, allowedMentions: { repliedUser: false } }).catch((e) => log.error('prefix reply failed', e));
   const err = (text) => reply({ embeds: [ui.errorEmbed(ctx.cfg, text)] });

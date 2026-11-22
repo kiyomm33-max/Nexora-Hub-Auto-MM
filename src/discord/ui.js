@@ -280,3 +280,31 @@ export const descModal = (id) => modal(`nx:am-descmodal:${id}`, 'Describe the de
 export const amountModal = (id) => modal(`nx:am-amountmodal:${id}`, 'Deal amount', input('amount', 'Amount in USD', { min: 1, max: 12, placeholder: '20' }));
 export const ticketButtons = (id) => [row(btn(`nx:tstaff:${id}`, 'Request staff'), btn(`nx:tclose:${id}`, 'Close & save transcript', ButtonStyle.Danger))];
 export const payoutModal = (id, asset) => modal(`nx:am-payaddrmodal:${id}`, `Your ${asset} address`, input('addr', `${asset} address to receive the payout`, { min: 20, max: 100 }));
+
+// ---------- activity: message leaderboard, server tag and status ----------
+const num = (n) => Number(n).toLocaleString('en-US');
+export function leaderboardEmbed(cfg, { period, label, rows, total, people, me, since }) {
+  const lines = rows.map((r, k) => `**${k + 1}.** <@${r.user_id}> - **${num(r.n)}** messages`).join('\n') || 'No messages counted yet.';
+  const mine = me && !rows.some((r) => r.user_id === me.id) ? `\n\nYour rank: **#${me.rank}** with **${num(me.n)}** messages` : '';
+  return base(cfg, `Message Leaderboard - ${label}`, `${lines}${mine}\n\n**${num(total)}** messages from **${num(people)}** people${since ? `, counted since **${since}**` : ''}.`);
+}
+export function messagesEmbed(cfg, name, avatarUrl, st) {
+  const e = base(cfg, `${name} - Messages`, `Rank **${st.rank ? `#${st.rank}` : 'unranked'}**${st.since ? `, counted since **${st.since}**` : ''}`)
+    .addFields({ name: 'Today', value: `\`${num(st.today)}\``, inline: true }, { name: 'Last 7 days', value: `\`${num(st.week)}\``, inline: true },
+      { name: 'Last 30 days', value: `\`${num(st.month)}\``, inline: true }, { name: 'All time', value: `\`${num(st.all)}\``, inline: true });
+  return avatarUrl ? e.setThumbnail(avatarUrl) : e;
+}
+const tstamp = (iso) => `<t:${Math.floor(Date.parse(iso) / 1000)}:f>`;
+export function perkLines(sum, dur) {
+  if (!sum.times) return 'Never seen.';
+  return `${sum.active ? `**Active now**, since ${tstamp(sum.active)} (<t:${Math.floor(Date.parse(sum.active) / 1000)}:R>)` : `**Not active**${sum.last ? `, ended ${tstamp(sum.last)}` : ''}`}\nTimes: \`${sum.times}\`  Total time: \`${dur(sum.totalMs)}\`  Longest: \`${dur(sum.longestMs)}\`\nFirst seen: ${tstamp(sum.first)}`;
+}
+export function tagEmbed(cfg, who, tag, status, dur, phrase) {
+  return base(cfg, 'Server tag and status', `<@${who}>`)
+    .addFields({ name: 'Server tag', value: perkLines(tag, dur) }, { name: `Status with ${phrase}`, value: perkLines(status, dur) });
+}
+export function tagBoardEmbed(cfg, tag, status, dur, phrase) {
+  const fmt = (b) => b.rows.map((r, k) => `**${k + 1}.** <@${r.user_id}> - \`${dur(r.totalMs)}\`, ${r.times}x${r.active ? ', **active**' : ''}`).join('\n') || 'Nobody yet.';
+  return base(cfg, 'Server tag and status leaderboard', 'Ranked by total time. Times are counted from when the bot first saw it.')
+    .addFields({ name: `Server tag - ${tag.activeNow} active now, ${tag.everyone} ever`, value: fmt(tag).slice(0, 1024) }, { name: `Status with ${phrase} - ${status.activeNow} active now, ${status.everyone} ever`, value: fmt(status).slice(0, 1024) });
+}

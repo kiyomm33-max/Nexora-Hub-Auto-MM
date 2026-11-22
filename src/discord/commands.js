@@ -7,6 +7,13 @@ const dealId = (o) => o.setName('deal_id').setDescription('Deal ID, e.g. NXH-AB1
 export const definitions = [
   new SCB().setName('stats').setDescription('Show deal stats and rank').setDMPermission(false).setDefaultMemberPermissions(null)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
+  new SCB().setName('leaderboard').setDescription('Who sent the most messages').setDMPermission(false).setDefaultMemberPermissions(null)
+    .addStringOption((o) => o.setName('period').setDescription('today, week, month or all').addChoices(...['today', 'week', 'month', 'all'].map((x) => ({ name: x, value: x })))),
+  new SCB().setName('messages').setDescription('How many messages a member sent').setDMPermission(false).setDefaultMemberPermissions(null)
+    .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
+  new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
+    .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
+  new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('vouch').setDescription('Leave feedback for a completed deal').setDMPermission(false)
     .addStringOption(dealId)
     .addIntegerOption((o) => o.setName('rating').setDescription('1 to 5').setRequired(true).setMinValue(1).setMaxValue(5))

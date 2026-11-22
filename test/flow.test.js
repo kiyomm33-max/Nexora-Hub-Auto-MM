@@ -521,3 +521,23 @@ test('text commands: .help lists them, staff commands need a role, replies stay 
   // the wallet goes to DMs only, never the channel
   m = msg(ADM, '.staff wallet', { admin: true }); await commandFromMessage(m, ctx); assert.ok(!/Recovery/i.test(body(m)), 'nothing secret in the channel');
 });
+
+test('text commands: .leaderboard and .messages are public, .tag and .tags are staff only', async () => {
+  const { commandFromMessage } = await import('../src/discord/prefix.js');
+  const act = await import('../src/core/activity.js');
+  const ctx = setup(); ctx.cfg.statusPhrase = 'gg/nexorra'; const lobby = fake(ctx, 'btn', A).channel;
+  const msg = (author, content, { admin = false } = {}) => { const out = [];
+    return { out, author: { id: author, bot: false, displayAvatarURL: () => null }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, member: { displayName: 'Tester', roles: { cache: new Map() }, permissions: { has: (p) => admin && p === 'Administrator' } },
+      mentions: { users: new Map() }, attachments: { first: () => undefined }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async () => {} }; } }; };
+  const body = (m) => JSON.stringify(m.out.map((o) => (o.embeds ?? []).map((e) => [e.data.title, e.data.description, ...(e.data.fields ?? []).map((f) => `${f.name}=${f.value}`)])));
+  for (let k = 0; k < 3; k++) act.countMessage(ctx.db, A); act.countMessage(ctx.db, B);
+  let m = msg(RND, '.leaderboard'); await commandFromMessage(m, ctx); assert.match(body(m), /Message Leaderboard - All time/); assert.ok(body(m).indexOf(A) < body(m).indexOf(B)); assert.match(body(m), /4\*\* messages from \*\*2\*\* people/);
+  m = msg(RND, '.top week'); await commandFromMessage(m, ctx); assert.match(body(m), /Last 7 days/);
+  m = msg(RND, '.lb nonsense'); await commandFromMessage(m, ctx); assert.match(body(m), /Pick a period/);
+  m = msg(A, '.messages'); await commandFromMessage(m, ctx); assert.match(body(m), /Tester - Messages[\s\S]*#1/); assert.match(body(m), /All time=`3`/);
+  m = msg(RND, '.tag'); await commandFromMessage(m, ctx); assert.match(body(m), /do not have permission/);
+  m = msg(RND, '.tags'); await commandFromMessage(m, ctx); assert.match(body(m), /do not have permission/);
+  act.setPerk(ctx.db, B, 'tag', true, { at: Date.now() - 3 * 3600e3 });
+  m = msg(ADM, '.tags', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /Server tag - 1 active now, 1 ever[\s\S]*3h/);
+  m = msg(ADM, `.tag <@${B}>`, { admin: true }); m.mentions.users.set(B, { id: B }); await commandFromMessage(m, ctx); assert.match(body(m), /Active now/);
+});
