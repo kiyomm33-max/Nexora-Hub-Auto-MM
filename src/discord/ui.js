@@ -1,4 +1,4 @@
-import { UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { usdWorth } from '../core/fees.js';
 import { STATUS } from '../core/deals.js';
 import { LABELS } from '../core/permissions.js';
@@ -308,3 +308,29 @@ export function tagBoardEmbed(cfg, tag, status, dur, phrase) {
   return base(cfg, 'Server tag and status leaderboard', 'Ranked by total time. Times are counted from when the bot first saw it.')
     .addFields({ name: `Server tag - ${tag.activeNow} active now, ${tag.everyone} ever`, value: fmt(tag).slice(0, 1024) }, { name: `Status with ${phrase} - ${status.activeNow} active now, ${status.everyone} ever`, value: fmt(status).slice(0, 1024) });
 }
+
+// ---------------- status rewards ----------------
+const cusd = (c) => `$${(c / 100).toFixed(2)}`;
+const dur = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return [d && `${d}d`, (d || h) && `${h}h`, `${m}m`].filter(Boolean).join(' '); };
+export const statusPanelPayload = (cfg) => {
+  const p = cfg.statusPay; const week = 7 * p.dailyCents + p.weekBonusCents;
+  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Status Rewards\nGet paid for your Discord status.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://logo.png' } })))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**How it works**\n**1.** Copy this exact custom status:\n\`\`\`\n.${cfg.statusPhrase}\n\`\`\`\n**2.** Stay **Online** or **Do Not Disturb** and set the expiry to **Don't clear**.\n**3.** Press **Start Earning**. Your time adds up across sessions.\n**4.** Press **Request Payout**, choose a payment method and enter your details.`))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**Pay**\n**24 hours online:** ${cusd(p.dailyCents)}\n**7 days online:** +${cusd(p.weekBonusCents)} bonus\n**Full week:** ${cusd(week)} total`))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**Minimum payout:** ${cusd(p.minPayoutCents)}  |  PayPal, Litecoin, Solana or Ethereum\nPayouts are sent by staff by hand. Idle or offline time does not count.`))
+    .addActionRowComponents(row(btn('nx:st-start', 'Start Earning', ButtonStyle.Primary), btn('nx:st-time', 'Online Time'), btn('nx:st-payout', 'Request Payout')));
+  return { flags: 1 << 15, components: [c] };
+};
+export const earnTimeEmbed = (cfg, s) => base(cfg, 'Online Time', !s.enrolled ? 'You have not started yet. Press **Start Earning** on the panel.' :
+  `**Status:** ${s.counting ? 'counting now' : 'not counting (status or presence is not matching)'}\n**Time online:** **${dur(s.seconds)}**\n**Earned:** **${cusd(s.earned)}**\n**Pending payout:** ${cusd(s.pending)}\n**Paid out:** ${cusd(s.paid)}\n**Available:** **${cusd(s.available)}**\n\nNext day in ${dur(s.nextDayIn)}, week bonus in ${dur(s.nextWeekIn)}.`);
+export const payMethodRow = (methods) => [row(...Object.entries(methods).map(([k, v]) => btn(`nx:st-pm:${k}`, v, ButtonStyle.Primary)))];
+export const earnPayModal = (method, label) => modal(`nx:st-pay:${method}`, `${label} payout`, input('details', method === 'paypal' ? 'PayPal email' : `${label} address`, { max: 120 }));
+export const earnPaidModal = (id) => modal(`nx:st-paidm:${id}`, 'Mark as paid', input('ref', 'Transaction ID or note (optional)', { required: false, max: 200 }));
+export const earnPayoutEmbed = (cfg, r, methods) => base(cfg, `Status payout #${r.id}`,
+  `**Member:** <@${r.user_id}>\n**Amount:** **${cusd(r.cents)}**\n**Method:** ${methods[r.method]}\n**Send to:** \`${r.details}\`\n**State:** **${r.state}**${r.handled_by ? `\nHandled by <@${r.handled_by}>` : ''}${r.ref ? `\n**Reference:** ${r.ref}` : ''}`);
+export const earnPayoutButtons = (id) => [row(btn(`nx:st-paid:${id}`, 'Mark paid', ButtonStyle.Primary), btn(`nx:st-rej:${id}`, 'Reject', ButtonStyle.Danger))];

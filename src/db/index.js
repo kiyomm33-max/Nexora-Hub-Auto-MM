@@ -56,6 +56,16 @@ CREATE TABLE IF NOT EXISTS perk_sessions(
 );
 CREATE UNIQUE INDEX IF NOT EXISTS perk_one_open ON perk_sessions(user_id, kind) WHERE ended_at IS NULL;
 CREATE INDEX IF NOT EXISTS perk_user ON perk_sessions(user_id, kind);
+CREATE TABLE IF NOT EXISTS status_earn(
+  user_id TEXT PRIMARY KEY, enrolled_at TEXT NOT NULL, seconds INTEGER NOT NULL DEFAULT 0, since TEXT
+);
+CREATE TABLE IF NOT EXISTS status_payouts(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, cents INTEGER NOT NULL, method TEXT NOT NULL, details TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','paid','rejected')), created_at TEXT NOT NULL,
+  handled_by TEXT, handled_at TEXT, ref TEXT, channel_id TEXT, message_id TEXT
+);
+CREATE INDEX IF NOT EXISTS status_payouts_user ON status_payouts(user_id);
+CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL
 );

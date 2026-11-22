@@ -541,3 +541,29 @@ test('text commands: .leaderboard and .messages are public, .tag and .tags are s
   m = msg(ADM, '.tags', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /Server tag - 1 active now, 1 ever[\s\S]*3h/);
   m = msg(ADM, `.tag <@${B}>`, { admin: true }); m.mentions.users.set(B, { id: B }); await commandFromMessage(m, ctx); assert.match(body(m), /Active now/);
 });
+
+test('status rewards: panel is staff-only; start, request and staff payout flow', async () => {
+  const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexorra';
+  ctx.cfg.statusPay = { dailyCents: 20, weekBonusCents: 120, minPayoutCents: 20 };
+  ctx.cfg.channels.statusPanel = 'stp'; ctx.cfg.channels.statusPayouts = 'stq';
+  ctx.chans.set('stp', { id: 'stp', sent: [], async send(p) { this.sent.push(p); } }); ctx.chans.set('stq', { id: 'stq', sent: [], async send(p) { this.sent.push(p); return { id: 'm1' }; } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'status' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'status' }), ctx);
+  const p = ctx.chans.get('stp').sent[0]; const j = JSON.stringify(p.components.map((c) => c.toJSON()));
+  assert.ok(j.includes('nx:st-start') && j.includes('nx:st-payout') && j.includes('Status Rewards')); assert.equal(p.files.length, 1);
+  // not showing the status: refused
+  const no = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); no.member.presence = { status: 'idle', activities: [] }; await route(no, ctx); assert.match(text(no), /Set your custom status/);
+  const ok = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); ok.member.presence = { status: 'dnd', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(ok, ctx); assert.match(text(ok), /Earning started/);
+  // two days of time, then request
+  ctx.db.prepare('UPDATE status_earn SET seconds=?, since=NULL WHERE user_id=?').run(2 * 86400 + 5, RND);
+  const t = fake(ctx, 'btn', RND, { customId: 'nx:st-time' }); await route(t, ctx); assert.match(text(t), /\$0\.40/);
+  const pr = fake(ctx, 'btn', RND, { customId: 'nx:st-payout' }); await route(pr, ctx); assert.ok(JSON.stringify(pr.out[0].components.map((c) => c.toJSON())).includes('nx:st-pm:paypal'));
+  const pm = fake(ctx, 'btn', RND, { customId: 'nx:st-pm:paypal' }); await route(pm, ctx); assert.ok(pm.modal);
+  const bad = fake(ctx, 'modal', RND, { customId: 'nx:st-pay:paypal', fields: { details: 'nope' } }); await route(bad, ctx); assert.match(text(bad), /valid PayPal/);
+  const good = fake(ctx, 'modal', RND, { customId: 'nx:st-pay:paypal', fields: { details: 'me@x.com' } }); await route(good, ctx); assert.match(text(good), /Payout requested/);
+  const staffMsg = ctx.chans.get('stq').sent[0]; assert.ok(JSON.stringify(staffMsg.components.map((c) => c.toJSON())).includes('nx:st-paid:1'));
+  const again = fake(ctx, 'btn', RND, { customId: 'nx:st-payout' }); await route(again, ctx); assert.match(text(again), /at least/);
+  const rd = fake(ctx, 'btn', RND, { customId: 'nx:st-rej:1' }); await route(rd, ctx); assert.match(text(rd), /do not have permission/);
+  const paid = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:1', fields: { ref: 'tx9' } }); await route(paid, ctx);
+  assert.equal(ctx.db.prepare('SELECT state, ref FROM status_payouts WHERE id=1').get().state, 'paid');
+});

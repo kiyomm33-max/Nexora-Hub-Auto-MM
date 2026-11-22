@@ -77,3 +77,7 @@ Supported: LTC, ETH, USDT/USDC (ERC-20), USDT (BEP-20), SOL. All wallets derive 
 - Every member message (not bots, webhooks or system messages) is counted per day. `.leaderboard [today|week|month|all]` (alias `.top`) and `.messages [@user]` are public.
 - The bot records when a member equips this server's tag, and when their custom status contains `STATUS_PHRASE` (default `.gg/nexorra`). `.tag [@user]` shows times used, total time, longest and when it started; `.tags` ranks everyone by total time (staff only).
 - Counting starts when this version is deployed; older messages are not backfilled. The status needs the **Presence Intent** enabled in the Discord Developer Portal; the tag only needs the Server Members intent. Offline members hide their status, so an offline member's status session stays open until they show a different status.
+
+## Status rewards
+
+`.status` (staff) posts the Status Rewards panel. Members press **Start Earning** while showing `.gg/nexorra` as their custom status and Online or Do Not Disturb. Time adds up (checked every minute, needs the Presence intent). **Request Payout** reserves the balance and posts it to `STATUS_PAYOUT_CHANNEL_ID` (falls back to the staff log) with Mark paid and Reject buttons. The bot never sends this money; staff pay by hand. Rejecting returns the amount to the member's balance. Pay: `STATUS_PAY_DAILY` per full 24 h, plus `STATUS_PAY_WEEK_BONUS` per full 7 days, minimum `STATUS_MIN_PAYOUT`.

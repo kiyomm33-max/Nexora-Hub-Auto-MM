@@ -15,6 +15,7 @@ import * as ui from './ui.js';
 import * as rooms from './rooms.js';
 import path from 'node:path';
 import * as am from './automm.js';
+import * as st from './status.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -204,6 +205,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'supportpanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Support panel posted', `Posted in <#${target.id}>.`);
   },
+  async status(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.statusPanel)) ?? i.channel;
+    await st.postPanel(ctx, target);
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'statuspanel.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Status panel posted', `Posted in <#${target.id}>.`);
+  },
   async panel(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.panel)) ?? i.channel;
@@ -285,6 +293,12 @@ const commands = {
 
 // ---------- components ----------
 const buttons = {
+  'st-start': (i, ctx) => st.start(i, ctx),
+  'st-time': (i, ctx) => st.time(i, ctx),
+  'st-payout': (i, ctx) => st.payout(i, ctx),
+  'st-pm': (i, ctx, a) => st.pickMethod(i, ctx, a),
+  'st-paid': (i, ctx, a) => { need(i, ctx, 'panel.post'); return st.paidAsk(i, ctx, a); },
+  'st-rej': (i, ctx, a) => { need(i, ctx, 'panel.post'); return st.reject(i, ctx, a); },
   'am-start': (i, ctx, [key]) => am.startAuto(i, ctx, key),
   'am-close': (i, ctx, [id]) => am.closeDeal(i, ctx, id, { staffCan: (cap) => can(staffOf(i, ctx), cap) }),
   'am-release': (i, ctx, [id]) => am.releaseAsk(i, ctx, id),
@@ -317,6 +331,8 @@ const buttons = {
   tclose: (i, ctx, [id]) => closeTicket(i, ctx, id),
 };
 const modals = {
+  'st-pay': (i, ctx, [m]) => st.payoutSubmit(i, ctx, m, i.fields.getTextInputValue('details')),
+  'st-paidm': (i, ctx, [id]) => { need(i, ctx, 'panel.post'); return st.paidSubmit(i, ctx, id, i.fields.getTextInputValue('ref').trim()); },
   disputemodal: (i, ctx, [id]) => openDispute(i, ctx, id === 'ask' ? i.fields.getTextInputValue('deal_id') : id, i.fields.getTextInputValue('reason')),
   evidencemodal: (i, ctx, [id]) => submitEvidence(i, ctx, id, i.fields.getTextInputValue('note'), i.fields.getTextInputValue('url')),
   'am-payaddrmodal': (i, ctx, [id]) => am.payAddrSubmit(i, ctx, id, i.fields.getTextInputValue('addr')),

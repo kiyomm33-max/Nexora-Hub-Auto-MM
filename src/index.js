@@ -12,6 +12,7 @@ import { audit } from './core/audit.js';
 import { sendWelcome } from './discord/welcome.js';
 import { commandFromMessage } from './discord/prefix.js';
 import { countFromMessage, startActivity } from './discord/activity.js';
+import { startStatusLoop } from './discord/status.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
@@ -52,6 +53,8 @@ function boot(level) {
   ctx.client = client; cfg.messageContent = withMessages;
   if (level >= 2) client.on(Events.GuildMemberAdd, (m) => sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)));
   if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
+  ctx.presenceTracking = level >= 3;
+  startStatusLoop(client, ctx);
   startActivity(client, ctx, { members: level >= 2, presences: level >= 3 });
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));
