@@ -342,7 +342,8 @@ export function feesPanelPayload(cfg) {
   const ex = (a) => { const fee = a > f.percentOver ? a * pct / 100 : a > f.threshold ? flat : 0; return fee; };
   const line = (a) => `**${m(a)}** deal: fee **${ex(a) ? m(ex(a)) : 'free'}**`;
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-    .addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(text(`**Fee tiers**\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal`))
     .addSeparatorComponents(new SeparatorBuilder())
