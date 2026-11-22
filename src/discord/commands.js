@@ -28,6 +28,7 @@ export const definitions = [
   new SlashCommandBuilder().setName('dealinfo').setDescription('Show the live status of a deal').setDMPermission(false).addStringOption(dealId),
   new SlashCommandBuilder().setName('panel').setDescription('Post the Nexora Hub deal panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('welcome').setDescription('Post a welcome message preview to the welcome channel (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('fees').setDescription('Post the fee explanation panel (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('rules').setDescription('Post the server rules (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('status').setDescription('Post the Status Rewards panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('supportpanel').setDescription('Post the Nexora Hub support panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),

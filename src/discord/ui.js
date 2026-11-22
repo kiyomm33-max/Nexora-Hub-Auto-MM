@@ -334,3 +334,22 @@ export const earnPaidModal = (id) => modal(`nx:st-paidm:${id}`, 'Mark as paid', 
 export const earnPayoutEmbed = (cfg, r, methods) => base(cfg, `Status payout #${r.id}`,
   `**Member:** <@${r.user_id}>\n**Amount:** **${cusd(r.cents)}**\n**Method:** ${methods[r.method]}\n**Send to:** \`${r.details}\`\n**State:** **${r.state}**${r.handled_by ? `\nHandled by <@${r.handled_by}>` : ''}${r.ref ? `\n**Reference:** ${r.ref}` : ''}`);
 export const earnPayoutButtons = (id) => [row(btn(`nx:st-paid:${id}`, 'Mark paid', ButtonStyle.Primary), btn(`nx:st-rej:${id}`, 'Reject', ButtonStyle.Danger))];
+
+// ---------------- fee explainer ----------------
+export function feesPanelPayload(cfg) {
+  const f = cfg.fee; const m = (n) => `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  const flat = Number(f.usd); const pct = f.percent;
+  const ex = (a) => { const fee = a > f.percentOver ? a * pct / 100 : a > f.threshold ? flat : 0; return fee; };
+  const line = (a) => `**${m(a)}** deal: fee **${ex(a) ? m(ex(a)) : 'free'}**`;
+  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
+    .addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**Fee tiers**\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal`))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**Examples**\n${[f.threshold, f.threshold + 50, f.percentOver, 400].map(line).join('\n')}`))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text('**Who pays?**\nThe **Sender** chooses: **Sender pays**, **Receiver pays**, or **Split 50/50**. The **Receiver** must then confirm. Nothing is charged until they agree.'))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(`**Good to know**\nThe deal limit is **${m(cfg.maxDealUsd ?? 400)}**.\nCrypto **network fees** for sending the payout are separate and paid by the blockchain, not by us.\nIf a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**`));
+  return { flags: 1 << 15, components: [c] };
+}
