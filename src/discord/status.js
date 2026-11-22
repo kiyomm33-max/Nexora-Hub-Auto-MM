@@ -8,8 +8,8 @@ import { log } from '../logger.js';
 import * as ui from './ui.js';
 import { UserError } from './automm.js';
 
-const LOGO = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../assets/logo.png');
-export const logoFile = () => new AttachmentBuilder(LOGO, { name: 'logo.png' });
+const LOGO = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../assets/status.png');
+export const logoFile = () => new AttachmentBuilder(LOGO, { name: 'status.png' });
 const eph = (ctx, payload) => ({ flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] }, ...payload });
 
 /** Online or Do Not Disturb, with the phrase in the custom status. */
@@ -43,7 +43,7 @@ export async function postPanel(ctx, channel) { return channel.send({ ...ui.stat
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
   const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
-  if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **.${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
+  if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
   const fresh = earn.enroll(ctx.db, i.user.id);
   earn.setQualifying(ctx.db, i.user.id, true);
   if (fresh) audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.enrolled', detail: {} });
