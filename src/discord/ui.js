@@ -359,16 +359,11 @@ export function feesPanelPayload(cfg) {
 export const reqText = (g) => (g.req_kind ? `Invite ${g.req_n} new member${g.req_n === 1 ? '' : 's'} after this giveaway started` : 'None, everyone can enter');
 export function giveawayPayload(cfg, g, entries) {
   const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
-  const head = new SectionBuilder().addTextDisplayComponents(text(`## ${g.prize}\n${ended ? '**Giveaway ended**' : '**Giveaway**  |  press Enter to join'}`))
-    .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } }));
-  const body = ended
-    ? `**Winner**\n${g.winner_id ? `<@${g.winner_id}>  (picked at random)` : 'No valid entries'}\n\n**Hosted by**\n<@${g.host_id}>\n\n**Entries**\n${entries}`
-    : `**Ends**\n<t:${ts}:R>  (<t:${ts}:f>)\n\n**Hosted by**\n<@${g.host_id}>\n\n**Requirement**\n${reqText(g)}\n\n**Entries**\n${entries}`;
-  const c = new ContainerBuilder().setAccentColor(BRAND.purple).addSectionComponents(head)
-    .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(body))
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addActionRowComponents(row(btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter Giveaway', ButtonStyle.Primary).setDisabled(ended)))
-    .addTextDisplayComponents(text(ended ? '-# Winners are drawn at random by the bot.' : '-# The winner is drawn at random from everyone who entered.'));
-  return { flags: 1 << 15, components: [c], allowedMentions: { parse: [] } };
+  const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
+  const e = base(cfg, g.prize, ended
+    ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}`
+    : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}`)
+    .setThumbnail('attachment://status.png');
+  return { embeds: [e], components: [row(btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter', ButtonStyle.Primary).setDisabled(ended))], allowedMentions: { parse: [] } };
 }
 export const giveawayLeaveRow = (id) => [row(btn(`nx:gw-leave:${id}`, 'Leave giveaway'))];

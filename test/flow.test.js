@@ -584,7 +584,7 @@ test('giveaway: /giveaway create, new-invite requirement gates entry, winner is 
   const mk = (user, roles, sub, o) => { const i = fake(ctx, 'cmd', user, { roles, command: 'giveaway', sub, opts: o }); i.guild = ctx.guild; i.options.getChannel = () => ch; i.options.getInteger = (k) => o[k] ?? null; return i; };
   const deny = mk(RND, [], 'create', { duration: '1d', prize: 'x' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   const ok = mk(ADM, [ROLE.adm], 'create', { duration: '1d', prize: '1 Nitro Giftlink', invites: 1 }); await route(ok, ctx); assert.match(text(ok), /Giveaway created/);
-  const posted = ch.sent[0]; assert.ok(JSON.stringify(posted.components.map((c) => c.toJSON())).includes('nx:gw-enter:1')); assert.match(JSON.stringify(posted.components.map((c) => c.toJSON())), /1 Nitro Giftlink.*attachment:\/\/status.png|attachment:\/\/status.png.*1 Nitro Giftlink/); assert.equal(posted.files.length, 1);
+  const posted = ch.sent[0]; assert.ok(JSON.stringify(posted.components.map((c) => c.toJSON())).includes('nx:gw-enter:1')); assert.match(JSON.stringify(posted.embeds[0].toJSON()), /1 Nitro Giftlink.*attachment:\/\/status.png|attachment:\/\/status.png.*1 Nitro Giftlink/); assert.equal(posted.files.length, 1);
   const enter = (u) => { const i = fake(ctx, 'btn', u, { customId: 'nx:gw-enter:1' }); i.guild = ctx.guild; return i; };
   const old = enter(A); await route(old, ctx); assert.match(text(old), /invite \*\*1\*\* new member/);
   uses = { [A]: 4 }; const yes = enter(A); await route(yes, ctx); assert.match(text(yes), /You are in/);
