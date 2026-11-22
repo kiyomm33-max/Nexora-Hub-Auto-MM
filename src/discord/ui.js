@@ -367,3 +367,14 @@ export function giveawayPayload(cfg, g, entries) {
   return { embeds: [e], components: [row(btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter', ButtonStyle.Primary).setDisabled(ended))], allowedMentions: { parse: [] } };
 }
 export const giveawayLeaveRow = (id) => [row(btn(`nx:gw-leave:${id}`, 'Leave giveaway'))];
+
+// ---------------- polls ----------------
+const bar = (pct) => { const n = Math.round(pct / 10); return '▰'.repeat(n) + '▱'.repeat(10 - n); };
+export function pollPayload(cfg, p, counts) {
+  const opts = JSON.parse(p.options); const total = counts.reduce((a, b) => a + b, 0); const ended = p.state === 'ended';
+  const ts = Math.floor(p.ends_at / 1000); const top = Math.max(...counts);
+  const lines = opts.map((o, k) => { const pct = total ? Math.round(counts[k] * 100 / total) : 0; return `**${k + 1}. ${o}**${ended && total && counts[k] === top ? '  (winner)' : ''}\n${bar(pct)}  **${pct}%**  (${counts[k]} vote${counts[k] === 1 ? '' : 's'})`; });
+  const e = base(cfg, p.question, `${lines.join('\n\n')}\n\n**${ended ? 'Poll ended' : 'Ends'}:** ${ended ? `<t:${ts}:f>` : `<t:${ts}:R> (<t:${ts}:f>)`}\n**Hosted by:** <@${p.host_id}>\n**Total votes:** ${total}${ended ? '' : '\nPress a button to vote. You can change your vote, or press your choice again to remove it.'}`)
+    .setThumbnail('attachment://status.png');
+  return { embeds: [e], components: [row(...opts.map((o, k) => btn(`nx:pl-vote:${p.id}:${k}`, `${k + 1}. ${o}`.slice(0, 80), ButtonStyle.Primary).setDisabled(ended)))], allowedMentions: { parse: [] } };
+}

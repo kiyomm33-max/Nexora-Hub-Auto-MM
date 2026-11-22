@@ -72,6 +72,11 @@ CREATE TABLE IF NOT EXISTS giveaways(
 );
 CREATE TABLE IF NOT EXISTS giveaway_invites(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, uses INTEGER NOT NULL, PRIMARY KEY(giveaway_id, user_id));
 CREATE TABLE IF NOT EXISTS giveaway_entries(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(giveaway_id, user_id));
+CREATE TABLE IF NOT EXISTS polls(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id TEXT NOT NULL, message_id TEXT, host_id TEXT NOT NULL, question TEXT NOT NULL,
+  options TEXT NOT NULL, ends_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','ended')), created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS poll_votes(poll_id INTEGER NOT NULL, user_id TEXT NOT NULL, choice INTEGER NOT NULL, PRIMARY KEY(poll_id, user_id));
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL

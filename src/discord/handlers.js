@@ -17,6 +17,7 @@ import path from 'node:path';
 import * as am from './automm.js';
 import * as st from './status.js';
 import * as gw from './giveaway.js';
+import * as pl from './poll.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -199,6 +200,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
   },
+  async poll(i, ctx) {
+    need(i, ctx, 'panel.post');
+    if (i.options.getSubcommand() === 'end') return pl.endNow(i, ctx, i.options.getInteger('id', true));
+    const o = i.options;
+    return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
+      options: [1, 2, 3, 4, 5].map((n) => o.getString(`option${n}`)).filter(Boolean) });
+  },
   async giveaway(i, ctx) {
     need(i, ctx, 'panel.post');
     const sub = i.options.getSubcommand();
@@ -308,6 +316,7 @@ const commands = {
 
 // ---------- components ----------
 const buttons = {
+  'pl-vote': (i, ctx, [id, n]) => pl.vote(i, ctx, id, n),
   'gw-enter': (i, ctx, [id]) => gw.enter(i, ctx, id),
   'gw-leave': (i, ctx, [id]) => gw.leave(i, ctx, id),
   'st-start': (i, ctx) => st.start(i, ctx),

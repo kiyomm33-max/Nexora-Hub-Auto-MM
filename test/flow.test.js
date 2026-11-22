@@ -491,7 +491,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => n !== 'giveaway').sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -592,4 +592,19 @@ test('giveaway: /giveaway create, new-invite requirement gates entry, winner is 
   const end = mk(ADM, [ROLE.adm], 'end', { id: 1 }); await route(end, ctx); assert.match(text(end), /picked at random/);
   assert.match(ch.sent[1].content, new RegExp(A)); assert.match(ch.sent[1].content, /at random/);
   const late = enter(A); await route(late, ctx); assert.match(text(late), /has ended/);
+});
+
+test('poll: /poll create posts buttons, votes update the card, /poll end posts the result', async () => {
+  const ctx = setup(); const edits = []; const ch = { id: 'plch', guild: ctx.guild, isTextBased: () => true, sent: [], messages: { fetch: async () => ({ edit: async (p) => { edits.push(p); } }) }, async send(p) { this.sent.push(p); return { id: 'pm1' }; } };
+  ctx.chans.set('plch', ch); ctx.guild.id ??= 'G1';
+  const mk = (user, roles, sub, o) => { const i = fake(ctx, 'cmd', user, { roles, command: 'poll', sub, opts: o }); i.guild = ctx.guild; i.options.getChannel = () => ch; i.options.getInteger = (k) => o[k] ?? null; i.options.getString = (k) => o[k] ?? null; return i; };
+  const deny = mk(RND, [], 'create', { question: 'q', duration: '1d', option1: 'a', option2: 'b' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const ok = mk(ADM, [ROLE.adm], 'create', { question: 'Which game?', duration: '1d', option1: 'Adopt Me', option2: 'Blox Fruits' }); await route(ok, ctx); assert.match(text(ok), /Poll created/);
+  const posted = ch.sent[0]; assert.equal(posted.files.length, 1); assert.ok(JSON.stringify(posted.components.map((c) => c.toJSON())).includes('nx:pl-vote:1:1'));
+  const v = async (u, n) => { const i = fake(ctx, 'btn', u, { customId: `nx:pl-vote:1:${n}` }); await route(i, ctx); return i; };
+  assert.match(text(await v(A, 1)), /Vote counted/); await v(B, 1); assert.match(text(await v(A, 0)), /changed/);
+  assert.match(JSON.stringify(edits.at(-1).embeds[0].toJSON()), /\*\*50%\*\*/);
+  const end = mk(ADM, [ROLE.adm], 'end', { id: 1 }); await route(end, ctx); assert.match(text(end), /Poll ended/);
+  assert.match(ch.sent[1].content, /tie/);
+  assert.match(text(await v(A, 0)), /has ended/);
 });
