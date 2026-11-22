@@ -29,6 +29,17 @@ export const definitions = [
   new SlashCommandBuilder().setName('panel').setDescription('Post the Nexora Hub deal panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('welcome').setDescription('Post a welcome message preview to the welcome channel (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('fees').setDescription('Post the fee explanation panel (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('poll').setDescription('Ask the community to vote (staff)').setDMPermission(false)
+    .addSubcommand((s) => {
+      s.setName('create').setDescription('Start a poll')
+        .addStringOption((o) => o.setName('question').setDescription('What are you asking?').setRequired(true).setMaxLength(250))
+        .addStringOption((o) => o.setName('duration').setDescription('When it ends: 30m, 12h, 1d or 2d12h').setRequired(true).setMaxLength(20))
+        .addStringOption((o) => o.setName('option1').setDescription('First choice').setRequired(true).setMaxLength(80))
+        .addStringOption((o) => o.setName('option2').setDescription('Second choice').setRequired(true).setMaxLength(80));
+      for (const n of [3, 4, 5]) s.addStringOption((o) => o.setName(`option${n}`).setDescription(`Choice ${n} (optional)`).setMaxLength(80));
+      return s.addChannelOption((o) => o.setName('channel').setDescription('Channel to post in (default: here)').addChannelTypes(0, 5));
+    })
+    .addSubcommand((s) => s.setName('end').setDescription('End a poll now and show the result').addIntegerOption((o) => o.setName('id').setDescription('Poll ID').setRequired(true))),
   new SlashCommandBuilder().setName('giveaway').setDescription('Run giveaways (staff)').setDMPermission(false)
     .addSubcommand((s) => s.setName('create').setDescription('Start a giveaway with a random winner')
       .addChannelOption((o) => o.setName('channel').setDescription('Channel to post in').setRequired(true).addChannelTypes(0, 5))
