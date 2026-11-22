@@ -7,6 +7,7 @@ import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/aud
 import { welcomePayload } from './welcome.js';
 import { rulesPayload } from './rules.js';
 import { userStats } from '../core/stats.js';
+import * as act from '../core/activity.js';
 import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
 import { backupNow } from '../jobs/backup.js';
 import { log } from '../logger.js';
@@ -157,6 +158,30 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.statsEmbed(name, u.displayAvatarURL?.({ size: 256 }), userStats(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async leaderboard(i, ctx) {
+    limit(ctx, i, 'leaderboard', 5, 60e3);
+    const raw = String(i.options.getString('period') ?? 'all').toLowerCase();
+    const period = { day: 'today', daily: 'today', weekly: 'week', monthly: 'month', alltime: 'all', total: 'all' }[raw] ?? raw;
+    if (!(period in act.PERIODS)) throw new UserError('Pick a period: today, week, month or all.');
+    const b = act.leaderboard(ctx.db, period, { limit: 10 }); const rank = act.userRank(ctx.db, i.user.id, period);
+    const me = rank ? { id: i.user.id, rank, n: act.userMessages(ctx.db, i.user.id)[period === 'all' ? 'all' : period] } : null;
+    return i.reply({ embeds: [ui.leaderboardEmbed(ctx.cfg, { period, label: act.PERIOD_LABEL[period], ...b, me, since: act.trackingSince(ctx.db) })], allowedMentions: { parse: [] } });
+  },
+  async messages(i, ctx) {
+    limit(ctx, i, 'messages', 5, 60e3);
+    const u = i.options.getUser('member') ?? i.user;
+    const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
+    return i.reply({ embeds: [ui.messagesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), act.userMessages(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async tag(i, ctx) {
+    need(i, ctx, 'activity.view');
+    const u = i.options.getUser('member') ?? i.user;
+    return reply(i, { embeds: [ui.tagEmbed(ctx.cfg, u.id, act.perkSummary(ctx.db, u.id, 'tag'), act.perkSummary(ctx.db, u.id, 'status'), act.duration, `.gg/${ctx.cfg.statusPhrase.replace(/^.*gg\//, '')}`)] });
+  },
+  async tags(i, ctx) {
+    need(i, ctx, 'activity.view');
+    return reply(i, { embeds: [ui.tagBoardEmbed(ctx.cfg, act.perkBoard(ctx.db, 'tag', { limit: 10 }), act.perkBoard(ctx.db, 'status', { limit: 10 }), act.duration, `.gg/${ctx.cfg.statusPhrase.replace(/^.*gg\//, '')}`)] });
   },
   async welcome(i, ctx) {
     need(i, ctx, 'panel.post');

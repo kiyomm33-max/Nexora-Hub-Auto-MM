@@ -46,6 +46,16 @@ CREATE TABLE IF NOT EXISTS tickets(
   status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
   created_at TEXT NOT NULL, closed_at TEXT, closed_by TEXT, transcript_sha256 TEXT
 );
+CREATE TABLE IF NOT EXISTS msg_counts(
+  user_id TEXT NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(user_id, day)
+);
+CREATE INDEX IF NOT EXISTS msg_counts_day ON msg_counts(day);
+CREATE TABLE IF NOT EXISTS perk_sessions(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('tag','status')),
+  started_at TEXT NOT NULL, ended_at TEXT, end_reason TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS perk_one_open ON perk_sessions(user_id, kind) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS perk_user ON perk_sessions(user_id, kind);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL
 );
