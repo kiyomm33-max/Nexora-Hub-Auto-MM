@@ -573,5 +573,5 @@ test('fee panel: staff-only, shows the tiers from config', async () => {
   const deny = fake(ctx, 'cmd', RND, { command: 'fees' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
   const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON()));
-  assert.ok(j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
+  assert.equal(ctx.chans.get('feech').sent[0].files.length, 1); assert.ok(j.includes('attachment://status.png') && j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
 });
