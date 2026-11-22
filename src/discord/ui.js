@@ -316,9 +316,9 @@ export const statusPanelPayload = (cfg) => {
   const p = cfg.statusPay; const week = 7 * p.dailyCents + p.weekBonusCents;
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Status Rewards\nGet paid for your Discord status.'))
-      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://logo.png' } })))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**How it works**\n**1.** Copy this exact custom status:\n\`\`\`\n.${cfg.statusPhrase}\n\`\`\`\n**2.** Stay **Online** or **Do Not Disturb** and set the expiry to **Don't clear**.\n**3.** Press **Start Earning**. Your time adds up across sessions.\n**4.** Press **Request Payout**, choose a payment method and enter your details.`))
+    .addTextDisplayComponents(text(`**How it works**\n**1.** Copy this exact custom status:\n\`\`\`\nBest Auto MM - .${cfg.statusPhrase}\n\`\`\`\n**2.** Stay **Online** or **Do Not Disturb** and set the expiry to **Don't clear**.\n**3.** Press **Start Earning**. Your time adds up across sessions.\n**4.** Press **Request Payout**, choose a payment method and enter your details.`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(text(`**Pay**\n**24 hours online:** ${cusd(p.dailyCents)}\n**7 days online:** +${cusd(p.weekBonusCents)} bonus\n**Full week:** ${cusd(week)} total`))
     .addSeparatorComponents(new SeparatorBuilder())
