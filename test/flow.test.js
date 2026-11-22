@@ -392,7 +392,7 @@ test('stats: own embed with rank, largest deal and avatar; only in the stats cha
   const i = fake(ctx, 'cmd', A, { command: 'stats' }); i.user.displayAvatarURL = () => 'https://x/a.png'; await route(i, ctx);
   const e = i.out[0].embeds[0].toJSON(); assert.match(e.title, /Tier 2/); assert.equal(e.thumbnail.url, 'https://x/a.png');
   assert.match(e.description, /rank `#3`/); assert.match(e.description, /Completed:\*\* 2/); assert.match(e.description, /Largest Deal:\*\* \$120\.50/); assert.match(e.description, /Completion Rate:\*\* 67%/);
-  ctx.cfg.channels.stats = 'elsewhere'; const w = fake(ctx, 'cmd', A, { command: 'stats' }); await route(w, ctx); assert.match(text(w), /Use \/stats in/);
+  ctx.cfg.channels.stats = 'elsewhere'; const w = fake(ctx, 'cmd', A, { command: 'stats' }); await route(w, ctx); assert.match(text(w), /Use the stats command in/);
 });
 
 test('rules: staff-only, posted to the rules channel as embeds within Discord limits', async () => {
@@ -486,4 +486,38 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
   ctx.cfg.channels.welcome = 'wc2'; ctx.chans.set('wc2', { id: 'wc2', sent: [], async send(p) { this.sent.push(p); } });
   const deny = fake(ctx, 'cmd', RND, { command: 'welcome' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   const ok = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'welcome' }); await route(ok, ctx); assert.equal(sent.length, 2, 'preview posted to the welcome channel');
+});
+
+test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
+  const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
+  const { definitions } = await import('../src/discord/commands.js');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).sort(), 'every slash command has a text command');
+  const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
+  const dms = [];
+  const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
+    return { out, dms, author: { id: author, bot: false, send: async (p) => { dms.push(p); } }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content,
+      member: { roles: { cache: new Map(roles.map((r) => [r, 1])) }, permissions: { has: (p) => admin && p === 'Administrator' } }, mentions: { users: new Map() },
+      attachments: { first: () => attachments }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async (x) => Object.assign(p, x) }; } }; };
+  const body = (m) => JSON.stringify(m.out.map((o) => (o.embeds ?? []).map((e) => [e.data.title, e.data.description])));
+  // not a command, other bots' commands, bots
+  for (const t of ['hello', '.', '...', '.unknowncmd', '. help']) { const m = msg(A, t); assert.equal(await commandFromMessage(m, ctx), false, t); assert.equal(m.out.length, 0); }
+  // help: members see the public ones, staff see everything
+  let m = msg(A, '.help'); assert.equal(await commandFromMessage(m, ctx), true); assert.match(body(m), /\.stats/); assert.doesNotMatch(body(m), /\.staff/);
+  m = msg(ADM, '.help', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /\.staff history/); assert.match(body(m), /\.vouch <deal_id> <rating> <feedback>/);
+  // permission
+  m = msg(RND, '.mydeals'); await commandFromMessage(m, ctx); assert.match(body(m), /do not have permission/);
+  m = msg(ADM, '.mydeals', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /Your deals/); assert.equal(m.out[0].flags, undefined, 'no ephemeral flag on a normal message');
+  // usage errors and parsing
+  m = msg(ADM, '.dealinfo', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /Usage: `\.dealinfo <deal_id>`/);
+  m = msg(ADM, '.vouch NXH-AB12CD34 six nope', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /must be a number/);
+  m = msg(ADM, '.staff', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /history\|activity/);
+  const v = await parseArgs('NXH-AB12CD34 5 great   deal, thanks', SPEC.vouch.args, { usage: 'x', resolveUser: async () => null });
+  assert.deepEqual(v, { deal_id: 'NXH-AB12CD34', rating: 5, feedback: 'great   deal, thanks' });
+  // staff subcommand runs through the same handler as the slash command
+  const { id } = await (async () => { const rid = await runToRoom(ctx, { amount: '2' }); return { id: rid }; })();
+  m = msg(ADM, `.staff history ${id}`, { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /history|deal\.created/i);
+  // ticket works as text; evidence takes the attachment
+  m = msg(A, '.ticket short', { admin: true }); await commandFromMessage(m, ctx); assert.match(body(m), /at least 10 characters/);
+  // the wallet goes to DMs only, never the channel
+  m = msg(ADM, '.staff wallet', { admin: true }); await commandFromMessage(m, ctx); assert.ok(!/Recovery/i.test(body(m)), 'nothing secret in the channel');
 });

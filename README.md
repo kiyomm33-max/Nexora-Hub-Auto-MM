@@ -3,7 +3,7 @@
 Purple / black / white deal-management bot for a Roblox middleman server. **Runs in DEMO mode by default: no real money is ever handled.**
 
 ## Auto-MM flow (panel button → release)
-1. `/panel` (admin) posts the coin panel (one **Start** button per coin/network) in `PANEL_CHANNEL_ID`.
+1. `.panel` (admin) posts the coin panel (one **Start** button per coin/network) in `PANEL_CHANNEL_ID`.
 2. Start opens a private room: Deal Started, Safety Warning, Close, then **Deal Type** dropdown (In-Game, Exchange, Counter Strike, Robux, Other).
 3. Creator adds the other trader (user picker or user ID/ping) → each trader picks Sender or Receiver → one describes the deal, the other accepts/declines → USD amount → both confirm.
 4. Deals over `FEE_THRESHOLD_USD` (50) pay a flat `FEE_USD` ($2); deals over `FEE_PERCENT_OVER_USD` (250) pay `FEE_PERCENT`% (2%). The sender chooses who pays and the receiver confirms: and both traders must pick the same payer: sender (sender sends amount + fee), receiver (receiver gets amount − fee) or split.
