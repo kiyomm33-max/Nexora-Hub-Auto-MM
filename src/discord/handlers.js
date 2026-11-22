@@ -135,7 +135,7 @@ async function closeTicket(i, ctx, id) {
 // ---------- slash commands ----------
 const commands = {
   vouch: (i, ctx) => vouch(i, ctx, i.options.getString('deal_id', true), i.options.getInteger('rating', true), i.options.getString('feedback', true)),
-  ticket: (i) => i.showModal(ui.ticketModal()),
+  ticket: (i, ctx) => (i.prefix ? openTicket(i, ctx, i.options.getString('subject', true), i.options.getString('details', true)) : i.showModal(ui.ticketModal())),
   dispute: (i, ctx) => openDispute(i, ctx, i.options.getString('deal_id', true), i.options.getString('reason', true)),
   evidence: (i, ctx) => {
     const att = i.options.getAttachment('file');
@@ -144,7 +144,7 @@ const commands = {
   },
   async mydeals(i, ctx) {
     const rows = ctx.deals.forUser(i.user.id);
-    return reply(i, { embeds: [ui.base(ctx.cfg, 'Your deals', rows.map((d) => `\`${d.id}\`  •  ${ui.statusText(d.status)}${d.channel_id ? `  •  <#${d.channel_id}>` : ''}`).join('\n') || 'No deals yet. Use /deal to start one.')] });
+    return reply(i, { embeds: [ui.base(ctx.cfg, 'Your deals', rows.map((d) => `\`${d.id}\`  •  ${ui.statusText(d.status)}${d.channel_id ? `  •  <#${d.channel_id}>` : ''}`).join('\n') || 'No deals yet. Start one from the panel.')] });
   },
   async dealinfo(i, ctx) {
     const { deal } = accessDeal(i, ctx, i.options.getString('deal_id', true));
@@ -152,7 +152,7 @@ const commands = {
   },
   async stats(i, ctx) {
     const only = ctx.cfg.channels.stats;
-    if (only && i.channel?.id !== only) throw new UserError(`Use /stats in <#${only}>.`);
+    if (only && i.channel?.id !== only) throw new UserError(`Use the stats command in <#${only}>.`);
     limit(ctx, i, 'stats', 5, 60e3);
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';

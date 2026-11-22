@@ -53,6 +53,8 @@ export function loadConfig(e = env) {
       rpcs: { ...(e.ETH_RPC_URL ? { ethereum: list(e.ETH_RPC_URL) } : {}), ...(e.BSC_RPC_URL ? { bsc: list(e.BSC_RPC_URL) } : {}) } },
     sol: { treasury: e.SOL_TREASURY_ADDRESS?.trim() || null, ...(e.SOL_RPC_URL ? { rpcs: list(e.SOL_RPC_URL) } : {}) },
     ownerUserIds: list(e.OWNER_USER_IDS),
+    prefix: (e.COMMAND_PREFIX || '.').trim().slice(0, 3) || '.',
+    slashCommands: /^(1|true|yes)$/i.test(e.SLASH_COMMANDS || ''),
     roles: {
       owner: list(e.ROLE_OWNER_IDS),
       admin: list(e.ROLE_ADMIN_IDS),
