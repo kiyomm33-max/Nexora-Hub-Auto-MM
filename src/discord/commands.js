@@ -29,6 +29,14 @@ export const definitions = [
   new SlashCommandBuilder().setName('panel').setDescription('Post the Nexora Hub deal panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('welcome').setDescription('Post a welcome message preview to the welcome channel (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('fees').setDescription('Post the fee explanation panel (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('giveaway').setDescription('Run giveaways (staff)').setDMPermission(false)
+    .addSubcommand((s) => s.setName('create').setDescription('Start a giveaway with a random winner')
+      .addChannelOption((o) => o.setName('channel').setDescription('Channel to post in').setRequired(true).addChannelTypes(0, 5))
+      .addStringOption((o) => o.setName('duration').setDescription('For example 30m, 12h, 1d or 2d12h').setRequired(true).setMaxLength(20))
+      .addStringOption((o) => o.setName('prize').setDescription('What is being given away').setRequired(true).setMaxLength(200))
+      .addIntegerOption((o) => o.setName('invites').setDescription('New invites a member needs to enter (optional)').setMinValue(1).setMaxValue(100)))
+    .addSubcommand((s) => s.setName('end').setDescription('End a giveaway now and draw a random winner').addIntegerOption((o) => o.setName('id').setDescription('Giveaway ID').setRequired(true)))
+    .addSubcommand((s) => s.setName('reroll').setDescription('Draw a new random winner').addIntegerOption((o) => o.setName('id').setDescription('Giveaway ID').setRequired(true))),
   new SlashCommandBuilder().setName('rules').setDescription('Post the server rules (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('status').setDescription('Post the Status Rewards panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName('supportpanel').setDescription('Post the Nexora Hub support panel (staff)').setDMPermission(false).setDefaultMemberPermissions(0),

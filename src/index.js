@@ -13,6 +13,7 @@ import { sendWelcome } from './discord/welcome.js';
 import { commandFromMessage } from './discord/prefix.js';
 import { countFromMessage, startActivity } from './discord/activity.js';
 import { startStatusLoop } from './discord/status.js';
+import { startGiveawayLoop } from './discord/giveaway.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
@@ -55,6 +56,7 @@ function boot(level) {
   if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
   ctx.presenceTracking = level >= 3;
   startStatusLoop(client, ctx);
+  startGiveawayLoop(client, ctx);
   startActivity(client, ctx, { members: level >= 2, presences: level >= 3 });
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));
@@ -68,7 +70,7 @@ function boot(level) {
     } catch (e) { log.error('avatar update failed', e); }
     try { (await import('./discord/emojis.js')).syncEmojis(client).catch((e) => log.error('emoji sync failed', e)); } catch (e) { log.error('emoji import failed', e); }
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
-    try { await registerCommands(cfg, { clear: cfg.messageContent && !cfg.slashCommands }); if (cfg.messageContent && !cfg.slashCommands) log.info('slash commands removed; text commands use the prefix', { prefix: cfg.prefix }); } catch (e) { log.error('command registration failed', e); }
+    try { await registerCommands(cfg, { clear: cfg.messageContent && !cfg.slashCommands }); if (cfg.messageContent && !cfg.slashCommands) log.info('only /giveaway is a slash command; the rest use the prefix', { prefix: cfg.prefix }); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
     // After a restart, put the live status message (with its buttons) back at the bottom of rooms that are waiting on a person.
     for (const d of db.prepare("SELECT * FROM deals WHERE status='verification_pending' AND mode='live' AND escrow_status='provider_confirmed' AND release_at IS NULL AND (released_at IS NULL OR payout_address IS NULL)").all()) await refreshStatus(ctx, d, { bump: true }).catch((e) => log.error('status repost failed', e));

@@ -354,3 +354,15 @@ export function feesPanelPayload(cfg) {
     .addTextDisplayComponents(text(`**Good to know**\nThe deal limit is **${m(cfg.maxDealUsd ?? 400)}**.\nCrypto **network fees** for sending the payout are separate and paid by the blockchain, not by us.\nIf a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**`));
   return { flags: 1 << 15, components: [c] };
 }
+
+// ---------------- giveaways ----------------
+export const reqText = (g) => (g.req_kind ? `Invite **${g.req_n}** new member${g.req_n === 1 ? '' : 's'} after this giveaway started` : '**None**');
+export function giveawayPayload(cfg, g, entries) {
+  const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
+  const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
+  const e = base(cfg, g.prize, ended
+    ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}`
+    : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}`);
+  return { embeds: [e], components: [row(btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter', ButtonStyle.Primary).setDisabled(ended))], allowedMentions: { parse: [] } };
+}
+export const giveawayLeaveRow = (id) => [row(btn(`nx:gw-leave:${id}`, 'Leave giveaway'))];

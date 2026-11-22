@@ -16,6 +16,7 @@ import * as rooms from './rooms.js';
 import path from 'node:path';
 import * as am from './automm.js';
 import * as st from './status.js';
+import * as gw from './giveaway.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -198,6 +199,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
   },
+  async giveaway(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const sub = i.options.getSubcommand();
+    if (sub === 'create') return gw.create(i, ctx, { channel: i.options.getChannel('channel', true), duration: i.options.getString('duration', true), prize: i.options.getString('prize', true), invites: i.options.getInteger('invites') });
+    if (sub === 'end') return gw.endNow(i, ctx, i.options.getInteger('id', true));
+    return gw.reroll(i, ctx, i.options.getInteger('id', true));
+  },
   async rules(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;
@@ -300,6 +308,8 @@ const commands = {
 
 // ---------- components ----------
 const buttons = {
+  'gw-enter': (i, ctx, [id]) => gw.enter(i, ctx, id),
+  'gw-leave': (i, ctx, [id]) => gw.leave(i, ctx, id),
   'st-start': (i, ctx) => st.start(i, ctx),
   'st-time': (i, ctx) => st.time(i, ctx),
   'st-payout': (i, ctx) => st.payout(i, ctx),

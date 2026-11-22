@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS status_payouts(
   handled_by TEXT, handled_at TEXT, ref TEXT, channel_id TEXT, message_id TEXT
 );
 CREATE INDEX IF NOT EXISTS status_payouts_user ON status_payouts(user_id);
+CREATE TABLE IF NOT EXISTS giveaways(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id TEXT NOT NULL, message_id TEXT, host_id TEXT NOT NULL, prize TEXT NOT NULL,
+  req_kind TEXT, req_n INTEGER, ends_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','ended')),
+  winner_id TEXT, picked_by TEXT, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS giveaway_invites(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, uses INTEGER NOT NULL, PRIMARY KEY(giveaway_id, user_id));
+CREATE TABLE IF NOT EXISTS giveaway_entries(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(giveaway_id, user_id));
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL
