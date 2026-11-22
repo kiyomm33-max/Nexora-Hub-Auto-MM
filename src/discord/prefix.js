@@ -27,6 +27,10 @@ export const SPEC = {
   fees: { desc: 'Post the fee explanation panel', args: [] },
   rules: { desc: 'Post the server rules', args: [] },
   status: { desc: 'Post the Status Rewards panel', args: [] },
+  // hidden: works for staff but is not listed in .help
+  giveawaycreate: { desc: 'Create a giveaway', args: [['channel', 'string', true], ['duration', 'string', true], ['details', 'rest', true]], hidden: true },
+  giveawayend: { desc: 'End a giveaway now (random winner, or pick one)', args: [['id', 'int', true], ['member', 'user', false]], hidden: true },
+  giveawayreroll: { desc: 'Pick a new random winner', args: [['id', 'int', true]], hidden: true },
   supportpanel: { desc: 'Post the support panel', args: [] },
   staff: {
     desc: 'Staff tools',
@@ -52,7 +56,7 @@ export const usageOf = (prefix, name, sub, spec) => `${prefix}${name}${sub ? ` $
 export function helpLines(prefix, { all }) {
   const out = [];
   for (const [name, s] of Object.entries(SPEC)) {
-    if (!all && !PUBLIC.has(name)) continue;
+    if (s.hidden || (!all && !PUBLIC.has(name))) continue;
     if (s.subs) for (const [sub, ss] of Object.entries(s.subs)) out.push(`\`${usageOf(prefix, name, sub, ss)}\`  ${ss.desc}`);
     else out.push(`\`${usageOf(prefix, name, null, s)}\`  ${s.desc}`);
   }

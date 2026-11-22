@@ -491,7 +491,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].hidden).sort(), definitions.map((d) => d.name).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -574,4 +574,21 @@ test('fee panel: staff-only, shows the tiers from config', async () => {
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
   const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON()));
   assert.equal(ctx.chans.get('feech').sent[0].files.length, 1); assert.ok(j.includes('attachment://status.png') && j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
+});
+
+test('giveaway: create posts an entry button, requirement gates entry, staff can pick the winner', async () => {
+  const ctx = setup(); ctx.chans.set('gwch', { id: 'gwch', guild: ctx.guild, isTextBased: () => true, sent: [], messages: { fetch: async () => ({ edit: async () => {} }) }, async send(p) { this.sent.push(p); return { id: 'gm1' }; } });
+  ctx.guild.id ??= 'G1';
+  const mk = (user, roles, sub) => { const i = fake(ctx, 'cmd', user, { roles, command: sub.cmd, opts: sub.opts }); i.guild = ctx.guild; i.options.getString = (k) => sub.opts[k]; i.options.getInteger = (k) => sub.opts[k]; return i; };
+  const deny = mk(RND, [], { cmd: 'giveawaycreate', opts: { channel: 'gwch', duration: '1d', details: 'x' } }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const ok = mk(ADM, [ROLE.adm], { cmd: 'giveawaycreate', opts: { channel: '123456789012345678', duration: '1d', details: '1 Nitro Giftlink 1 Invite' } });
+  ctx.chans.set('123456789012345678', ctx.chans.get('gwch')); await route(ok, ctx); assert.match(text(ok), /Giveaway created/);
+  const posted = ctx.chans.get('gwch').sent[0]; assert.ok(JSON.stringify(posted.components.map((c) => c.toJSON())).includes('nx:gw-enter:1')); assert.match(JSON.stringify(posted.embeds[0].toJSON()), /1 Nitro Giftlink/);
+  const enter = (u) => { const i = fake(ctx, 'btn', u, { customId: 'nx:gw-enter:1' }); i.guild = { ...ctx.guild, invites: { fetch: async () => new Map(u === A ? [['x', { inviter: { id: A }, uses: 2 }]] : []) } }; return i; };
+  const no = enter(RND); await route(no, ctx); assert.match(text(no), /need \*\*1\*\* invite/);
+  const yes = enter(A); await route(yes, ctx); assert.match(text(yes), /You are in/);
+  const again = enter(A); await route(again, ctx); assert.match(text(again), /Already entered/);
+  const end = mk(ADM, [ROLE.adm], { cmd: 'giveawayend', opts: { id: 1 } }); end.options.getUser = () => ({ id: B }); await route(end, ctx);
+  assert.match(text(end), /chosen by you/); assert.match(JSON.stringify(ctx.chans.get('gwch').sent[1].content), new RegExp(B));
+  const late = enter(A); await route(late, ctx); assert.match(text(late), /has ended/);
 });
