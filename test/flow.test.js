@@ -567,3 +567,11 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   const paid = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:1', fields: { ref: 'tx9' } }); await route(paid, ctx);
   assert.equal(ctx.db.prepare('SELECT state, ref FROM status_payouts WHERE id=1').get().state, 'paid');
 });
+
+test('fee panel: staff-only, shows the tiers from config', async () => {
+  const ctx = setup(); ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'fees' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
+  const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON()));
+  assert.ok(j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
+});

@@ -24,6 +24,7 @@ export const SPEC = {
   dealinfo: { desc: 'Live status of a deal', args: [D] },
   panel: { desc: 'Post the deal panel', args: [] },
   welcome: { desc: 'Post a welcome message preview', args: [] },
+  fees: { desc: 'Post the fee explanation panel', args: [] },
   rules: { desc: 'Post the server rules', args: [] },
   status: { desc: 'Post the Status Rewards panel', args: [] },
   supportpanel: { desc: 'Post the support panel', args: [] },

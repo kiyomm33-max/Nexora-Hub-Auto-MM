@@ -191,6 +191,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'welcome.previewed', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Welcome preview posted', `Posted in <#${target.id}> with you as the new member.`);
   },
+  async fees(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.fees)) ?? i.channel;
+    await target.send(ui.feesPanelPayload(ctx.cfg));
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
+  },
   async rules(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;

@@ -36,6 +36,7 @@ export function loadConfig(e = env) {
       stats: e.STATS_CHANNEL_ID,
       rules: e.RULES_CHANNEL_ID,
       welcome: e.WELCOME_CHANNEL_ID,
+      fees: e.FEES_CHANNEL_ID,
       statusPanel: e.STATUS_PANEL_CHANNEL_ID,
       statusPayouts: e.STATUS_PAYOUT_CHANNEL_ID,
     },
