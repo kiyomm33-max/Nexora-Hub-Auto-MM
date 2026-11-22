@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS giveaways(
   req_kind TEXT, req_n INTEGER, ends_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','ended')),
   winner_id TEXT, picked_by TEXT, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS giveaway_invites(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, uses INTEGER NOT NULL, PRIMARY KEY(giveaway_id, user_id));
 CREATE TABLE IF NOT EXISTS giveaway_entries(giveaway_id INTEGER NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY(giveaway_id, user_id));
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(

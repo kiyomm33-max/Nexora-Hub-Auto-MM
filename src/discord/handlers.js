@@ -199,12 +199,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
   },
-  async giveawaycreate(i, ctx) {
+  async giveaway(i, ctx) {
     need(i, ctx, 'panel.post');
-    return gw.create(i, ctx, { channel: i.options.getString('channel', true), duration: i.options.getString('duration', true), details: i.options.getString('details', true) });
+    const sub = i.options.getSubcommand();
+    if (sub === 'create') return gw.create(i, ctx, { channel: i.options.getChannel('channel', true), duration: i.options.getString('duration', true), prize: i.options.getString('prize', true), invites: i.options.getInteger('invites') });
+    if (sub === 'end') return gw.endNow(i, ctx, i.options.getInteger('id', true));
+    return gw.reroll(i, ctx, i.options.getInteger('id', true));
   },
-  async giveawayend(i, ctx) { need(i, ctx, 'panel.post'); return gw.endNow(i, ctx, i.options.getInteger('id', true), i.options.getUser('member')); },
-  async giveawayreroll(i, ctx) { need(i, ctx, 'panel.post'); return gw.reroll(i, ctx, i.options.getInteger('id', true)); },
   async rules(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;

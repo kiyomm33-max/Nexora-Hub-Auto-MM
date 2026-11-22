@@ -1,6 +1,5 @@
 import { Events } from 'discord.js';
 import * as G from '../core/giveaways.js';
-import * as act from '../core/activity.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
@@ -18,35 +17,42 @@ async function refresh(ctx, g) {
 async function announce(ctx, g, { rerolled = false } = {}) {
   const ch = await chanOf(ctx, g.channel_id); if (!ch) return;
   const text = g.winner_id
-    ? `${rerolled ? 'New winner' : 'Congratulations'} <@${g.winner_id}>! You won **${g.prize}**.${g.picked_by ? ' (Winner chosen by staff.)' : ''}`
+    ? `${rerolled ? 'New winner' : 'Congratulations'} <@${g.winner_id}>! You won **${g.prize}**. The winner was picked at random.`
     : `Nobody entered the giveaway for **${g.prize}**, so there is no winner.`;
   await ch.send({ content: text, allowedMentions: { users: g.winner_id ? [g.winner_id] : [] }, ...(g.message_id ? { reply: { messageReference: g.message_id, failIfNotExists: false } } : {}) }).catch((e) => log.error('giveaway announce failed', e));
 }
 
-export async function create(i, ctx, { channel, duration, details }) {
-  const cid = /^<#(\d{15,25})>$|^(\d{15,25})$/.exec(channel.trim()); if (!cid) throw new UserError('Give a channel ID or #channel first. Usage: `.giveawaycreate <channel ID> <duration> <prize> <requirement>`');
-  const ms = wrap(() => G.parseDuration(duration)); const { prize, req } = wrap(() => G.splitDetails(details));
-  const ch = await chanOf(ctx, cid[1] ?? cid[2]);
+const usesByInviter = (invites) => {
+  const out = {};
+  for (const v of invites.values()) if (v.inviter?.id) out[v.inviter.id] = (out[v.inviter.id] ?? 0) + (v.uses ?? 0);
+  return out;
+};
+export async function create(i, ctx, { channel, duration, prize, invites }) {
+  const ms = wrap(() => G.parseDuration(duration));
+  prize = String(prize).trim(); if (!prize) throw new UserError('Add the prize.');
+  const ch = await chanOf(ctx, channel.id);
   if (!ch || !ch.isTextBased?.() || !ch.guild || ch.guild.id !== i.guild?.id) throw new UserError('I cannot find that text channel in this server.');
-  const g = G.create(ctx.db, { channelId: ch.id, hostId: i.user.id, prize, req, endsAt: Date.now() + ms });
+  let baseline = null;
+  if (invites) {
+    try { baseline = usesByInviter(await i.guild.invites.fetch()); }
+    catch { throw new UserError('I need the **Manage Server** permission to count invites. Give it to my role and try again.'); }
+  }
+  const g = G.create(ctx.db, { channelId: ch.id, hostId: i.user.id, prize, req: invites ? { kind: 'invites', n: invites } : null, endsAt: Date.now() + ms });
+  if (baseline) G.setBaseline(ctx.db, g.id, baseline);
   try {
     const msg = await ch.send(ui.giveawayPayload(ctx.cfg, g, 0)); G.setMessage(ctx.db, g.id, msg.id);
   } catch (e) { G.remove(ctx.db, g.id); log.error('giveaway post failed', e); throw new UserError(`I could not post in <#${ch.id}>. Check my permissions there.`); }
-  audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'giveaway.created', detail: { staff: true, id: g.id, prize, channel: ch.id } });
+  audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'giveaway.created', detail: { staff: true, id: g.id, prize, channel: ch.id, invites: invites ?? 0 } });
   const ts = Math.floor(g.ends_at / 1000);
-  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Giveaway created', `**ID:** ${g.id}\n**Prize:** ${prize}\n**Channel:** <#${ch.id}>\n**Ends:** <t:${ts}:R>\n**Requirement:** ${ui.reqText(g)}\n\nEnd it early with \`.giveawayend ${g.id}\` (random) or \`.giveawayend ${g.id} @member\` (you pick).`)] });
+  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Giveaway created', `**ID:** ${g.id}\n**Prize:** ${prize}\n**Channel:** <#${ch.id}>\n**Ends:** <t:${ts}:R>\n**Requirement:** ${ui.reqText(g)}\n\nThe winner is drawn **at random** from everyone who entered. End it early with \`/giveaway end ${g.id}\`.`)] });
 }
 
 async function meets(i, ctx, g) {
   if (!g.req_kind) return null;
-  if (g.req_kind === 'messages') {
-    const n = act.userMessages(ctx.db, i.user.id).all;
-    return n >= g.req_n ? null : `You need **${g.req_n}** messages to enter. I have counted **${n}** from you.`;
-  }
   let invites;
   try { invites = await i.guild.invites.fetch(); } catch { throw new UserError('I cannot check invites right now. Ask staff.'); }
-  const n = [...invites.values()].filter((v) => v.inviter?.id === i.user.id).reduce((a, v) => a + (v.uses ?? 0), 0);
-  return n >= g.req_n ? null : `You need **${g.req_n}** invite${g.req_n === 1 ? '' : 's'} to enter. Your invite links have **${n}** use${n === 1 ? '' : 's'}.`;
+  const n = G.newInvites(ctx.db, g.id, i.user.id, usesByInviter(invites)[i.user.id] ?? 0);
+  return n >= g.req_n ? null : `You need to invite **${g.req_n}** new member${g.req_n === 1 ? '' : 's'} after this giveaway started. Your invite links have brought **${n}** so far. Create an invite link, share it, and press Enter again once someone joins with it.`;
 }
 export async function enter(i, ctx, id) {
   const g = G.get(ctx.db, Number(id));
@@ -64,15 +70,15 @@ export async function leave(i, ctx, id) {
   await refresh(ctx, g);
 }
 
-export async function finish(ctx, id, opts = {}) {
-  const g = wrap(() => G.end(ctx.db, id, opts));
-  audit(ctx.db, { category: 'system', actor: opts.pickedBy ?? 'system', action: 'giveaway.ended', detail: { id, winner: g.winner_id, staffPicked: !!g.picked_by } });
+export async function finish(ctx, id) {
+  const g = wrap(() => G.end(ctx.db, id));
+  audit(ctx.db, { category: 'system', actor: 'system', action: 'giveaway.ended', detail: { id, winner: g.winner_id } });
   await refresh(ctx, g); await announce(ctx, g);
   return g;
 }
-export async function endNow(i, ctx, id, member) {
-  const g = await finish(ctx, id, { winner: member?.id ?? null, pickedBy: member ? i.user.id : null });
-  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Giveaway ended', g.winner_id ? `**Winner:** <@${g.winner_id}> (${g.picked_by ? 'chosen by you' : 'random'}).` : 'Nobody entered, so there is no winner.')] });
+export async function endNow(i, ctx, id) {
+  const g = await finish(ctx, id);
+  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Giveaway ended', g.winner_id ? `**Winner:** <@${g.winner_id}> (picked at random).` : 'Nobody entered, so there is no winner.')] });
 }
 export async function reroll(i, ctx, id) {
   const g = wrap(() => G.reroll(ctx.db, id));

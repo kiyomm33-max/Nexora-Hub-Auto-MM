@@ -356,11 +356,10 @@ export function feesPanelPayload(cfg) {
 }
 
 // ---------------- giveaways ----------------
-export const REQ_LABEL = { invites: 'Invite', messages: 'Message' };
-export const reqText = (g) => (g.req_kind ? `**${g.req_n} ${REQ_LABEL[g.req_kind]}${g.req_n === 1 ? '' : 's'}**` : '**None**');
+export const reqText = (g) => (g.req_kind ? `Invite **${g.req_n}** new member${g.req_n === 1 ? '' : 's'} after this giveaway started` : '**None**');
 export function giveawayPayload(cfg, g, entries) {
   const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
-  const winner = g.winner_id ? `<@${g.winner_id}>${g.picked_by ? ' (chosen by staff)' : ''}` : 'No valid entries';
+  const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
   const e = base(cfg, g.prize, ended
     ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}`
     : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}`);

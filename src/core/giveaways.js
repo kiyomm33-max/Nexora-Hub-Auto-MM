@@ -11,23 +11,6 @@ export function parseDuration(s) {
   if (ms > 30 * 86400e3) throw new GiveawayError('The duration can be at most 30 days.');
   return ms;
 }
-/** "1 Nitro Giftlink 1 Invite" -> prize "1 Nitro Giftlink", requirement 1 invite. `|` splits prize and requirement explicitly. */
-export function splitDetails(text) {
-  let prize = String(text ?? '').trim(); let reqText = null;
-  if (prize.includes('|')) { const [a, ...b] = prize.split('|'); prize = a.trim(); reqText = b.join('|').trim(); }
-  else { const m = /^(.*\S)\s+(\d{1,5})\s*(invites?|messages?|msgs?)$/i.exec(prize); if (m) { prize = m[1].trim(); reqText = `${m[2]} ${m[3]}`; } }
-  let req = null;
-  if (reqText && !/^(none|no|-)$/i.test(reqText)) {
-    const m = /^(\d{1,5})\s*(invites?|messages?|msgs?)$/i.exec(reqText);
-    if (!m) throw new GiveawayError('The requirement looks like `1 Invite` or `100 Messages`, or leave it out.');
-    req = { kind: m[2].toLowerCase().startsWith('i') ? 'invites' : 'messages', n: Number(m[1]) };
-    if (req.n < 1) req = null;
-  }
-  if (!prize) throw new GiveawayError('Add the prize.');
-  if (prize.length > 200) throw new GiveawayError('The prize is too long (200 characters max).');
-  return { prize, req };
-}
-
 export function create(db, { channelId, hostId, prize, req, endsAt, at = Date.now() }) {
   const id = Number(db.prepare('INSERT INTO giveaways(channel_id, host_id, prize, req_kind, req_n, ends_at, created_at) VALUES(?,?,?,?,?,?,?)')
     .run(channelId, hostId, prize, req?.kind ?? null, req?.n ?? null, endsAt, new Date(at).toISOString()).lastInsertRowid);
@@ -45,11 +28,11 @@ export function randomEntrant(db, id, { exclude = [] } = {}) {
   const all = db.prepare('SELECT user_id FROM giveaway_entries WHERE giveaway_id=?').all(id).map((r) => r.user_id).filter((u) => !exclude.includes(u));
   return all.length ? all[crypto.randomInt(all.length)] : null;
 }
-/** Ends an open giveaway once. `winner` set by staff is recorded as staff-picked; otherwise the winner is random. */
-export function end(db, id, { winner = null, pickedBy = null } = {}) {
+/** Ends an open giveaway once. The winner is always a random entrant (crypto.randomInt); staff cannot choose. */
+export function end(db, id) {
   const g = get(db, id); if (!g) throw new GiveawayError('No giveaway with that ID.');
-  const w = winner ?? randomEntrant(db, id);
-  const r = db.prepare("UPDATE giveaways SET state='ended', winner_id=?, picked_by=? WHERE id=? AND state='open'").run(w, winner ? pickedBy : null, id);
+  const w = randomEntrant(db, id);
+  const r = db.prepare("UPDATE giveaways SET state='ended', winner_id=? WHERE id=? AND state='open'").run(w, id);
   if (!r.changes) throw new GiveawayError('That giveaway has already ended.');
   return get(db, id);
 }
@@ -58,6 +41,14 @@ export function reroll(db, id) {
   if (g.state !== 'ended') throw new GiveawayError('That giveaway has not ended yet.');
   const w = randomEntrant(db, id, { exclude: [g.winner_id].filter(Boolean) });
   if (!w) throw new GiveawayError('There is nobody else who entered.');
-  db.prepare('UPDATE giveaways SET winner_id=?, picked_by=NULL WHERE id=?').run(w, id);
+  db.prepare('UPDATE giveaways SET winner_id=? WHERE id=?').run(w, id);
   return get(db, id);
 }
+
+/** Invite uses per inviter when the giveaway starts. Only uses above this baseline count as new invites. */
+export function setBaseline(db, id, usesByUser) {
+  const ins = db.prepare('INSERT OR REPLACE INTO giveaway_invites(giveaway_id, user_id, uses) VALUES(?,?,?)');
+  for (const [u, n] of Object.entries(usesByUser)) ins.run(id, u, n);
+}
+export const newInvites = (db, id, uid, currentUses) =>
+  Math.max(0, currentUses - Number(db.prepare('SELECT uses FROM giveaway_invites WHERE giveaway_id=? AND user_id=?').get(id, uid)?.uses ?? 0));
