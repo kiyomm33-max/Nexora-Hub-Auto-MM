@@ -25,6 +25,7 @@ export const SPEC = {
   panel: { desc: 'Post the deal panel', args: [] },
   welcome: { desc: 'Post a welcome message preview', args: [] },
   rules: { desc: 'Post the server rules', args: [] },
+  status: { desc: 'Post the Status Rewards panel', args: [] },
   supportpanel: { desc: 'Post the support panel', args: [] },
   staff: {
     desc: 'Staff tools',
