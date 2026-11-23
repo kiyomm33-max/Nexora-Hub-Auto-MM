@@ -16,6 +16,8 @@ export const definitions = [
   new SlashCommandBuilder().setName('check').setDescription('Show everyone who entered the current giveaway (staff)').setDMPermission(false)
     .addIntegerOption((o) => o.setName('id').setDescription('Giveaway ID (default: the current giveaway)')),
   new SlashCommandBuilder().setName('totals').setDescription('Create the locked voice channels showing total volume and deals (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('steal').setDescription('Add custom emoji to this server (staff)').setDMPermission(false)
+    .addStringOption((o) => o.setName('emoji').setDescription('The emoji to add')),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),
