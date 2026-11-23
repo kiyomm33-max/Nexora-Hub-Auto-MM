@@ -15,6 +15,7 @@ export const SPEC = {
   messages: { desc: 'How many messages a member sent', args: [['member', 'user', false]] },
   invites: { desc: 'How many people a member invited', args: [['member', 'user', false]] },
   check: { desc: 'Show everyone who entered the current giveaway', args: [['id', 'int', false]] },
+  totals: { desc: 'Post the live total deals and volume panel', args: [] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },

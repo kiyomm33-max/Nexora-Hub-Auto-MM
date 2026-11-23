@@ -392,3 +392,6 @@ export function invitesEmbed(cfg, name, avatarUrl, st) {
     .addFields({ name: 'Joined', value: `\`${st.joined}\``, inline: true }, { name: 'Still in server', value: `\`${st.here}\``, inline: true }, { name: 'Left', value: `\`${st.left}\``, inline: true });
   return avatarUrl ? e.setThumbnail(avatarUrl) : e;
 }
+
+export const totalsEmbed = (cfg, st) => base(cfg, 'Nexora Auto MM',
+  `**Volume:** $${st.volume.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n**Total Deals:** ${st.deals.toLocaleString('en-US')}`);

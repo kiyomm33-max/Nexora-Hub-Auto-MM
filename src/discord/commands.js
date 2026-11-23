@@ -15,6 +15,7 @@ export const definitions = [
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('check').setDescription('Show everyone who entered the current giveaway (staff)').setDMPermission(false)
     .addIntegerOption((o) => o.setName('id').setDescription('Giveaway ID (default: the current giveaway)')),
+  new SlashCommandBuilder().setName('totals').setDescription('Post the live total deals and volume panel (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),

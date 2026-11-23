@@ -18,6 +18,7 @@ import * as am from './automm.js';
 import * as st from './status.js';
 import * as gw from './giveaway.js';
 import * as pl from './poll.js';
+import * as totals from './totals.js';
 import { inviteStats } from './invites.js';
 
 export { UserError } from './automm.js';
@@ -206,6 +207,13 @@ const commands = {
     await target.send({ ...ui.feesPanelPayload(ctx.cfg), files: [st.logoFile()] });
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
+  },
+  async totals(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.stats)) ?? i.channel;
+    await totals.post(ctx, target);
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'totals.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Totals panel posted', `Posted in <#${target.id}>. It updates itself every 5 minutes.`);
   },
   async check(i, ctx) {
     need(i, ctx, 'panel.post');
