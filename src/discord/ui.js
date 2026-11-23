@@ -353,7 +353,7 @@ export function feesPanelPayload(cfg) {
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
       .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**Fee tiers**\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal`))
+    .addTextDisplayComponents(text(`**LTC, SOL and ETH**\n**Free** on every deal.\n\n**Stablecoins (${(cfg.feeAssets ?? []).join(', ')})**\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(text(`**Examples**\n${[f.threshold, f.threshold + 50, f.percentOver, 400].map(line).join('\n')}`))
     .addSeparatorComponents(new SeparatorBuilder())

@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import * as V from '../core/validate.js';
 import { DealError } from '../core/deals.js';
 import { audit } from '../core/audit.js';
-import { calcFee, calcTotals, usdWorth } from '../core/fees.js';
+import { calcFee, calcTotals, usdWorth, feeCfgFor } from '../core/fees.js';
 import { CAPS, LEVELS } from '../core/permissions.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
@@ -194,7 +194,7 @@ export const handlers = {
     const nd = await locked(ctx, id, async () => {
       const cur = load(ctx, id); const set = ctx.deals.setup(cur); const votes = { ...set.votes, [i.user.id]: 'confirmed' };
       if (Object.keys(votes).length < 2) return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes } }, 'setup.amount_vote', { silent: true });
-      const fee = calcFee(cur.amount, ctx.cfg.fee);
+      const fee = calcFee(cur.amount, feeCfgFor(ctx.cfg, cur.asset));
       const fields = { confirmed_a: 1, confirmed_b: 1, fee_usd: fee.toFixed(2) };
       if (fee > 0) return ctx.deals.patch(id, i.user.id, { ...fields, setup: setStep(ctx, cur, 'fee') }, 'setup.amount_confirmed');
       const p = ctx.deals.patch(id, i.user.id, { ...fields, setup: setStep(ctx, cur, 'payment') }, 'setup.amount_confirmed');
@@ -417,7 +417,7 @@ export async function shortYes(i, ctx, id) {
   const nd = await locked(ctx, id, async () => {
     let r;
     try { r = await ctx.provider.acceptShort(id); } catch (e) { throw new UserError(e?.userFacing ? e.message : 'Could not read the payment from the chain right now. Try again in a minute.'); }
-    return ctx.deals.acceptShort(id, i.user.id, r.amount, usdWorth(d, r.amount), ctx.cfg.fee);
+    return ctx.deals.acceptShort(id, i.user.id, r.amount, usdWorth(d, r.amount), feeCfgFor(ctx.cfg, d.asset));
   });
   return nd;
 }
