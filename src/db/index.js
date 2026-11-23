@@ -77,6 +77,10 @@ CREATE TABLE IF NOT EXISTS polls(
   options TEXT NOT NULL, ends_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'open' CHECK(state IN ('open','ended')), created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS poll_votes(poll_id INTEGER NOT NULL, user_id TEXT NOT NULL, choice INTEGER NOT NULL, PRIMARY KEY(poll_id, user_id));
+CREATE TABLE IF NOT EXISTS invite_joins(
+  invitee_id TEXT PRIMARY KEY, inviter_id TEXT NOT NULL, code TEXT, joined_at TEXT NOT NULL, left_at TEXT
+);
+CREATE INDEX IF NOT EXISTS invite_joins_inviter ON invite_joins(inviter_id);
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL

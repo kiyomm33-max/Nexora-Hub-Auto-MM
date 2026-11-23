@@ -15,6 +15,7 @@ import { countFromMessage, startActivity } from './discord/activity.js';
 import { startStatusLoop } from './discord/status.js';
 import { startGiveawayLoop } from './discord/giveaway.js';
 import { startPollLoop } from './discord/poll.js';
+import { startInvites } from './discord/invites.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
@@ -50,7 +51,7 @@ createServer({ cfg, db, deals, mode, health: () => ({ discordReady: hasToken ? r
 // level 3 = Guilds + Messages + Message Content + Server Members + Presences (status tracking); 2 = without Presences; 1 = without Server Members; 0 = Guilds only.
 function boot(level) {
   const withMessages = level >= 1;
-  const intents = [GatewayIntentBits.Guilds, ...(withMessages ? [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : []), ...(level >= 2 ? [GatewayIntentBits.GuildMembers] : []), ...(level >= 3 ? [GatewayIntentBits.GuildPresences] : [])];
+  const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildInvites, ...(withMessages ? [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : []), ...(level >= 2 ? [GatewayIntentBits.GuildMembers] : []), ...(level >= 3 ? [GatewayIntentBits.GuildPresences] : [])];
   client = new Client({ intents });
   ctx.client = client; cfg.messageContent = withMessages;
   if (level >= 2) client.on(Events.GuildMemberAdd, (m) => sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)));
@@ -59,6 +60,7 @@ function boot(level) {
   startStatusLoop(client, ctx);
   startGiveawayLoop(client, ctx);
   startPollLoop(client, ctx);
+  startInvites(client, ctx);
   startActivity(client, ctx, { members: level >= 2, presences: level >= 3 });
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
   client.on(Events.Error, (e) => log.error('discord client error', e));

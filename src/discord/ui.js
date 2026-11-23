@@ -378,3 +378,9 @@ export function pollPayload(cfg, p, counts) {
     .setThumbnail('attachment://status.png');
   return { embeds: [e], components: [row(...opts.map((o, k) => btn(`nx:pl-vote:${p.id}:${k}`, `${k + 1}. ${o}`.slice(0, 80), ButtonStyle.Primary).setDisabled(ended)))], allowedMentions: { parse: [] } };
 }
+
+export function invitesEmbed(cfg, name, avatarUrl, st) {
+  const e = base(cfg, `${name} - Invites`, st.uses == null ? 'I cannot read the server invites right now, so only tracked joins are shown.' : `**${st.uses}** invite link use${st.uses === 1 ? '' : 's'} all time`)
+    .addFields({ name: 'Joined', value: `\`${st.joined}\``, inline: true }, { name: 'Still in server', value: `\`${st.here}\``, inline: true }, { name: 'Left', value: `\`${st.left}\``, inline: true });
+  return avatarUrl ? e.setThumbnail(avatarUrl) : e;
+}

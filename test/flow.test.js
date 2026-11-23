@@ -610,3 +610,10 @@ test('poll: /poll create posts buttons, votes update the card, /poll end posts t
   assert.match(ch.sent[1].content, /tie/);
   assert.match(text(await v(A, 0)), /has ended/);
 });
+
+test('.invites is public and shows invite link uses and tracked joins', async () => {
+  const ctx = setup(); ctx.guild.invites = { fetch: async () => new Map([['c', { code: 'c', inviter: { id: A }, uses: 7 }]]) };
+  const { recordJoin, recordLeave } = await import('../src/core/invites.js'); recordJoin(ctx.db, 'm1', A, 'c'); recordJoin(ctx.db, 'm2', A, 'c'); recordLeave(ctx.db, 'm2');
+  const i = fake(ctx, 'cmd', A, { command: 'invites' }); i.guild = ctx.guild; i.options.getUser = () => null; await route(i, ctx);
+  const e = i.out[0].embeds[0].toJSON(); assert.match(e.description, /\*\*7\*\* invite link uses/); assert.deepEqual(e.fields.map((f) => f.value), ['`2`', '`1`', '`1`']);
+});

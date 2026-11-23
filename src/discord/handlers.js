@@ -18,6 +18,7 @@ import * as am from './automm.js';
 import * as st from './status.js';
 import * as gw from './giveaway.js';
 import * as pl from './poll.js';
+import { inviteStats } from './invites.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -176,6 +177,12 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.messagesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), act.userMessages(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async invites(i, ctx) {
+    limit(ctx, i, 'invites', 5, 60e3);
+    const u = i.options.getUser('member') ?? i.user;
+    const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
+    return i.reply({ embeds: [ui.invitesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), await inviteStats(i.guild, ctx, u.id))], allowedMentions: { parse: [] } });
   },
   async tag(i, ctx) {
     need(i, ctx, 'activity.view');
