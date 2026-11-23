@@ -89,7 +89,8 @@ export async function reroll(i, ctx, id) {
 }
 
 export async function entries(i, ctx, id) {
-  const g = G.get(ctx.db, id); if (!g) throw new UserError('No giveaway with that ID.');
+  const g = id == null ? G.current(ctx.db) : G.get(ctx.db, id); if (!g) throw new UserError(id == null ? 'There is no giveaway yet.' : 'No giveaway with that ID.');
+  id = g.id;
   const ids = G.entrants(ctx.db, id);
   const lines = []; let len = 0;
   for (const [k, u] of ids.entries()) { const l = `${k + 1}. <@${u}> (\`${u}\`)`; if (len + l.length > 3600) { lines.push(`...and **${ids.length - k}** more`); break; } lines.push(l); len += l.length + 1; }

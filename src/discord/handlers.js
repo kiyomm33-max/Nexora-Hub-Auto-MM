@@ -209,8 +209,7 @@ const commands = {
   },
   async check(i, ctx) {
     need(i, ctx, 'panel.post');
-    if (i.options.getString('what', true).toLowerCase() !== 'entries') throw new UserError('Usage: `.check giveaway entries <giveaway ID>`');
-    return gw.entries(i, ctx, i.options.getInteger('id', true));
+    return gw.entries(i, ctx, i.options.getInteger('id'));
   },
   async poll(i, ctx) {
     need(i, ctx, 'panel.post');
