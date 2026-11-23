@@ -243,6 +243,30 @@ const commands = {
     return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
       options: [1, 2, 3, 4, 5].map((n) => o.getString(`option${n}`)).filter(Boolean) });
   },
+  async role(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const role = i.options.getRole('role', true); const g = i.guild;
+    if (role.id === g.roles.everyone?.id || role.managed) throw new UserError('That role cannot be given out: it is @everyone or managed by an integration.');
+    if (role.position >= (g.members.me?.roles?.highest?.position ?? 0)) throw new UserError('That role is above my highest role. Move my role higher in Server Settings, then try again.');
+    const risky = ['Administrator', 'ManageGuild', 'ManageRoles', 'ManageChannels', 'ManageWebhooks', 'BanMembers', 'KickMembers', 'ModerateMembers', 'MentionEveryone'].filter((p) => role.permissions?.has?.(p));
+    if (risky.length) throw new UserError(`I will not give **everyone** a role with these permissions: ${risky.join(', ')}.`);
+    if (ctx.roleAllBusy) throw new UserError('A role-all run is already in progress. Wait for it to finish.');
+    ctx.roleAllBusy = true;
+    try {
+      await i.deferReply?.();
+      let members; try { members = await g.members.fetch(); } catch { throw new UserError('I could not load the member list. Turn on the **Server Members Intent** for the bot and redeploy.'); }
+      const todo = [...members.values()].filter((m) => !m.user.bot && !m.roles.cache.has(role.id));
+      let ok = 0, bad = 0, lastErr = '';
+      for (const m of todo) {
+        try { await m.roles.add(role, `/role all by ${i.user.id}`); ok++; } catch (e) { bad++; lastErr = String(e?.message ?? e); }
+        if ((ok + bad) % 25 === 0) await i.editReply?.({ embeds: [ui.okEmbed(ctx.cfg, 'Giving the role', `**${ok + bad}** of **${todo.length}** done.`)] }).catch(() => {});
+        if (bad >= 10 && ok === 0) break;
+      }
+      audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'role.all', detail: { staff: true, role: role.id, ok, failed: bad } });
+      const hint = bad && /Missing Permissions/i.test(lastErr) ? '\nI need the **Manage Roles** permission.' : '';
+      return reply(i, { embeds: [ui.okEmbed(ctx.cfg, ok || !bad ? 'Role given' : 'Nothing changed', `**${role.name}** added to **${ok}** member${ok === 1 ? '' : 's'}.${bad ? `\n**${bad}** failed.${hint}` : ''}${todo.length ? '' : '\nEveryone already had it.'}\nBots are skipped.`)] });
+    } finally { ctx.roleAllBusy = false; }
+  },
   async giveaway(i, ctx) {
     need(i, ctx, 'panel.post');
     const sub = i.options.getSubcommand();
