@@ -639,3 +639,20 @@ test('.check lists everyone who entered the current giveaway, staff only', async
   assert.match(d, /1 Nitro/); assert.match(d, /Entries:\*\* \*\*2\*\*/); assert.ok(d.includes(`<@${A}>`) && d.includes(`<@${B}>`) && !d.includes(`<@${RND}>`));
   const byId = mk(ADM, [ROLE.adm], { id: old.id }); await route(byId, ctx); assert.match(byId.out[0].embeds[0].toJSON().description, /Old/);
 });
+
+test('totals panel: staff-only, shows only volume and total deals, refreshes in place', async () => {
+  const ctx = setup(); const edits = []; const deleted = [];
+  const msgs = new Map(); let n = 0;
+  const ch = { id: 'stch', sent: [], messages: { fetch: async (id) => ({ edit: async (p) => { edits.push(p); }, delete: async () => { deleted.push(id); } }) }, async send(p) { this.sent.push(p); n++; return { id: `m${n}` }; } };
+  ctx.chans.set('stch', ch); ctx.cfg.channels.stats = 'stch';
+  const mk = (u, roles) => fake(ctx, 'cmd', u, { roles, command: 'totals' });
+  const deny = mk(RND, []); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const d1 = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '1200.50', currency: 'USD', asset: 'LTC', network: 'litecoin' });
+  ctx.db.prepare("UPDATE deals SET status='completed' WHERE id=?").run(d1.id);
+  const d2 = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '99.50', currency: 'USD', asset: 'LTC', network: 'litecoin' }); // not completed
+  await route(mk(ADM, [ROLE.adm]), ctx);
+  const e = ch.sent[0].embeds[0].toJSON(); assert.match(e.description, /\*\*Volume:\*\* \$1,200\.50/); assert.match(e.description, /\*\*Total Deals:\*\* 1/); assert.ok(!e.fields?.length);
+  const { refresh } = await import('../src/discord/totals.js'); ctx.client = { channels: { cache: new Map([['stch', ch]]) } };
+  ctx.db.prepare("UPDATE deals SET status='completed' WHERE id=?").run(d2.id); await refresh(ctx);
+  assert.match(edits.at(-1).embeds[0].toJSON().description, /\$1,300\.00/);
+});

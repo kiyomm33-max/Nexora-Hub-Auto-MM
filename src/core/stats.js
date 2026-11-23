@@ -15,3 +15,9 @@ export function userStats(db, userId) {
   const rank = done.n ? 1 + totals.filter((r) => r.t > done.total).length : null;
   return { completed: done.n, total: +done.total.toFixed(2), largest: +done.largest.toFixed(2), rate: closed.n ? Math.round((done.n / closed.n) * 100) : 100, rank, ...tierOf(done.total) };
 }
+
+/** Everything the bot has completed: deal count and total USD value. */
+export function globalStats(db) {
+  const r = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(${val}),0) total FROM deals WHERE status='completed'`).get();
+  return { deals: Number(r.n), volume: +Number(r.total).toFixed(2) };
+}

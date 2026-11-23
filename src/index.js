@@ -15,6 +15,7 @@ import { countFromMessage, startActivity } from './discord/activity.js';
 import { startStatusLoop } from './discord/status.js';
 import { startGiveawayLoop } from './discord/giveaway.js';
 import { startPollLoop } from './discord/poll.js';
+import { startTotalsLoop } from './discord/totals.js';
 import { startInvites } from './discord/invites.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
@@ -60,6 +61,7 @@ function boot(level) {
   startStatusLoop(client, ctx);
   startGiveawayLoop(client, ctx);
   startPollLoop(client, ctx);
+  startTotalsLoop(client, ctx);
   startInvites(client, ctx);
   startActivity(client, ctx, { members: level >= 2, presences: level >= 3 });
   client.on(Events.InteractionCreate, (i) => route(i, ctx));
