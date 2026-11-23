@@ -640,19 +640,23 @@ test('.check lists everyone who entered the current giveaway, staff only', async
   const byId = mk(ADM, [ROLE.adm], { id: old.id }); await route(byId, ctx); assert.match(byId.out[0].embeds[0].toJSON().description, /Old/);
 });
 
-test('totals panel: staff-only, shows only volume and total deals, refreshes in place', async () => {
-  const ctx = setup(); const edits = []; const deleted = [];
-  const msgs = new Map(); let n = 0;
-  const ch = { id: 'stch', sent: [], messages: { fetch: async (id) => ({ edit: async (p) => { edits.push(p); }, delete: async () => { deleted.push(id); } }) }, async send(p) { this.sent.push(p); n++; return { id: `m${n}` }; } };
-  ctx.chans.set('stch', ch); ctx.cfg.channels.stats = 'stch';
-  const mk = (u, roles) => fake(ctx, 'cmd', u, { roles, command: 'totals' });
+test('totals: .totals creates two locked voice channels, names follow completed deals, renames are throttled', async () => {
+  const ctx = setup(); const made = []; ctx.guild.id ??= 'G1';
+  ctx.guild.channels = { create: async (o) => { const ch = { id: `v${made.length + 1}`, name: o.name, opts: o, async setName(n) { this.name = n; this.renames = (this.renames ?? 0) + 1; } }; made.push(ch); return ch; } };
+  ctx.client = { channels: { cache: new Map(), fetch: async (id) => made.find((c) => c.id === id) } };
+  const mk = (u, roles) => { const i = fake(ctx, 'cmd', u, { roles, command: 'totals' }); i.guild = ctx.guild; return i; };
   const deny = mk(RND, []); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  await route(mk(ADM, [ROLE.adm]), ctx);
+  assert.deepEqual(made.map((c) => c.name), ['Volume: $0.00', 'Total Deals: 0']);
+  const ow = made[0].opts.permissionOverwrites[0]; assert.equal(ow.id, 'G1'); assert.ok(ow.deny.length >= 1);
+  await route(mk(ADM, [ROLE.adm]), ctx); assert.equal(made.length, 2, 'running it again reuses the channels');
   const d1 = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '1200.50', currency: 'USD', asset: 'LTC', network: 'litecoin' });
   ctx.db.prepare("UPDATE deals SET status='completed' WHERE id=?").run(d1.id);
-  const d2 = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '99.50', currency: 'USD', asset: 'LTC', network: 'litecoin' }); // not completed
-  await route(mk(ADM, [ROLE.adm]), ctx);
-  const e = ch.sent[0].embeds[0].toJSON(); assert.match(e.description, /\*\*Volume:\*\* \$1,200\.50/); assert.match(e.description, /\*\*Total Deals:\*\* 1/); assert.ok(!e.fields?.length);
-  const { refresh } = await import('../src/discord/totals.js'); ctx.client = { channels: { cache: new Map([['stch', ch]]) } };
-  ctx.db.prepare("UPDATE deals SET status='completed' WHERE id=?").run(d2.id); await refresh(ctx);
-  assert.match(edits.at(-1).embeds[0].toJSON().description, /\$1,300\.00/);
+  const { refresh } = await import('../src/discord/totals.js');
+  const t0 = Date.now() + 10 * 60e3; assert.equal(await refresh(ctx, { now: t0 }), 2);
+  assert.deepEqual(made.map((c) => c.name), ['Volume: $1,200.50', 'Total Deals: 1']);
+  const d2 = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '10', currency: 'USD', asset: 'LTC', network: 'litecoin' });
+  ctx.db.prepare("UPDATE deals SET status='completed' WHERE id=?").run(d2.id);
+  assert.equal(await refresh(ctx, { now: t0 + 60e3 }), 0, 'within 5 minutes: wait');
+  assert.equal(await refresh(ctx, { now: t0 + 301e3 }), 2); assert.equal(made[1].name, 'Total Deals: 2');
 });

@@ -210,10 +210,9 @@ const commands = {
   },
   async totals(i, ctx) {
     need(i, ctx, 'panel.post');
-    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.stats)) ?? i.channel;
-    await totals.post(ctx, target);
-    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'totals.posted', detail: { staff: true, channel: target.id } });
-    return say(ctx, i, 'Totals panel posted', `Posted in <#${target.id}>. It updates itself every 5 minutes.`);
+    let r; try { r = await totals.setup(ctx, i.guild); } catch (e) { log.error('totals setup failed', e); throw new UserError('I could not create the voice channels. Give me the **Manage Channels** permission and try again.'); }
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'totals.setup', detail: { staff: true, ...r.ids } });
+    return say(ctx, i, r.created.length ? 'Stats channels created' : 'Stats channels already exist', `<#${r.ids.volume}> and <#${r.ids.deals}> are locked: nobody can join. They rename themselves when a deal completes (at most every 5 minutes).`);
   },
   async check(i, ctx) {
     need(i, ctx, 'panel.post');
