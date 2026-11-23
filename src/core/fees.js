@@ -10,6 +10,8 @@ export function calcFee(amountUsd, { threshold = 50, usd = 2, percentOver = 250,
   if (a > percentOver) return cents(a * percent / 100) / 100;
   return a > threshold ? usd : 0;
 }
+/** Fee settings for a coin: the configured tiers if the coin is in `cfg.feeAssets`, otherwise free. */
+export const feeCfgFor = (cfg, asset) => ((cfg.feeAssets ?? []).includes(String(asset).toUpperCase()) ? cfg.fee : { ...cfg.fee, usd: 0, percent: 0 });
 /** sender sends `send`, receiver gets `receive`, difference is the fee. */
 export function calcTotals(amountUsd, feeUsd, payer) {
   const a = cents(amountUsd), f = cents(feeUsd);
