@@ -179,7 +179,7 @@ test('config: demo by default; live needs the self-custody acknowledgement; LTC 
 });
 test('slash command definitions and modals are valid discord.js payloads', async () => {
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(definitions.map((d) => d.name).sort(), ['dealinfo', 'dispute', 'evidence', 'fees', 'giveaway', 'leaderboard', 'messages', 'mydeals', 'panel', 'poll', 'rules', 'staff', 'stats', 'status', 'supportpanel', 'tag', 'tags', 'ticket', 'vouch', 'welcome']);
+  assert.deepEqual(definitions.map((d) => d.name).sort(), ['dealinfo', 'dispute', 'evidence', 'fees', 'giveaway', 'invites', 'leaderboard', 'messages', 'mydeals', 'panel', 'poll', 'rules', 'staff', 'stats', 'status', 'supportpanel', 'tag', 'tags', 'ticket', 'vouch', 'welcome']);
   const ui = await import('../src/discord/ui.js');
   for (const m of [ui.partnerIdModal('NXH-AAAAAAAA'), ui.descModal('NXH-AAAAAAAA'), ui.amountModal('NXH-AAAAAAAA'), ui.disputeModal(), ui.disputeModal('NXH-AAAAAAAA'), ui.evidenceModal('NXH-AAAAAAAA'), ui.ticketModal(), ui.vouchModal('NXH-AAAAAAAA')]) {
     const j = m.toJSON(); assert.ok(j.components.length >= 1 && j.components.length <= 5 && j.title.length <= 45);

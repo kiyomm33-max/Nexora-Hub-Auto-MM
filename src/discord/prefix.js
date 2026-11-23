@@ -4,7 +4,7 @@ import { route, staffOf, UserError } from './handlers.js';
 import * as ui from './ui.js';
 import { log } from '../logger.js';
 
-const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages']);
+const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages', 'invites']);
 const ALIASES = { top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
 
 // arg: [name, type, required]. Types: string, int, user, rest (everything that is left).
@@ -13,6 +13,7 @@ export const SPEC = {
   help: { desc: 'Show every command', args: [] },
   leaderboard: { desc: 'Message leaderboard (today, week, month or all)', args: [['period', 'string', false]] },
   messages: { desc: 'How many messages a member sent', args: [['member', 'user', false]] },
+  invites: { desc: 'How many people a member invited', args: [['member', 'user', false]] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },
