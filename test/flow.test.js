@@ -552,18 +552,20 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   const p = ctx.chans.get('stp').sent[0]; const j = JSON.stringify(p.components.map((c) => c.toJSON()));
   assert.ok(j.includes('nx:st-start') && j.includes('nx:st-payout') && j.includes('Status Rewards')); assert.equal(p.files.length, 1);
   // not showing the status: refused
-  const no = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); no.member.presence = { status: 'idle', activities: [] }; await route(no, ctx); assert.match(text(no), /Set your custom status/);
-  const ok = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); ok.member.presence = { status: 'dnd', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(ok, ctx); assert.match(text(ok), /Earning started/);
+  ctx.cfg.statusRoleId = 'ROLE_X';
+  const norole = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); norole.member.presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(norole, ctx); assert.match(text(norole), /role to earn/);
+  const no = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); no.member.presence = { status: 'idle', activities: [] }; await route(no, ctx); assert.match(text(no), /Set your custom status/);
+  const ok = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); ok.member.presence = { status: 'dnd', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(ok, ctx); assert.match(text(ok), /Earning started/);
   // two days of time, then request
   ctx.db.prepare('UPDATE status_earn SET seconds=?, since=NULL WHERE user_id=?').run(2 * 86400 + 5, RND);
-  const t = fake(ctx, 'btn', RND, { customId: 'nx:st-time' }); await route(t, ctx); assert.match(text(t), /\$0\.40/);
-  const pr = fake(ctx, 'btn', RND, { customId: 'nx:st-payout' }); await route(pr, ctx); assert.ok(JSON.stringify(pr.out[0].components.map((c) => c.toJSON())).includes('nx:st-pm:paypal'));
-  const pm = fake(ctx, 'btn', RND, { customId: 'nx:st-pm:paypal' }); await route(pm, ctx); assert.ok(pm.modal);
-  const bad = fake(ctx, 'modal', RND, { customId: 'nx:st-pay:paypal', fields: { details: 'nope' } }); await route(bad, ctx); assert.match(text(bad), /valid PayPal/);
-  const good = fake(ctx, 'modal', RND, { customId: 'nx:st-pay:paypal', fields: { details: 'me@x.com' } }); await route(good, ctx); assert.match(text(good), /Payout requested/);
+  const t = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-time' }); await route(t, ctx); assert.match(text(t), /\$0\.40/);
+  const pr = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-payout' }); await route(pr, ctx); assert.ok(JSON.stringify(pr.out[0].components.map((c) => c.toJSON())).includes('nx:st-pm:paypal'));
+  const pm = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-pm:paypal' }); await route(pm, ctx); assert.ok(pm.modal);
+  const bad = fake(ctx, 'modal', RND, { roles: ['ROLE_X'], customId: 'nx:st-pay:paypal', fields: { details: 'nope' } }); await route(bad, ctx); assert.match(text(bad), /valid PayPal/);
+  const good = fake(ctx, 'modal', RND, { roles: ['ROLE_X'], customId: 'nx:st-pay:paypal', fields: { details: 'me@x.com' } }); await route(good, ctx); assert.match(text(good), /Payout requested/);
   const staffMsg = ctx.chans.get('stq').sent[0]; assert.ok(JSON.stringify(staffMsg.components.map((c) => c.toJSON())).includes('nx:st-paid:1'));
-  const again = fake(ctx, 'btn', RND, { customId: 'nx:st-payout' }); await route(again, ctx); assert.match(text(again), /at least/);
-  const rd = fake(ctx, 'btn', RND, { customId: 'nx:st-rej:1' }); await route(rd, ctx); assert.match(text(rd), /do not have permission/);
+  const again = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-payout' }); await route(again, ctx); assert.match(text(again), /at least/);
+  const rd = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-rej:1' }); await route(rd, ctx); assert.match(text(rd), /do not have permission/);
   const paid = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:1', fields: { ref: 'tx9' } }); await route(paid, ctx);
   assert.equal(ctx.db.prepare('SELECT state, ref FROM status_payouts WHERE id=1').get().state, 'paid');
 });

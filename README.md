@@ -81,3 +81,5 @@ Supported: LTC, ETH, USDT/USDC (ERC-20), USDT (BEP-20), SOL. All wallets derive 
 ## Status rewards
 
 `.status` (staff) posts the Status Rewards panel. Members press **Start Earning** while showing `.gg/nexorra` as their custom status and Online or Do Not Disturb. Time adds up (checked every minute, needs the Presence intent). **Request Payout** reserves the balance and posts it to `STATUS_PAYOUT_CHANNEL_ID` (falls back to the staff log) with Mark paid and Reject buttons. The bot never sends this money; staff pay by hand. Rejecting returns the amount to the member's balance. Pay: `STATUS_PAY_DAILY` per full 24 h, plus `STATUS_PAY_WEEK_BONUS` per full 7 days, minimum `STATUS_MIN_PAYOUT`.
+
+Earning from the status needs the role in `STATUS_ROLE_ID` (default `1574324490236596314`). Without it Start Earning and Request Payout are refused, and time stops counting for anyone who loses the role.

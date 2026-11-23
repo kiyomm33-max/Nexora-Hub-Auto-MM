@@ -56,6 +56,7 @@ export function loadConfig(e = env) {
       rpcs: { ...(e.ETH_RPC_URL ? { ethereum: list(e.ETH_RPC_URL) } : {}), ...(e.BSC_RPC_URL ? { bsc: list(e.BSC_RPC_URL) } : {}) } },
     sol: { treasury: e.SOL_TREASURY_ADDRESS?.trim() || null, ...(e.SOL_RPC_URL ? { rpcs: list(e.SOL_RPC_URL) } : {}) },
     ownerUserIds: list(e.OWNER_USER_IDS),
+    statusRoleId: e.STATUS_ROLE_ID || '1574324490236596314',
     statusPay: {
       dailyCents: Math.round(Number(e.STATUS_PAY_DAILY ?? 0.2) * 100), weekBonusCents: Math.round(Number(e.STATUS_PAY_WEEK_BONUS ?? 1.2) * 100),
       minPayoutCents: Math.round(Number(e.STATUS_MIN_PAYOUT ?? e.STATUS_PAY_DAILY ?? 0.2) * 100),
