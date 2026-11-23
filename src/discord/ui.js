@@ -341,6 +341,14 @@ export function feesPanelPayload(cfg) {
   const flat = Number(f.usd); const pct = f.percent;
   const ex = (a) => { const fee = a > f.percentOver ? a * pct / 100 : a > f.threshold ? flat : 0; return fee; };
   const line = (a) => `**${m(a)}** deal: fee **${ex(a) ? m(ex(a)) : 'free'}**`;
+  if (!Number(f.usd) && !Number(f.percent)) {
+    const c = new ContainerBuilder().setAccentColor(BRAND.purple)
+      .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\n**Every deal is free.** The **Nexora Hub** auto middleman charges **no service fee** on any coin.'))
+        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+      .addSeparatorComponents(new SeparatorBuilder())
+      .addTextDisplayComponents(text(`**Good to know**\nThe deal limit is **${m(cfg.maxDealUsd ?? 400)}**.\nCrypto **network fees** are paid to the blockchain, not to us. If a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**`));
+    return { flags: 1 << 15, components: [c] };
+  }
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
       .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
