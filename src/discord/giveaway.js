@@ -88,6 +88,14 @@ export async function reroll(i, ctx, id) {
   return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Rerolled', `**New winner:** <@${g.winner_id}>.`)] });
 }
 
+export async function entries(i, ctx, id) {
+  const g = G.get(ctx.db, id); if (!g) throw new UserError('No giveaway with that ID.');
+  const ids = G.entrants(ctx.db, id);
+  const lines = []; let len = 0;
+  for (const [k, u] of ids.entries()) { const l = `${k + 1}. <@${u}> (\`${u}\`)`; if (len + l.length > 3600) { lines.push(`...and **${ids.length - k}** more`); break; } lines.push(l); len += l.length + 1; }
+  const head = `**Prize:** ${g.prize}\n**State:** ${g.state === 'open' ? 'open' : 'ended'}\n**Entries:** **${ids.length}**${g.winner_id ? `\n**Winner:** <@${g.winner_id}>` : ''}\n\n`;
+  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, `Giveaway ${g.id} - entries`, head + (lines.join('\n') || 'Nobody has entered yet.'))] });
+}
 export async function sweep(ctx) {
   for (const g of G.due(ctx.db)) { try { await finish(ctx, g.id); } catch (e) { log.error('giveaway end failed', e); } }
 }

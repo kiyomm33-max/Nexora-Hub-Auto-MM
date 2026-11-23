@@ -13,6 +13,10 @@ export const definitions = [
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SCB().setName('invites').setDescription('How many people a member invited').setDMPermission(false).setDefaultMemberPermissions(null)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
+  new SlashCommandBuilder().setName('check').setDescription('Staff checks').setDMPermission(false)
+    .addSubcommand((s) => s.setName('giveaway').setDescription('See who entered a giveaway')
+      .addStringOption((o) => o.setName('what').setDescription('Type: entries').setRequired(true).addChoices({ name: 'entries', value: 'entries' }))
+      .addIntegerOption((o) => o.setName('id').setDescription('Giveaway ID').setRequired(true))),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),
