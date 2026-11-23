@@ -126,7 +126,7 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
 
 test('fee: under threshold none; over threshold only the sender chooses who pays and the receiver confirms (sender / receiver / split)', async () => {
   for (const [choice, send, recv] of [['sender', '102.00', '100.00'], ['receiver', '100.00', '98.00'], ['split', '101.00', '99.00']]) {
-    const ctx = setup(); const id = await runToRoom(ctx, { amount: '100', feeChoice: choice });
+    const ctx = setup(); ctx.cfg.fee = { threshold: 50, usd: 2, percentOver: 250, percent: 2 }; const id = await runToRoom(ctx, { amount: '100', feeChoice: choice });
     const d = ctx.deals.get(id); assert.equal(d.status, 'awaiting_provider'); assert.equal(d.fee_usd, '2.00'); assert.equal(d.fee_payer, choice);
     assert.equal(d.send_usd, send, `${choice} send`); assert.equal(d.receive_usd, recv, `${choice} receive`);
     const room = ctx.chans.get(d.channel_id); const last = JSON.stringify(room.sent.at(-1).embeds ?? room.msgs.get(d.status_message_id).embeds);
@@ -571,7 +571,7 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
 });
 
 test('fee panel: staff-only, shows the tiers from config', async () => {
-  const ctx = setup(); ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
+  const ctx = setup(); ctx.cfg.fee = { threshold: 50, usd: 2, percentOver: 250, percent: 2 }; ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
   const deny = fake(ctx, 'cmd', RND, { command: 'fees' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
   const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON()));
@@ -616,4 +616,12 @@ test('.invites is public and shows invite link uses and tracked joins', async ()
   const { recordJoin, recordLeave } = await import('../src/core/invites.js'); recordJoin(ctx.db, 'm1', A, 'c'); recordJoin(ctx.db, 'm2', A, 'c'); recordLeave(ctx.db, 'm2');
   const i = fake(ctx, 'cmd', A, { command: 'invites' }); i.guild = ctx.guild; i.options.getUser = () => null; await route(i, ctx);
   const e = i.out[0].embeds[0].toJSON(); assert.match(e.description, /\*\*7\*\* invite link uses/); assert.deepEqual(e.fields.map((f) => f.value), ['`2`', '`1`', '`1`']);
+});
+
+test('free by default: no fee on any amount, and the fee panel says every deal is free', async () => {
+  const { loadConfig } = await import('../src/config.js'); const { calcFee } = await import('../src/core/fees.js');
+  const cfg = loadConfig(); for (const a of [10, 51, 100, 400]) assert.equal(calcFee(a, cfg.fee), 0);
+  const ctx = setup(); ctx.cfg.fee = cfg.fee; ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
+  await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
+  assert.match(JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON())), /Every deal is free/);
 });

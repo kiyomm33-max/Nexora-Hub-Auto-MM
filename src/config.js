@@ -77,7 +77,7 @@ export function loadConfig(e = env) {
       apiKey: e.PROVIDER_API_KEY,
       webhookSecret: e.PROVIDER_WEBHOOK_SECRET || e.DEMO_WEBHOOK_SECRET,
     },
-    fee: { threshold: Number(e.FEE_THRESHOLD_USD || 50), usd: Number(e.FEE_USD || 2), percentOver: Number(e.FEE_PERCENT_OVER_USD || 250), percent: Number(e.FEE_PERCENT || 2) },
+    fee: { threshold: Number(e.FEE_THRESHOLD_USD || 50), usd: Number(e.FEE_USD || 0), percentOver: Number(e.FEE_PERCENT_OVER_USD || 250), percent: Number(e.FEE_PERCENT || 0) },
     releaseDelaySec: Number(e.RELEASE_DELAY_SEC || 60),
     brandLogo: e.BRAND_LOGO_URL,
   };
