@@ -628,13 +628,14 @@ test('fees: LTC, SOL and ETH are free by default, USDT and USDC keep the tiers',
   const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON())); assert.ok(j.includes('LTC, SOL and ETH') && j.includes('Free') && j.includes('USDT, USDC') && j.includes('2%'));
 });
 
-test('.check giveaway entries lists everyone who entered, staff only', async () => {
+test('.check lists everyone who entered the current giveaway, staff only', async () => {
   const ctx = setup(); const G = await import('../src/core/giveaways.js');
+  const mk = (u, roles, o = {}) => { const i = fake(ctx, 'cmd', u, { roles, command: 'check', opts: o }); i.options.getInteger = (k) => o[k] ?? null; return i; };
+  const none = mk(ADM, [ROLE.adm]); await route(none, ctx); assert.match(text(none), /no giveaway yet/);
+  const old = G.create(ctx.db, { channelId: 'c', hostId: 'h', prize: 'Old', req: null, endsAt: 1 }); G.enter(ctx.db, old.id, RND); G.end(ctx.db, old.id);
   const g = G.create(ctx.db, { channelId: 'c', hostId: 'h', prize: '1 Nitro', req: null, endsAt: Date.now() + 1e6 }); G.enter(ctx.db, g.id, A); G.enter(ctx.db, g.id, B);
-  const mk = (u, roles, o) => { const i = fake(ctx, 'cmd', u, { roles, command: 'check', sub: 'giveaway', opts: o }); i.options.getString = (k) => o[k]; i.options.getInteger = (k) => o[k]; return i; };
-  const deny = mk(RND, [], { what: 'entries', id: g.id }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
-  const ok = mk(ADM, [ROLE.adm], { what: 'entries', id: g.id }); await route(ok, ctx); const d = ok.out[0].embeds[0].toJSON().description;
-  assert.match(d, /Entries:\*\* \*\*2\*\*/); assert.ok(d.includes(`<@${A}>`) && d.includes(`<@${B}>`));
-  const bad = mk(ADM, [ROLE.adm], { what: 'winners', id: g.id }); await route(bad, ctx); assert.match(text(bad), /Usage/);
-  const none = mk(ADM, [ROLE.adm], { what: 'entries', id: 99 }); await route(none, ctx); assert.match(text(none), /No giveaway/);
+  const deny = mk(RND, []); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const ok = mk(ADM, [ROLE.adm]); await route(ok, ctx); const d = ok.out[0].embeds[0].toJSON().description;
+  assert.match(d, /1 Nitro/); assert.match(d, /Entries:\*\* \*\*2\*\*/); assert.ok(d.includes(`<@${A}>`) && d.includes(`<@${B}>`) && !d.includes(`<@${RND}>`));
+  const byId = mk(ADM, [ROLE.adm], { id: old.id }); await route(byId, ctx); assert.match(byId.out[0].embeds[0].toJSON().description, /Old/);
 });
