@@ -41,7 +41,7 @@ function fake(ctx, kind, user, { roles = [], customId, command, sub, opts = {}, 
   const i = { user: { id: user }, member: { roles: { cache: new Map(roles.map((r) => [r, 1])) } }, guild: ctx.guild, customId, commandName: command, channel: channel ?? ctx.chans.get('lobby') ?? (ctx.chans.set('lobby', { id: 'lobby', sent: [], async send(p) { this.sent.push(p); } }), ctx.chans.get('lobby')),
     out: [], modal: null, deferred: false, replied: false,
     isChatInputCommand: () => kind === 'cmd', isButton: () => kind === 'btn', isModalSubmit: () => kind === 'modal', isUserSelectMenu: () => kind === 'select', values,
-    options: { getUser: (k) => opts[k], getString: (k) => opts[k], getInteger: (k) => opts[k], getAttachment: (k) => opts[k], getSubcommand: () => sub },
+    options: { getUser: (k) => opts[k], getString: (k) => opts[k], getInteger: (k) => opts[k], getAttachment: (k) => opts[k], getSubcommand: () => sub, getRole: (k) => opts[k] },
     fields: { getTextInputValue: (k) => fields[k] ?? '' }, users: { first: () => opts.user },
     reply: async (p) => { i.replied = true; i.out.push(p); }, followUp: async (p) => { i.out.push(p); }, update: async (p) => { i.out.push(p); },
     deferReply: async () => { i.deferred = true; }, deferUpdate: async () => { i.deferred = true; }, editReply: async (p) => { i.out.push(p); },
@@ -491,7 +491,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll'].includes(n)).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -677,4 +677,17 @@ test('.steal: reply to a message with custom emoji adds them as nexora_<number>,
   assert.match(made[0].attachment, /emojis\/123456789012345678\.png/); assert.match(made[1].attachment, /emojis\/223456789012345678\.gif/);
   assert.match(text2(ok), /Added/);
   const inline = msg(ADM, '.steal <:xx:323456789012345678>', { admin: true }); await commandFromMessage(inline, ctx); assert.equal(made.length, 3);
+});
+
+test('/role all: staff only, gives the role to non-bot members who lack it, refuses unsafe roles', async () => {
+  const ctx = setup(); const added = [];
+  const mem = (id, bot, has) => ({ id, user: { bot }, roles: { cache: new Map(has ? [['R1', 1]] : []), add: async (r) => { if (id === 'bad') throw new Error('Missing Permissions'); added.push(id); } } });
+  ctx.guild.members.me = { roles: { highest: { position: 10 } } }; ctx.guild.members.fetch = async () => new Map([['a', mem('a', false, false)], ['b', mem('b', false, true)], ['c', mem('c', true, false)], ['bad', mem('bad', false, false)], ['d', mem('d', false, false)]]);
+  const role = (o = {}) => ({ id: 'R1', name: 'Member', position: 5, managed: false, permissions: { has: () => false }, ...o });
+  const run = async (u, roles, r) => { const i = fake(ctx, 'cmd', u, { roles, command: 'role', sub: 'all', opts: { role: r } }); i.guild = ctx.guild; i.deferReply = async () => {}; i.editReply = async () => {}; await route(i, ctx); return text(i); };
+  assert.match(await run(RND, [], role()), /do not have permission/); assert.equal(added.length, 0);
+  assert.match(await run(ADM, [ROLE.adm], role({ position: 10 })), /above my highest role/);
+  assert.match(await run(ADM, [ROLE.adm], role({ permissions: { has: (p) => p === 'Administrator' } })), /will not give/);
+  assert.match(await run(ADM, [ROLE.adm], role({ managed: true })), /cannot be given out/);
+  const out = await run(ADM, [ROLE.adm], role()); assert.deepEqual(added.sort(), ['a', 'd']); assert.match(out, /\*\*2\*\* member/); assert.match(out, /\*\*1\*\* failed/);
 });

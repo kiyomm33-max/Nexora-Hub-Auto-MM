@@ -18,6 +18,9 @@ export const definitions = [
   new SlashCommandBuilder().setName('totals').setDescription('Create the locked voice channels showing total volume and deals (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('steal').setDescription('Add custom emoji to this server (staff)').setDMPermission(false)
     .addStringOption((o) => o.setName('emoji').setDescription('The emoji to add')),
+  new SlashCommandBuilder().setName('role').setDescription('Mass role tools (staff)').setDMPermission(false)
+    .addSubcommand((s) => s.setName('all').setDescription('Give a role to every member of the server')
+      .addRoleOption((o) => o.setName('role').setDescription('The role to give everyone').setRequired(true))),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),
