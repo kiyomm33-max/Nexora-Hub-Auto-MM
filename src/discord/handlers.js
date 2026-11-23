@@ -207,6 +207,11 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
   },
+  async check(i, ctx) {
+    need(i, ctx, 'panel.post');
+    if (i.options.getString('what', true).toLowerCase() !== 'entries') throw new UserError('Usage: `.check giveaway entries <giveaway ID>`');
+    return gw.entries(i, ctx, i.options.getInteger('id', true));
+  },
   async poll(i, ctx) {
     need(i, ctx, 'panel.post');
     if (i.options.getSubcommand() === 'end') return pl.endNow(i, ctx, i.options.getInteger('id', true));

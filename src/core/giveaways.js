@@ -20,6 +20,7 @@ export const get = (db, id) => db.prepare('SELECT * FROM giveaways WHERE id=?').
 export const setMessage = (db, id, mid) => db.prepare('UPDATE giveaways SET message_id=? WHERE id=?').run(mid, id);
 export const remove = (db, id) => { db.prepare('DELETE FROM giveaways WHERE id=?').run(id); };
 export const entryCount = (db, id) => Number(db.prepare('SELECT COUNT(*) AS c FROM giveaway_entries WHERE giveaway_id=?').get(id).c);
+export const entrants = (db, id) => db.prepare('SELECT user_id FROM giveaway_entries WHERE giveaway_id=? ORDER BY rowid').all(id).map((r) => r.user_id);
 export const hasEntered = (db, id, uid) => !!db.prepare('SELECT 1 FROM giveaway_entries WHERE giveaway_id=? AND user_id=?').get(id, uid);
 export const enter = (db, id, uid) => db.prepare('INSERT OR IGNORE INTO giveaway_entries(giveaway_id, user_id) VALUES(?,?)').run(id, uid).changes === 1;
 export const leave = (db, id, uid) => db.prepare('DELETE FROM giveaway_entries WHERE giveaway_id=? AND user_id=?').run(id, uid).changes === 1;

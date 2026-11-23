@@ -14,6 +14,7 @@ export const SPEC = {
   leaderboard: { desc: 'Message leaderboard (today, week, month or all)', args: [['period', 'string', false]] },
   messages: { desc: 'How many messages a member sent', args: [['member', 'user', false]] },
   invites: { desc: 'How many people a member invited', args: [['member', 'user', false]] },
+  check: { desc: 'Staff checks', subs: { giveaway: { desc: 'See who entered a giveaway: .check giveaway entries <id>', args: [['what', 'string', true], ['id', 'int', true]] } } },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },
