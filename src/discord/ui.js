@@ -369,8 +369,8 @@ export function giveawayPayload(cfg, g, entries) {
   const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
   const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
   const e = base(cfg, g.prize, ended
-    ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}`
-    : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}`)
+    ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}\n**Giveaway ID:** ${g.id}`
+    : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}\n**Giveaway ID:** ${g.id}`)
     .setThumbnail('attachment://status.png');
   return { embeds: [e], components: [row(btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter', ButtonStyle.Primary).setDisabled(ended))], allowedMentions: { parse: [] } };
 }
