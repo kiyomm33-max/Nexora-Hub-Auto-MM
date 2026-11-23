@@ -214,6 +214,24 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'totals.setup', detail: { staff: true, ...r.ids } });
     return say(ctx, i, r.created.length ? 'Stats channels created' : 'Stats channels already exist', `<#${r.ids.volume}> and <#${r.ids.deals}> are locked: nobody can join. They rename themselves when a deal completes (at most every 5 minutes).`);
   },
+  async steal(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const found = new Map();
+    for (const m of String(i.options.getString('emoji') ?? '').matchAll(/<(a?):(\w{2,32}):(\d{15,25})>/g)) if (!found.has(m[3])) found.set(m[3], { animated: !!m[1], id: m[3] });
+    if (!found.size) throw new UserError('Reply to a message that has a **custom emoji** with `.steal`, or type it after the command.');
+    if (found.size > 10) throw new UserError('That is more than 10 emoji. Do 10 at a time.');
+    await i.deferReply?.();
+    const taken = new Set([...(i.guild.emojis.cache?.values?.() ?? [])].map((e) => e.name));
+    const added = []; const failed = [];
+    for (const e of found.values()) {
+      let name; do { name = `nexora_${crypto.randomInt(1000, 10000)}`; } while (taken.has(name)); taken.add(name);
+      try { const made = await i.guild.emojis.create({ attachment: `https://cdn.discordapp.com/emojis/${e.id}.${e.animated ? 'gif' : 'png'}?size=128&quality=lossless`, name }); added.push(`${made} \`${name}\``); }
+      catch (err) { failed.push(/Maximum number|emoji slots|30008/i.test(String(err?.message) + String(err?.code)) ? 'No free emoji slots left in this server.' : /Missing Permissions|50013/i.test(String(err?.message) + String(err?.code)) ? 'I need the **Manage Expressions** permission.' : 'Discord refused that emoji (too big or not available).'); }
+    }
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'emoji.stolen', detail: { staff: true, added: added.length, failed: failed.length } });
+    const parts = []; if (added.length) parts.push(`**Added:**\n${added.join('\n')}`); if (failed.length) parts.push(`**Failed:**\n${[...new Set(failed)].join('\n')}`);
+    return reply(i, { embeds: [ui.okEmbed(ctx.cfg, added.length ? 'Emoji added' : 'Nothing added', parts.join('\n\n'))] });
+  },
   async check(i, ctx) {
     need(i, ctx, 'panel.post');
     return gw.entries(i, ctx, i.options.getInteger('id'));

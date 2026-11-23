@@ -16,6 +16,7 @@ export const SPEC = {
   invites: { desc: 'How many people a member invited', args: [['member', 'user', false]] },
   check: { desc: 'Show everyone who entered the current giveaway', args: [['id', 'int', false]] },
   totals: { desc: 'Create the locked voice channels showing total volume and deals', args: [] },
+  steal: { desc: 'Add a custom emoji to this server (reply to a message with it, or put it after the command)', args: [['emoji', 'rest', false]] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },
@@ -145,6 +146,7 @@ export async function commandFromMessage(msg, ctx) {
       return u;
     };
     const vals = await parseArgs(rest, s.args, { usage, resolveUser });
+    if (name === 'steal') { const ref = msg.reference?.messageId ? await msg.fetchReference?.().catch(() => null) : null; vals.emoji = `${vals.emoji ?? ''} ${ref?.content ?? ''}`.trim(); }
     const att = msg.attachments?.first?.();
     if (name === 'ticket') { if (vals.text.length < 10) throw new UserError('Describe your problem in at least 10 characters.'); vals.subject = vals.text.slice(0, 80); vals.details = vals.text; }
     const i = interactionFrom(msg, name, optionsOf(sub, vals, att), { dm: !!s.dm });

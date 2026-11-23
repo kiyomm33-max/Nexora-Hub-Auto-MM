@@ -660,3 +660,21 @@ test('totals: .totals creates two locked voice channels, names follow completed 
   assert.equal(await refresh(ctx, { now: t0 + 60e3 }), 0, 'within 5 minutes: wait');
   assert.equal(await refresh(ctx, { now: t0 + 301e3 }), 2); assert.equal(made[1].name, 'Total Deals: 2');
 });
+
+test('.steal: reply to a message with custom emoji adds them as nexora_<number>, staff only', async () => {
+  const { commandFromMessage } = await import('../src/discord/prefix.js');
+  const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel; const made = [];
+  ctx.guild.emojis = { cache: new Map([['1', { name: 'nexora_1234' }]]), create: async (o) => { if (o.name === 'FAIL') throw new Error('x'); made.push(o); return { toString: () => `<:${o.name}:99>` }; } };
+  const msg = (author, content, { admin = false, ref } = {}) => { const out = [];
+    return { out, author: { id: author, bot: false, send: async () => {} }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, reference: ref ? { messageId: 'r1' } : undefined,
+      fetchReference: async () => ({ content: ref }), member: { roles: { cache: new Map() }, permissions: { has: (p) => admin && p === 'Administrator' } }, mentions: { users: new Map() },
+      attachments: { first: () => undefined }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async () => {} }; } }; };
+  const text2 = (m) => JSON.stringify(m.out.map((o) => (o.embeds ?? []).map((e) => e.data.description)));
+  const deny = msg(RND, '.steal', { ref: '<:pog:123456789012345678>' }); await commandFromMessage(deny, ctx); assert.match(text2(deny), /do not have permission/); assert.equal(made.length, 0);
+  const none = msg(ADM, '.steal', { admin: true, ref: 'no emoji here' }); await commandFromMessage(none, ctx); assert.match(text2(none), /custom emoji/);
+  const ok = msg(ADM, '.steal', { admin: true, ref: 'look <:pog:123456789012345678> and <a:dance:223456789012345678> and <:pog:123456789012345678>' }); await commandFromMessage(ok, ctx);
+  assert.equal(made.length, 2); assert.ok(made.every((o) => /^nexora_\d{4}$/.test(o.name) && o.name !== 'nexora_1234'));
+  assert.match(made[0].attachment, /emojis\/123456789012345678\.png/); assert.match(made[1].attachment, /emojis\/223456789012345678\.gif/);
+  assert.match(text2(ok), /Added/);
+  const inline = msg(ADM, '.steal <:xx:323456789012345678>', { admin: true }); await commandFromMessage(inline, ctx); assert.equal(made.length, 3);
+});
