@@ -12,11 +12,13 @@ const LOGO = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../asse
 export const logoFile = () => new AttachmentBuilder(LOGO, { name: 'status.png' });
 const eph = (ctx, payload) => ({ flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] }, ...payload });
 
+export const hasRole = (member, cfg) => !cfg.statusRoleId || !!member?.roles?.cache?.has?.(cfg.statusRoleId);
 /** Online or Do Not Disturb, with the phrase in the custom status. */
 export function qualifies(member, cfg) {
   const p = member?.presence;
   if (!p || !['online', 'dnd'].includes(p.status)) return false;
   const phrase = cfg.statusPhrase.toLowerCase();
+  if (!hasRole(member, cfg)) return false;
   return (p.activities ?? []).some((a) => a.type === 4 && String(a.state ?? '').toLowerCase().includes(phrase));
 }
 const guildOf = (ctx) => ctx.client?.guilds?.cache?.get(ctx.cfg.guildId) ?? ctx.client?.guilds?.cache?.first();
@@ -43,6 +45,7 @@ export async function postPanel(ctx, channel) { return channel.send({ ...ui.stat
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
   const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
+  if (!hasRole(m, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to earn from your status.`);
   if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
   const fresh = earn.enroll(ctx.db, i.user.id);
   earn.setQualifying(ctx.db, i.user.id, true);
@@ -55,6 +58,7 @@ export function time(i, ctx) {
 export function payout(i, ctx) {
   const s = earn.summary(ctx.db, i.user.id, ctx.cfg.statusPay);
   if (!s.enrolled) throw new UserError('Press **Start Earning** first.');
+  if (!hasRole(i.member, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to request a payout.`);
   if (s.available < ctx.cfg.statusPay.minPayoutCents) throw new UserError(`You need at least **${earn.usd(ctx.cfg.statusPay.minPayoutCents)}** to request a payout. You have **${earn.usd(s.available)}** available.`);
   return i.reply(eph(ctx, { embeds: [ui.base(ctx.cfg, 'Request payout', `You have **${earn.usd(s.available)}** available. Choose how you want to be paid.`)], components: ui.payMethodRow(earn.METHODS) }));
 }
@@ -67,6 +71,7 @@ function cleanDetails(method, raw) {
   return V.payoutAddress(asset, network, v);
 }
 export async function payoutSubmit(i, ctx, method, raw) {
+  if (!hasRole(i.member, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to request a payout.`);
   const details = cleanDetails(method, raw);
   let r;
   try { r = earn.requestPayout(ctx.db, i.user.id, { method, details, pay: ctx.cfg.statusPay }); }

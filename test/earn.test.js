@@ -42,8 +42,8 @@ test('payout reserves the balance once; reject returns it; handled once', () => 
   assert.throws(() => earn.requestPayout(db, 'nobody', { method: 'paypal', details: 'x', pay }), /Start Earning/);
 });
 test('qualifies: online or dnd with the phrase in a custom status', () => {
-  const cfg = { statusPhrase: 'gg/nexorra' };
-  const m = (status, state, type = 4) => ({ presence: { status, activities: [{ type, state }] } });
+  const cfg = { statusPhrase: 'gg/nexorra', statusRoleId: 'R' };
+  const m = (status, state, type = 4) => ({ roles: { cache: new Map([['R', 1]]) }, presence: { status, activities: [{ type, state }] } });
   assert.equal(qualifies(m('online', '.gg/Nexorra'), cfg), true);
   assert.equal(qualifies(m('dnd', 'join .gg/nexorra now'), cfg), true);
   assert.equal(qualifies(m('idle', '.gg/nexorra'), cfg), false);
@@ -51,4 +51,5 @@ test('qualifies: online or dnd with the phrase in a custom status', () => {
   assert.equal(qualifies(m('online', 'hello'), cfg), false);
   assert.equal(qualifies(m('online', '.gg/nexorra', 0), cfg), false);
   assert.equal(qualifies({}, cfg), false);
+  assert.equal(qualifies({ ...m('online', '.gg/nexorra'), roles: { cache: new Map() } }, cfg), false, 'no role, no earning');
 });
