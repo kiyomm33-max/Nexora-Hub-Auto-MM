@@ -54,7 +54,7 @@ const modalFields = { roblox_you: 'Alice_1', roblox_partner: 'Bob22', item: 'Dom
 const click = async (ctx, user, customId, extra = {}) => { const ch = ctx.chans.get(ctx.room); const i = fake(ctx, 'btn', user, { customId, channel: ch, ...extra }); await route(i, ctx); return i; };
 const submit = async (ctx, user, customId, fields) => { const i = fake(ctx, 'modal', user, { customId, fields, channel: ctx.chans.get(ctx.room) }); await route(i, ctx); return i; };
 async function startDeal(ctx, key = 'LTC', user = A) {
-  const i = fake(ctx, 'btn', user, { customId: `nx:am-start:${key}` }); await route(i, ctx);
+  const i = fake(ctx, 'select', user, { customId: 'nx:am-pick', values: [key] }); await route(i, ctx);
   const d = ctx.db.prepare('SELECT * FROM deals ORDER BY created_at DESC, rowid DESC LIMIT 1').get(); ctx.room = d.channel_id; return { i, d };
 }
 /** Walk the whole setup flow with real handlers. Returns deal id. */
@@ -76,7 +76,9 @@ test('panel is a Components V2 message with a Start button per coin; posted to t
   const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'panel' }); await route(i, ctx);
   const p = ctx.chans.get('panelch').sent[0]; assert.equal(p.flags & 32768, 32768);
   const json = JSON.stringify(p.components.map((c) => c.toJSON()));
-  for (const k of ['ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']) assert.ok(json.includes(`nx:am-start:${k}`), k);
+  assert.ok(json.includes('nx:am-pick')); assert.ok(!json.includes('nx:am-start'), 'one dropdown, no per-coin buttons');
+  for (const k of ['ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']) assert.ok(json.includes(`"value":"${k}"`), k);
+  assert.match(json, /LTC \| Litecoin/); assert.match(json, /Open a protected LTC deal on Litecoin/); assert.equal(p.files.length, 1);
   const deny = fake(ctx, 'cmd', RND, { command: 'panel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
 

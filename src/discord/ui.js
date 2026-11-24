@@ -97,20 +97,29 @@ export const coinIcon = (c) => emojiMap.get(c.asset) ?? c.mark;
 const section = (t, key) => new SectionBuilder().addTextDisplayComponents(text(t))
   .setButtonAccessory(new ButtonBuilder().setCustomId(`nx:am-start:${key}`).setLabel('Start').setStyle(ButtonStyle.Primary));
 
-/** Components V2 panel: one row per coin with its own Start button. */
+const NETS = { bitcoin: 'Bitcoin', ethereum: 'Ethereum', litecoin: 'Litecoin', solana: 'Solana', bsc: 'BNB Smart Chain' };
+const emojiOf = (c) => { const m = /^<(a?):(\w+):(\d+)>$/.exec(emojiMap.get(c.asset) ?? ''); return m ? { id: m[3], name: m[2], animated: !!m[1] } : null; };
+
+/** Components V2 panel: one dropdown with every coin. Picking one opens a private deal room. */
 export function panelPayload(cfg, mode) {
-  const mk = (title, intro, keys) => {
-    const c = new ContainerBuilder().setAccentColor(BRAND.purple).addTextDisplayComponents(text(`## ${title}\n${intro}`));
-    for (const k of keys) { c.addSeparatorComponents(new SeparatorBuilder()); c.addSectionComponents(section(`${coinIcon(COINS[k])}  **${COINS[k].label}**`, k)); }
-    return c;
-  };
-  const demo = mode === 'demo' ? '\n**DEMO MODE** — simulated escrow, no real funds.' : '';
   const on = (keys) => (mode === 'live' ? keys.filter((k) => cfg.coins?.enabled?.includes(k)) : keys);
-  const main = on(['ETH', 'LTC', 'SOL']); const stable = on(['USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']);
-  return { flags: 1 << 15, components: [
-    mk('Start Cryptocurrency Deal', `Use the selection below to start a deal with the appropriate coin & network. Be sure all deals abide by the rules. **Nexora Hub** never asks for passwords, 2FA codes or seed phrases.${demo}`, main),
-    ...(stable.length ? [mk('Stablecoins', 'Start a deal with USDT or USDC on the network that matches your wallet. Be sure to select the correct network.', stable)] : []),
-  ] };
+  const keys = on(['ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']);
+  const demo = mode === 'demo' ? '\n**DEMO MODE** - simulated escrow, no real funds.' : '';
+  const rules = cfg.channels?.rules ? `<#${cfg.channels.rules}>` : 'the rules channel';
+  const menu = new StringSelectMenuBuilder().setCustomId('nx:am-pick').setPlaceholder('Select a coin to start a deal').addOptions(keys.map((k) => {
+    const c = COINS[k]; const o = { label: `${c.asset} | ${NETS[c.network] ?? c.label}`, value: k, description: `Open a protected ${c.asset} deal on ${NETS[c.network] ?? c.label}` };
+    const em = emojiOf(c); if (em) o.emoji = em; return o;
+  }));
+  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`## Nexora Auto MM\nAutomated crypto escrow\nPlease read ${rules} before you start.${demo}`))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text('**Add the other side of the deal**\n**Agree on the item, terms and price**\n**Fund the escrow and release when ready**'))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addActionRowComponents(new ActionRowBuilder().addComponents(menu))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text('**Opens a private deal room where the payment is held until both sides approve the outcome.**'));
+  return { flags: 1 << 15, components: [c] };
 }
 const usdFmt = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const statsEmbed = (name, avatarUrl, st) => new EmbedBuilder().setColor(BLUE)

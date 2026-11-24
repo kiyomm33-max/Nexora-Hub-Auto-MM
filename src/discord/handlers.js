@@ -319,7 +319,7 @@ const commands = {
   async panel(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.panel)) ?? i.channel;
-    await target.send(ui.panelPayload(ctx.cfg, ctx.mode));
+    await target.send({ ...ui.panelPayload(ctx.cfg, ctx.mode), files: [st.logoFile()] });
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'panel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Panel posted', `Posted in <#${target.id}>.`);
   },
