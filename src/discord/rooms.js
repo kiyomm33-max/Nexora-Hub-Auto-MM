@@ -8,7 +8,7 @@ import { log } from '../logger.js';
 import { base, dealEmbed, completedEmbed, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
 import { isHidden, ANON } from '../core/privacy.js';
-import { dmTranscript, viewButton, metaOf, parseBody } from './transcript.js';
+import { metaOf, parseBody } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
 
@@ -58,7 +58,6 @@ export async function completedPayload(ctx, deal, names, info, { test = false } 
   if (existsSync(icon)) { files.push(new AttachmentBuilder(fileURLToPath(icon), { name: 'coin.png' })); embed.setThumbnail('attachment://coin.png'); }
   const crow = new ActionRowBuilder();
   if (info?.url) crow.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url));
-  if (!test) crow.addComponents(new ButtonBuilder().setCustomId(`nx:tview:${deal.id}`).setLabel('View Transcript').setStyle(ButtonStyle.Secondary));
   if (crow.components.length) components.push(crow);
   return { embeds: [embed], files, components, allowedMentions: { parse: [] } };
 }
@@ -140,10 +139,7 @@ export async function saveTranscript(ctx, refId, channel, by) {
   const names = meta.parties.map((u) => `<@${u}>`).join(', ') || 'none';
   const embed = base(ctx.cfg, `${meta.kind} Transcript`, [`**ID:** \`${refId}\``, `**Participants:** ${names}`, `**Status:** ${meta.status ?? 'closed'}`, meta.amount ? `**Deal amount:** $${meta.amount}` : null, `**Messages:** ${n}`, `**SHA-256:** \`${sha}\``].filter(Boolean).join('\n'));
   const out = await fetchChannel(ctx, ctx.cfg.channels.transcripts);
-  if (out) await out.send({ embeds: [embed], components: [viewButton(refId)], allowedMentions: { parse: [] } }).catch((e) => log.error('transcript post failed', e));
-  for (const u of meta.parties) { // the people in the room get their copy in DMs; closed DMs are fine
-    try { await dmTranscript(await ctx.client.users.fetch(u), ctx, refId, body, meta); } catch { /* DMs closed */ }
-  }
+  if (out) await out.send({ embeds: [embed], files: [new AttachmentBuilder(Buffer.from(body), { name: `${refId}.txt` })], allowedMentions: { parse: [] } }).catch((e) => log.error('transcript post failed', e));
   return sha;
 }
 

@@ -735,21 +735,16 @@ test('.invites @user: staff see who that member invited (alt check), members onl
   const pub = await run('.invites <@410000000000000001>', false); assert.ok(!pub.fields.some((x) => x.name === 'Invited members'));
 });
 
-test('transcripts: close DMs parties an HTML file; View Transcript DMs it to a party or admin, refuses strangers', async () => {
-  const { pages, parseBody } = await import('../src/discord/transcript.js'); const rooms = await import('../src/discord/rooms.js');
+test('transcripts: saved to the staff channel as a summary with a text file, nobody is DMed, old View Transcript buttons say it is off', async () => {
+  const rooms = await import('../src/discord/rooms.js'); const { parseBody } = await import('../src/discord/transcript.js');
   const ctx = setup(); const d = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '99', currency: 'USD', asset: 'LTC', network: 'litecoin' });
   const dms = []; const posted = []; ctx.client.users.fetch = async (id) => ({ id, send: async (p) => { dms.push([id, p]); } });
   ctx.chans.set('tlog', { id: 'tlog', send: async (p) => { posted.push(p); } }); ctx.cfg.channels.transcripts = 'tlog';
-  const ch = { id: 'room', messages: { fetch: async ({ before }) => (before ? new Map() : Object.assign(new Map([['2', { id: '2', createdTimestamp: 2000, author: { username: 'Bob', id: B }, content: 'line one\nline <b>two</b>', embeds: [] }], ['1', { id: '1', createdTimestamp: 1000, author: { username: 'Alice', id: A }, content: 'hi', embeds: [] }]]), { last: () => ({ id: '1' }) })) } };
+  const ch = { id: 'room', messages: { fetch: async ({ before }) => (before ? new Map() : Object.assign(new Map([['2', { id: '2', createdTimestamp: 2000, author: { username: 'Bob', id: B }, content: 'line one\nline two', embeds: [] }], ['1', { id: '1', createdTimestamp: 1000, author: { username: 'Alice', id: A }, content: 'hi', embeds: [] }]]), { last: () => ({ id: '1' }) })) } };
   await rooms.saveTranscript(ctx, d.id, ch, 'system');
-  assert.deepEqual(dms.map((x) => x[0]).sort(), [A, B].sort()); assert.ok(!dms[0][1].files, 'readable messages, no file'); assert.match(dms[0][1].embeds[0].data.description, /\*\*Alice\*\*[\s\S]*hi[\s\S]*\*\*Bob\*\*[\s\S]*line one\nline <b>two<\/b>/);
-  assert.equal(posted.length, 1); assert.ok(!posted[0].files); assert.match(JSON.stringify(posted[0].components[0].toJSON()), new RegExp(`nx:tview:${d.id}`)); assert.match(posted[0].embeds[0].data.description, /Messages:\*\* 2/);
-  const body = ctx.db.prepare('SELECT body FROM transcripts WHERE ticket_id=?').get(d.id).body; assert.equal(parseBody(body).length, 2); assert.match(parseBody(body)[1].text, /line one\nline <b>two<\/b>/);
-  const long = pages(ctx.cfg, 'X', Array.from({ length: 60 }, (_, k) => `[2026-01-01T00:00:00.000Z] U (1): ${'x'.repeat(300)} ${k}`).join('\n')); assert.ok(long.length > 1 && long.every((e) => e.data.description.length <= 4096));
-  dms.length = 0; const click = async (u, roles) => { const i = fake(ctx, 'btn', u, { roles, customId: `nx:tview:${d.id}` }); i.user.send = async (p) => { dms.push([u, p]); }; i.deferReply = async () => {}; i.editReply = async (p) => { i.edited = p; }; await route(i, ctx); return i; };
-  const ok = await click(A, []); assert.equal(dms.length, 1); assert.match(JSON.stringify(ok.edited), /DMs/);
-  const no = await click(RND, []); assert.equal(dms.length, 1); assert.match(text(no), /Only the people in that room/);
-  await click(ADM, [ROLE.adm]); assert.equal(dms.length, 2);
+  assert.equal(dms.length, 0); assert.equal(posted.length, 1); assert.ok(!posted[0].components); assert.match(posted[0].files[0].name, /\.txt$/); assert.match(posted[0].embeds[0].data.description, /Messages:\*\* 2/);
+  const body = ctx.db.prepare('SELECT body FROM transcripts WHERE ticket_id=?').get(d.id).body; assert.equal(parseBody(body).length, 2);
+  const click = fake(ctx, 'btn', A, { customId: `nx:tview:${d.id}` }); await route(click, ctx); assert.match(text(click), /turned off/);
 });
 
 test('completed post: new layout, /set-privacy hides a name as Anonymous, .testdone posts a labelled sample', async () => {
@@ -760,7 +755,7 @@ test('completed post: new layout, /set-privacy hides a name as Anonymous, .testd
   const set = fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'hide' } }); await route(set, ctx); assert.equal(privacy.isHidden(ctx.db, A), true);
   await rooms.publishCompleted(ctx, ctx.deals.get(d.id));
   const e = posts[0].embeds[0].data; assert.equal(e.title, 'Funds Released'); assert.match(e.description, /\*\*Sender\*\* - Anonymous/); assert.match(e.description, new RegExp(`<@${B}>`)); assert.match(e.description, /\/set-privacy/); assert.match(e.description, /USD Amount/);
-  assert.doesNotMatch(e.description, new RegExp(`<@${A}>`)); assert.match(JSON.stringify(posts[0].components[0].toJSON()), /View Transcript/);
+  assert.doesNotMatch(e.description, new RegExp(`<@${A}>`)); assert.ok(!JSON.stringify(posts[0].components).includes('Transcript'));
   await route(fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'show' } }), ctx); assert.equal(privacy.isHidden(ctx.db, A), false);
   const out = []; const t = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'testdone' }); t.channel = { send: async (p) => { out.push(p); } }; await route(t, ctx);
   assert.match(out[0].embeds[0].data.description, /Test post/); assert.match(out[0].embeds[0].data.description, /Anonymous/); assert.equal(out[0].components.length, 1 - 1 + out[0].components.length);
