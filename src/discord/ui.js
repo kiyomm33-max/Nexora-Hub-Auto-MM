@@ -288,6 +288,11 @@ export function leaderboardEmbed(cfg, { period, label, rows, total, people, me, 
   const mine = me && !rows.some((r) => r.user_id === me.id) ? `\n\nYour rank: **#${me.rank}** with **${num(me.n)}** messages` : '';
   return base(cfg, `Message Leaderboard - ${label}`, `${lines}${mine}\n\n**${num(total)}** messages from **${num(people)}** people${since ? `, counted since **${since}**` : ''}.`);
 }
+export function inviteBoardEmbed(cfg, { rows, people, total, me }) {
+  const lines = rows.map((r, k) => `**${k + 1}.** <@${r.id}> - **${num(r.here)}** invite${r.here === 1 ? '' : 's'}${r.left ? ` (${num(r.left)} left)` : ''}`).join('\n') || 'No invites tracked yet.';
+  const mine = me && !rows.some((r) => r.id === me.id) ? `\n\nYour rank: **#${me.rank}** with **${num(me.here)}** invite${me.here === 1 ? '' : 's'}` : '';
+  return base(cfg, 'Invite Leaderboard', `${lines}${mine}\n\n**${num(total)}** members still here from **${num(people)}** inviters. Members who left are not counted.`);
+}
 export function messagesEmbed(cfg, name, avatarUrl, st) {
   const e = base(cfg, `${name} - Messages`, `Rank **${st.rank ? `#${st.rank}` : 'unranked'}**${st.since ? `, counted since **${st.since}**` : ''}`)
     .addFields({ name: 'Today', value: `\`${num(st.today)}\``, inline: true }, { name: 'Last 7 days', value: `\`${num(st.week)}\``, inline: true },

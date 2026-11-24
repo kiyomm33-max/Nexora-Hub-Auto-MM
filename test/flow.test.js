@@ -702,3 +702,19 @@ test('join ping: pings a new member in each configured channel and deletes it af
   assert.deepEqual(sent.map((s) => s[0]), ['c1', 'c2']); assert.equal(sent[0][1].content, '<@u9>'); assert.deepEqual(sent[0][1].allowedMentions.users, ['u9']);
   assert.equal(deleted.length, 0); await new Promise((r) => setTimeout(r, 80)); assert.deepEqual(deleted, ['c1', 'c2']);
 });
+
+test('.invites leaderboard: ranks inviters by members still here, public, own rank shown', async () => {
+  const { commandFromMessage } = await import('../src/discord/prefix.js'); const { recordJoin, recordLeave } = await import('../src/core/invites.js');
+  const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
+  const J = (inv, who) => recordJoin(ctx.db, who, inv, 'c');
+  for (const w of ['i1', 'i2', 'i3']) J('top', w); J('mid', 'i4'); J('mid', 'i5'); recordLeave(ctx.db, 'i5'); J('low', 'i6');
+  const run = async (content, author = RND) => { const out = [];
+    const m = { out, author: { id: author, bot: false, send: async () => {} }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, member: { roles: { cache: new Map() }, permissions: { has: () => false } }, mentions: { users: new Map() },
+      attachments: { first: () => undefined }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async () => {} }; } };
+    assert.equal(await commandFromMessage(m, ctx), true); return out[0].embeds[0].data; };
+  for (const c of ['.invites leaderboard', '.invite leaderboard', '.invites lb']) {
+    const e = await run(c); assert.equal(e.title, 'Invite Leaderboard');
+    assert.match(e.description, /\*\*1\.\*\* <@top> - \*\*3\*\* invites/); assert.match(e.description, /\*\*2\.\*\* <@mid> - \*\*1\*\* invite \(1 left\)/); assert.match(e.description, /\*\*3\.\*\* <@low>/);
+  }
+  const mine = await run('.invites leaderboard', 'low'); assert.doesNotMatch(mine.description, /Your rank/);
+});

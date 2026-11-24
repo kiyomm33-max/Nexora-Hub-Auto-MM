@@ -4,8 +4,8 @@ import { route, staffOf, UserError } from './handlers.js';
 import * as ui from './ui.js';
 import { log } from '../logger.js';
 
-const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages', 'invites']);
-const ALIASES = { top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
+const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages', 'invites', 'inviteboard']);
+const ALIASES = { invite: 'invites', top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
 
 // arg: [name, type, required]. Types: string, int, user, rest (everything that is left).
 const D = ['deal_id', 'string', true];
@@ -13,6 +13,7 @@ export const SPEC = {
   help: { desc: 'Show every command', args: [] },
   leaderboard: { desc: 'Message leaderboard (today, week, month or all)', args: [['period', 'string', false]] },
   messages: { desc: 'How many messages a member sent', args: [['member', 'user', false]] },
+  inviteboard: { desc: 'Top inviters (also: .invites leaderboard)', args: [] },
   invites: { desc: 'How many people a member invited', args: [['member', 'user', false]] },
   check: { desc: 'Show everyone who entered the current giveaway', args: [['id', 'int', false]] },
   totals: { desc: 'Create the locked voice channels showing total volume and deals', args: [] },
@@ -119,7 +120,7 @@ function interactionFrom(msg, name, options, { dm = false } = {}) {
 export async function commandFromMessage(msg, ctx) {
   const prefix = ctx.cfg.prefix ?? '.';
   if (!msg.guild || msg.author?.bot || typeof msg.content !== 'string' || !msg.content.startsWith(prefix)) return false;
-  const body = msg.content.slice(prefix.length);
+  const body = msg.content.slice(prefix.length).replace(/^invites?\s+(?:leaderboard|lb|top)\s*$/i, 'inviteboard');
   const head = /^([a-z]+)(?:\s+|$)/i.exec(body); if (!head) return false;
   const typed = head[1].toLowerCase(); const name = ALIASES[typed] ?? typed; const spec = SPEC[name]; if (!spec) return false; // other bots use the same prefix: stay quiet
   let rest = body.slice(head[0].length);
