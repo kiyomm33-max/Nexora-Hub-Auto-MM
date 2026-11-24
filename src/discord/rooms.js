@@ -7,6 +7,7 @@ import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import { base, dealEmbed, completedEmbed, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
+import { htmlFile, viewButton, metaOf, parseBody } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
 
@@ -60,7 +61,9 @@ export async function publishCompleted(ctx, deal) {
   const files = []; const components = [];
   const icon = new URL(`../../assets/coins/done-${String(deal.asset).toLowerCase()}.png`, import.meta.url);
   if (existsSync(icon)) { files.push(new AttachmentBuilder(fileURLToPath(icon), { name: 'coin.png' })); embed.setThumbnail('attachment://coin.png'); }
-  if (info?.url) components.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url)));
+  const crow = new ActionRowBuilder();
+  if (info?.url) crow.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url));
+  crow.addComponents(new ButtonBuilder().setCustomId(`nx:tview:${deal.id}`).setLabel('View Transcript').setStyle(ButtonStyle.Secondary)); components.push(crow);
   const m = await ch.send({ embeds: [embed], files, components, allowedMentions: { parse: [] } });
   ctx.deals.setChannel(deal.id, 'completed_message_id', m.id);
   audit(ctx.db, { actor: 'system', action: 'completed_deal.published', dealId: deal.id, detail: { messageId: m.id } });
@@ -124,8 +127,14 @@ export async function saveTranscript(ctx, refId, channel, by) {
   const sha = crypto.createHash('sha256').update(body).digest('hex');
   ctx.db.prepare('INSERT OR IGNORE INTO transcripts(ticket_id,body,sha256,created_at) VALUES(?,?,?,?)').run(refId, body, sha, new Date().toISOString());
   audit(ctx.db, { category: 'staff', actor: by, action: 'transcript.saved', detail: { refId, sha256: sha, channel: channel.id } });
+  const meta = metaOf(ctx.db, refId); const n = parseBody(body).length;
+  const names = meta.parties.map((u) => `<@${u}>`).join(', ') || 'none';
+  const embed = base(ctx.cfg, `${meta.kind} Transcript`, [`**ID:** \`${refId}\``, `**Participants:** ${names}`, `**Status:** ${meta.status ?? 'closed'}`, meta.amount ? `**Deal amount:** $${meta.amount}` : null, `**Messages:** ${n}`, `**SHA-256:** \`${sha}\``].filter(Boolean).join('\n'));
   const out = await fetchChannel(ctx, ctx.cfg.channels.transcripts);
-  if (out) await out.send({ embeds: [base(ctx.cfg, `Transcript  •  ${refId}`, `SHA-256 \`${sha}\``)], files: [new AttachmentBuilder(Buffer.from(body), { name: `${refId}.txt` })], allowedMentions: { parse: [] } });
+  if (out) await out.send({ embeds: [embed], files: [htmlFile(refId, body, meta)], components: [viewButton(refId)], allowedMentions: { parse: [] } }).catch((e) => log.error('transcript post failed', e));
+  for (const u of meta.parties) { // the people in the room get their copy in DMs; closed DMs are fine
+    try { await (await ctx.client.users.fetch(u)).send({ content: `Transcript for **${meta.title}**`, files: [htmlFile(refId, body, meta)] }); } catch { /* DMs closed */ }
+  }
   return sha;
 }
 
