@@ -392,9 +392,15 @@ export function pollPayload(cfg, p, counts) {
   return { embeds: [e], components: [row(...opts.map((o, k) => btn(`nx:pl-vote:${p.id}:${k}`, `${k + 1}. ${o}`.slice(0, 80), ButtonStyle.Primary).setDisabled(ended)))], allowedMentions: { parse: [] } };
 }
 
-export function invitesEmbed(cfg, name, avatarUrl, st) {
+export function invitesEmbed(cfg, name, avatarUrl, st, list) {
   const e = base(cfg, `${name} - Invites`, st.uses == null ? 'I cannot read the server invites right now, so only tracked joins are shown.' : `**${st.uses}** invite link use${st.uses === 1 ? '' : 's'} all time`)
     .addFields({ name: 'Joined', value: `\`${st.joined}\``, inline: true }, { name: 'Still in server', value: `\`${st.here}\``, inline: true }, { name: 'Left', value: `\`${st.left}\``, inline: true });
+  if (list) {
+    const t = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
+    const lines = list.rows.map((r) => { const made = list.created(r.id); const fresh = Date.now() - made < 7 * 864e5;
+      return `<@${r.id}> - ${r.left_at ? '**left**' : 'here'}, joined ${t(Date.parse(r.joined_at))}, account made ${t(made)}${fresh ? ' **(new account)**' : ''}`; });
+    e.addFields({ name: 'Invited members', value: (lines.join('\n') + (list.more ? `\n...and ${list.more} more` : '')).slice(0, 1024) || 'Nobody tracked yet.' });
+  }
   return avatarUrl ? e.setThumbnail(avatarUrl) : e;
 }
 
