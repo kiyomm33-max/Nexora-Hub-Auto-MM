@@ -691,3 +691,14 @@ test('/role all: staff only, gives the role to non-bot members who lack it, refu
   assert.match(await run(ADM, [ROLE.adm], role({ managed: true })), /cannot be given out/);
   const out = await run(ADM, [ROLE.adm], role()); assert.deepEqual(added.sort(), ['a', 'd']); assert.match(out, /\*\*2\*\* member/); assert.match(out, /\*\*1\*\* failed/);
 });
+
+test('join ping: pings a new member in each configured channel and deletes it after the delay; bots are ignored', async () => {
+  const { pingNewMember } = await import('../src/discord/joinping.js');
+  const sent = []; const deleted = [];
+  const mkch = (id) => ({ id, send: async (p) => { sent.push([id, p]); return { delete: async () => { deleted.push(id); } }; } });
+  const ctx = { cfg: { channels: { joinPing: ['c1', 'c2'] } }, client: { channels: { fetch: async (id) => (id === 'zz' ? null : mkch(id)) } } };
+  assert.equal(await pingNewMember(ctx, { user: { id: 'u9', bot: true } }), 0); assert.equal(sent.length, 0);
+  assert.equal(await pingNewMember(ctx, { user: { id: 'u9', bot: false } }, { ttl: 20 }), 2);
+  assert.deepEqual(sent.map((s) => s[0]), ['c1', 'c2']); assert.equal(sent[0][1].content, '<@u9>'); assert.deepEqual(sent[0][1].allowedMentions.users, ['u9']);
+  assert.equal(deleted.length, 0); await new Promise((r) => setTimeout(r, 80)); assert.deepEqual(deleted, ['c1', 'c2']);
+});

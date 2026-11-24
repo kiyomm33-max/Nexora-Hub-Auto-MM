@@ -36,6 +36,7 @@ export function loadConfig(e = env) {
       stats: e.STATS_CHANNEL_ID,
       rules: e.RULES_CHANNEL_ID,
       welcome: e.WELCOME_CHANNEL_ID,
+      joinPing: (e.JOIN_PING_CHANNEL_IDS ?? '1573996708445032488,1574144918048210954').split(',').map((s) => s.trim()).filter(Boolean),
       fees: e.FEES_CHANNEL_ID,
       volumeVoice: e.VOLUME_CHANNEL_ID,
       dealsVoice: e.DEALS_CHANNEL_ID,
