@@ -21,6 +21,7 @@ import * as pl from './poll.js';
 import * as totals from './totals.js';
 import { inviteStats } from './invites.js';
 import * as inv from '../core/invites.js';
+import { viewTranscript } from './transcript.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -420,6 +421,7 @@ const buttons = {
   vouch: (i, ctx, [id]) => { const { deal } = accessDeal(i, ctx, id); if (deal.status !== 'completed') throw new UserError('Only completed deals can be vouched.'); return i.showModal(ui.vouchModal(id)); },
   tstaff: (i, ctx, [id]) => callStaff(i, ctx, id, `ticket \`${id}\``),
   tclose: (i, ctx, [id]) => closeTicket(i, ctx, id),
+  tview: (i, ctx, [id]) => { limit(ctx, i, 'tview', 4, 60e3); return viewTranscript(i, ctx, id, { isStaff: LEVELS[staffOf(i, ctx)] >= LEVELS.admin }); },
 };
 const modals = {
   'st-pay': (i, ctx, [m]) => st.payoutSubmit(i, ctx, m, i.fields.getTextInputValue('details')),
