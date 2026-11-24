@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS invite_joins(
 );
 CREATE INDEX IF NOT EXISTS invite_joins_inviter ON invite_joins(inviter_id);
 CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS user_privacy(user_id TEXT PRIMARY KEY, hidden INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS close_req(
   deal_id TEXT PRIMARY KEY, requested_by TEXT NOT NULL, message_id TEXT, created_at TEXT NOT NULL
 );

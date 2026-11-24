@@ -21,6 +21,7 @@ import * as pl from './poll.js';
 import * as totals from './totals.js';
 import { inviteStats } from './invites.js';
 import * as inv from '../core/invites.js';
+import * as privacy from '../core/privacy.js';
 import { viewTranscript } from './transcript.js';
 
 export { UserError } from './automm.js';
@@ -180,6 +181,20 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.messagesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), act.userMessages(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async 'set-privacy'(i, ctx) {
+    const hide = i.options.getString('name', true) === 'hide';
+    privacy.setHidden(ctx.db, i.user.id, hide);
+    audit(ctx.db, { category: 'deal', actor: i.user.id, action: 'privacy.set', detail: { hidden: hide } });
+    return i.reply({ flags: EPH, embeds: [ui.okEmbed(ctx.cfg, 'Privacy updated', hide ? 'Your name is now shown as **Anonymous** on new completed deal posts.' : 'Your name is now **shown** on new completed deal posts.')] });
+  },
+  async testdone(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const me = `<@${i.user.id}>`;
+    const deal = { id: 'NXD-TEST00', asset: 'LTC', network: 'litecoin', amount: '82.21', receive_usd: '82.21', mode: 'live' };
+    const info = { amount: '0.98412345', txid: '0224d0c9f1b83a5e77c1d0e4f2a9b6385c7d1e0f4a2b9c6d8e3f1a5b7c9d0a0c387' };
+    await i.channel.send(await rooms.completedPayload(ctx, deal, { sender: privacy.ANON, receiver: me }, info, { test: true }));
+    return say(ctx, i, 'Test post sent', 'Posted a sample completed-deal message in this channel. Nothing was saved.');
   },
   async inviteboard(i, ctx) {
     limit(ctx, i, 'inviteboard', 5, 60e3);
