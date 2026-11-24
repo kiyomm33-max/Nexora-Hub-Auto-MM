@@ -137,6 +137,7 @@ export async function partnerFromMessage(msg, ctx) {
 
 // ---------- steps ----------
 export const handlers = {
+  pick: (i, ctx) => startAuto(i, ctx, i.values?.[0]),
   async partner(i, ctx, [id], uid) {
     const u = uid ?? i.users?.first?.()?.id;
     const nd = await addPartner(ctx, id, i.user.id, u, i.guild, i.channel);
