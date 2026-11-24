@@ -27,3 +27,11 @@ export function leaderboard(db, { limit = 10, me } = {}) {
   const k = me ? all.findIndex((r) => r.id === me) : -1;
   return { rows: all.slice(0, limit), people: all.length, total: all.reduce((n, r) => n + r.here, 0), me: k >= 0 ? { ...all[k], rank: k + 1 } : null };
 }
+
+/** Everyone this member invited, newest first, with when they joined and whether they left. */
+export function invitees(db, inviterId, limit = 20) {
+  const rows = db.prepare('SELECT invitee_id id, code, joined_at, left_at FROM invite_joins WHERE inviter_id=? ORDER BY joined_at DESC').all(inviterId);
+  return { rows: rows.slice(0, limit), more: Math.max(0, rows.length - limit) };
+}
+/** When a Discord account was created, read from its ID. A brand new account is the usual sign of an alt. */
+export const accountCreated = (id) => Number((BigInt(id) >> 22n) + 1420070400000n);

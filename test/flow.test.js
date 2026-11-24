@@ -718,3 +718,17 @@ test('.invites leaderboard: ranks inviters by members still here, public, own ra
   }
   const mine = await run('.invites leaderboard', 'low'); assert.doesNotMatch(mine.description, /Your rank/);
 });
+
+test('.invites @user: staff see who that member invited (alt check), members only see counts', async () => {
+  const { commandFromMessage } = await import('../src/discord/prefix.js'); const { recordJoin, recordLeave } = await import('../src/core/invites.js');
+  const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
+  const fresh = String((BigInt(Date.now() - 864e5 - 1420070400000) << 22n)); const old = '323456789012345678';
+  recordJoin(ctx.db, fresh, '410000000000000001', 'abc'); recordJoin(ctx.db, old, '410000000000000001', 'abc'); recordLeave(ctx.db, old);
+  const run = async (content, admin) => { const out = [];
+    const m = { out, author: { id: admin ? ADM : RND, bot: false, send: async () => {} }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, member: { roles: { cache: new Map() }, permissions: { has: (p) => admin && p === 'Administrator' } },
+      mentions: { users: new Map([['410000000000000001', { id: '410000000000000001', username: 'inv', displayAvatarURL: () => null }]]) }, attachments: { first: () => undefined }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async () => {} }; } };
+    assert.equal(await commandFromMessage(m, ctx), true); return out[0].embeds[0].data; };
+  const staff = await run('.invites <@410000000000000001>', true); const f = staff.fields.find((x) => x.name === 'Invited members').value;
+  assert.match(f, new RegExp(`<@${fresh}> - here.*\\(new account\\)`)); assert.match(f, new RegExp(`<@${old}> - \\*\\*left\\*\\*`)); assert.doesNotMatch(f.split('\n')[1] ?? '', /new account/);
+  const pub = await run('.invites <@410000000000000001>', false); assert.ok(!pub.fields.some((x) => x.name === 'Invited members'));
+});

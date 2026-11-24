@@ -188,7 +188,7 @@ const commands = {
     limit(ctx, i, 'invites', 5, 60e3);
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
-    return i.reply({ embeds: [ui.invitesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), await inviteStats(i.guild, ctx, u.id))], allowedMentions: { parse: [] } });
+    return i.reply({ embeds: [ui.invitesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), await inviteStats(i.guild, ctx, u.id), can(staffOf(i, ctx), 'panel.post') ? { ...inv.invitees(ctx.db, u.id, 15), created: inv.accountCreated } : null)], allowedMentions: { parse: [] } });
   },
   async tag(i, ctx) {
     need(i, ctx, 'activity.view');
