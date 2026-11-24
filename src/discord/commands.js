@@ -11,6 +11,7 @@ export const definitions = [
     .addStringOption((o) => o.setName('period').setDescription('today, week, month or all').addChoices(...['today', 'week', 'month', 'all'].map((x) => ({ name: x, value: x })))),
   new SCB().setName('messages').setDescription('How many messages a member sent').setDMPermission(false).setDefaultMemberPermissions(null)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
+  new SCB().setName('inviteboard').setDescription('Top inviters').setDMPermission(false).setDefaultMemberPermissions(null),
   new SCB().setName('invites').setDescription('How many people a member invited').setDMPermission(false).setDefaultMemberPermissions(null)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('check').setDescription('Show everyone who entered the current giveaway (staff)').setDMPermission(false)

@@ -20,6 +20,7 @@ import * as gw from './giveaway.js';
 import * as pl from './poll.js';
 import * as totals from './totals.js';
 import { inviteStats } from './invites.js';
+import * as inv from '../core/invites.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -178,6 +179,10 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.messagesEmbed(ctx.cfg, name, u.displayAvatarURL?.({ size: 256 }), act.userMessages(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async inviteboard(i, ctx) {
+    limit(ctx, i, 'inviteboard', 5, 60e3);
+    return i.reply({ embeds: [ui.inviteBoardEmbed(ctx.cfg, inv.leaderboard(ctx.db, { limit: 10, me: i.user.id }))], allowedMentions: { parse: [] } });
   },
   async invites(i, ctx) {
     limit(ctx, i, 'invites', 5, 60e3);
