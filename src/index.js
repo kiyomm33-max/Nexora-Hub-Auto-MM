@@ -10,6 +10,7 @@ import { createServer } from './web/server.js';
 import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
 import { sendWelcome } from './discord/welcome.js';
+import { pingNewMember } from './discord/joinping.js';
 import { commandFromMessage } from './discord/prefix.js';
 import { countFromMessage, startActivity } from './discord/activity.js';
 import { startStatusLoop } from './discord/status.js';
@@ -55,7 +56,7 @@ function boot(level) {
   const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildInvites, ...(withMessages ? [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : []), ...(level >= 2 ? [GatewayIntentBits.GuildMembers] : []), ...(level >= 3 ? [GatewayIntentBits.GuildPresences] : [])];
   client = new Client({ intents });
   ctx.client = client; cfg.messageContent = withMessages;
-  if (level >= 2) client.on(Events.GuildMemberAdd, (m) => sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)));
+  if (level >= 2) client.on(Events.GuildMemberAdd, (m) => { sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)); pingNewMember(ctx, m).catch((e) => log.error('join ping failed', e)); });
   if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
   ctx.presenceTracking = level >= 3;
   startStatusLoop(client, ctx);
