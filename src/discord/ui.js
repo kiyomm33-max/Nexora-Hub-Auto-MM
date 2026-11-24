@@ -29,18 +29,22 @@ export function escrowLines(d) {
 
 const shortTx = (h) => (h.length > 16 ? `${h.slice(0, 6)}…${h.slice(-8)}` : h);
 /** `info` = { txid, url, amount } from the provider when a real payout happened. */
-export function completedEmbed(cfg, d, names, info) {
+export function completedEmbed(cfg, d, names, info, { test = false } = {}) {
   const coin = Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network);
   const coinLabel = (coin?.label ?? d.asset).replace(/ \[.*\]/, '');
-  const demo = d.mode === 'demo' ? '**DEMO deal** — simulated, no real funds.\n' : '';
-  const e = base(cfg, `${coinLabel} Deal Complete`, demo || null, BLUE);
-  const amount = info?.amount ? `\`${info.amount}\` ${d.asset} (**$${d.receive_usd ?? d.amount} USD**)` : `**$${d.receive_usd ?? d.amount} USD** in ${d.asset}`;
-  e.addFields({ name: 'Amount', value: amount },
-    { name: 'Sender', value: names.sender ?? names.a, inline: true }, { name: 'Receiver', value: names.receiver ?? names.b, inline: true });
-  if (info?.txid) e.addFields({ name: 'Transaction', value: `\`${shortTx(info.txid)}\` ([View Transaction](${info.url}))` });
-  e.addFields({ name: 'Deal ID', value: `\`${d.id}\``, inline: true }, { name: 'Completed', value: ts(d.completed_at), inline: true });
-  if (names.middleman) e.addFields({ name: 'Middleman', value: names.middleman, inline: true });
-  return e;
+  const usd = Number(d.receive_usd || d.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sent = info?.amount ? `${info.amount} ${d.asset}` : d.asset;
+  const lines = [
+    '*Nexora Auto MM - paid out to the receiver*', '',
+    test ? '**Test post. The data below is a sample, not a real deal.**' : d.mode === 'demo' ? '**DEMO deal** - simulated, no real funds.' : null,
+    test || d.mode === 'demo' ? '' : null,
+    '**Deal Summary**',
+    `> **Sender** - ${names.sender ?? names.a}`, `> **Receiver** - ${names.receiver ?? names.b}`, names.middleman ? `> **Middleman** - ${names.middleman}` : null, `> **Deal ID** - \`${d.id}\``, '',
+    '**Value**', `> **USD Amount** - \`$${usd}\``, `> **Crypto Sent** - **${sent}** (${coinLabel})`,
+    info?.txid ? '' : null, info?.txid ? '**Blockchain Proof**' : null, info?.txid ? `\`${shortTx(info.txid)}\`` : null, '',
+    '*Want your name shown or hidden here? Use* `/set-privacy`',
+  ].filter((x) => x !== null).join('\n');
+  return base(cfg, 'Funds Released', lines, BLUE);
 }
 
 export function vouchEmbed(cfg, { dealId, author, target, rating, text, createdAt }) {

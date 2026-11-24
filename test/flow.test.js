@@ -268,7 +268,7 @@ test('full lifecycle: simulate provider -> completed -> published -> vouch', asy
   const pub = ctx.chans.get('completed').sent; assert.equal(pub.length, 1, 'published exactly once');
   const pj = JSON.stringify(pub[0].embeds[0].data);
   assert.ok(pj.includes(id) && pj.includes('user111') && pj.includes('user222') && pj.includes('user333'));
-  assert.ok(!/Dominus|DEMO-/.test(pj), 'no item description or wallet/provider data published'); assert.match(pj, /Litecoin Deal Complete/); assert.ok(pub[0].files.length === 1, 'coin thumbnail attached');
+  assert.ok(!/Dominus|DEMO-/.test(pj), 'no item description or wallet/provider data published'); assert.match(pj, /Funds Released[\s\S]*Litecoin/); assert.ok(pub[0].files.length === 1, 'coin thumbnail attached');
   const v = fake(ctx, 'cmd', A, { command: 'vouch', opts: { deal_id: id, rating: 5, feedback: 'Smooth trade!' } }); await route(v, ctx);
   assert.match(text(v), /Verified Vouch/); assert.equal(ctx.chans.get('vouches').sent.length, 1);
   const v2 = fake(ctx, 'cmd', A, { command: 'vouch', opts: { deal_id: id, rating: 3, feedback: 'again again' } }); await route(v2, ctx); assert.match(text(v2), /already/);
@@ -491,7 +491,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role'].includes(n)).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -748,4 +748,19 @@ test('transcripts: close DMs parties an HTML file; View Transcript DMs it to a p
   const ok = await click(A, []); assert.equal(dms.length, 1); assert.match(JSON.stringify(ok.edited), /DMs/);
   const no = await click(RND, []); assert.equal(dms.length, 1); assert.match(text(no), /Only the people in that room/);
   await click(ADM, [ROLE.adm]); assert.equal(dms.length, 2);
+});
+
+test('completed post: new layout, /set-privacy hides a name as Anonymous, .testdone posts a labelled sample', async () => {
+  const rooms = await import('../src/discord/rooms.js'); const privacy = await import('../src/core/privacy.js');
+  const ctx = setup(); const posts = []; ctx.chans.set('done', { id: 'done', send: async (p) => { posts.push(p); return { id: 'm1' }; } }); ctx.cfg.channels.completed = 'done';
+  const d = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '99', currency: 'USD', asset: 'LTC', network: 'litecoin' });
+  ctx.db.prepare("UPDATE deals SET status='completed', sender_id=?, receiver_id=?, completed_at=? WHERE id=?").run(A, B, new Date().toISOString(), d.id);
+  const set = fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'hide' } }); await route(set, ctx); assert.equal(privacy.isHidden(ctx.db, A), true);
+  await rooms.publishCompleted(ctx, ctx.deals.get(d.id));
+  const e = posts[0].embeds[0].data; assert.equal(e.title, 'Funds Released'); assert.match(e.description, /\*\*Sender\*\* - Anonymous/); assert.match(e.description, new RegExp(`<@${B}>`)); assert.match(e.description, /\/set-privacy/); assert.match(e.description, /USD Amount/);
+  assert.doesNotMatch(e.description, new RegExp(`<@${A}>`)); assert.match(JSON.stringify(posts[0].components[0].toJSON()), /View Transcript/);
+  await route(fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'show' } }), ctx); assert.equal(privacy.isHidden(ctx.db, A), false);
+  const out = []; const t = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'testdone' }); t.channel = { send: async (p) => { out.push(p); } }; await route(t, ctx);
+  assert.match(out[0].embeds[0].data.description, /Test post/); assert.match(out[0].embeds[0].data.description, /Anonymous/); assert.equal(out[0].components.length, 1 - 1 + out[0].components.length);
+  const deny = fake(ctx, 'cmd', RND, { command: 'testdone' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });

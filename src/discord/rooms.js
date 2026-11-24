@@ -7,6 +7,7 @@ import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import { base, dealEmbed, completedEmbed, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
+import { isHidden, ANON } from '../core/privacy.js';
 import { htmlFile, viewButton, metaOf, parseBody } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
@@ -49,22 +50,30 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   return putStep(ctx, ch, old, deal, payload, { force: !old || bump });
 }
 
-export async function publishCompleted(ctx, deal) {
-  if (deal.status !== 'completed' || deal.completed_message_id) return;
-  const ch = await fetchChannel(ctx, ctx.cfg.channels.completed);
-  if (!ch) return;
-  const name = async (id) => { try { const u = await ctx.client.users.fetch(id); return `**${u.username}** (<@${id}>)`; } catch { return `<@${id}>`; } };
-  const names = { a: await name(deal.party_a), b: await name(deal.party_b), middleman: deal.middleman_id ? await name(deal.middleman_id) : null };
-  if (deal.sender_id && deal.receiver_id) { names.sender = await name(deal.sender_id); names.receiver = await name(deal.receiver_id); }
-  const info = ctx.provider.payoutInfo?.(deal.id) ?? null;
-  const embed = completedEmbed(ctx.cfg, deal, names, info);
+/** The completed-deal post (embed, coin icon, buttons). Names of members who hid themselves show as Anonymous. */
+export async function completedPayload(ctx, deal, names, info, { test = false } = {}) {
+  const embed = completedEmbed(ctx.cfg, deal, names, info, { test });
   const files = []; const components = [];
   const icon = new URL(`../../assets/coins/done-${String(deal.asset).toLowerCase()}.png`, import.meta.url);
   if (existsSync(icon)) { files.push(new AttachmentBuilder(fileURLToPath(icon), { name: 'coin.png' })); embed.setThumbnail('attachment://coin.png'); }
   const crow = new ActionRowBuilder();
   if (info?.url) crow.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url));
-  crow.addComponents(new ButtonBuilder().setCustomId(`nx:tview:${deal.id}`).setLabel('View Transcript').setStyle(ButtonStyle.Secondary)); components.push(crow);
-  const m = await ch.send({ embeds: [embed], files, components, allowedMentions: { parse: [] } });
+  if (!test) crow.addComponents(new ButtonBuilder().setCustomId(`nx:tview:${deal.id}`).setLabel('View Transcript').setStyle(ButtonStyle.Secondary));
+  if (crow.components.length) components.push(crow);
+  return { embeds: [embed], files, components, allowedMentions: { parse: [] } };
+}
+export async function publishCompleted(ctx, deal) {
+  if (deal.status !== 'completed' || deal.completed_message_id) return;
+  const ch = await fetchChannel(ctx, ctx.cfg.channels.completed);
+  if (!ch) return;
+  const name = async (id) => {
+    if (isHidden(ctx.db, id)) return ANON;
+    try { const u = await ctx.client.users.fetch(id); return `**${u.username}** (<@${id}>)`; } catch { return `<@${id}>`; }
+  };
+  const names = { a: await name(deal.party_a), b: await name(deal.party_b), middleman: deal.middleman_id ? await name(deal.middleman_id) : null };
+  if (deal.sender_id && deal.receiver_id) { names.sender = await name(deal.sender_id); names.receiver = await name(deal.receiver_id); }
+  const info = ctx.provider.payoutInfo?.(deal.id) ?? null;
+  const m = await ch.send(await completedPayload(ctx, deal, names, info));
   ctx.deals.setChannel(deal.id, 'completed_message_id', m.id);
   audit(ctx.db, { actor: 'system', action: 'completed_deal.published', dealId: deal.id, detail: { messageId: m.id } });
 }
