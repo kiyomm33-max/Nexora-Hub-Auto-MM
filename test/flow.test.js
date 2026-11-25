@@ -493,7 +493,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].textOnly).sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy'].includes(n)).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].textOnly).sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy', 'say'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -838,4 +838,12 @@ test('moderation text commands: permissions, hierarchy, and each action', async 
   assert.match(await run(`.role 111111111111111111 ${role.id}`), /Role removed/); assert.deepEqual(calls.pop(), ['remove', '111111111111111111', role.id]);
   assert.match(await run(`.role 111111111111111111 ${high.id}`), /above my highest role|equal to or above your/);
   assert.match(await run(`.role 111111111111111111 ${role.id}`, { pos: 3 }), /equal to or above your highest/);
+});
+
+test('/say posts an embed with the Nexora thumbnail, staff only', async () => {
+  const ctx = setup(); const target = { id: 'say1', sent: [], async send(p) { this.sent.push(p); } };
+  const deny = fake(ctx, 'cmd', RND, { command: 'say', opts: { message: 'hi' } }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const ok = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'say', opts: { message: 'Line one\\nLine two', title: 'News', channel: target } }); ok.options.getChannel = (k) => ok.opts?.[k] ?? target; await route(ok, ctx);
+  const e = target.sent[0].embeds[0].data; assert.equal(e.title, 'News'); assert.equal(e.description, 'Line one\nLine two'); assert.equal(e.thumbnail.url, 'attachment://status.png'); assert.equal(target.sent[0].files.length, 1);
+  assert.deepEqual(target.sent[0].allowedMentions, { parse: [] }); assert.match(text(ok), /Posted/);
 });
