@@ -63,8 +63,7 @@ async function runToRoom(ctx, { amount = '20', feeChoice = 'receiver' } = {}) {
   const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
   await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: B } }, values: [] });
   await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`); await click(ctx, A, `nx:am-roleok:${id}`); await click(ctx, B, `nx:am-roleok:${id}`);
-  await submit(ctx, A, `nx:am-descmodal:${id}`, { desc: '20k Robux for $20 of LTC' });
-  await click(ctx, B, `nx:am-accept:${id}`);
+  await submit(ctx, A, `nx:am-termsmodal:${id}`, { terms: '20k Robux for $20 of LTC' }); await click(ctx, A, `nx:am-termsok:${id}`); await click(ctx, B, `nx:am-termsok:${id}`);
   await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount });
   await click(ctx, A, `nx:am-amtok:${id}`); await click(ctx, B, `nx:am-amtok:${id}`);
   if (Number(amount) >= 50) { await click(ctx, A, `nx:am-fee:${id}:${feeChoice}`); await click(ctx, B, `nx:am-feeok:${id}`); }
@@ -118,10 +117,15 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   await click(ctx, B, `nx:am-role:${id}:sender`); await click(ctx, A, `nx:am-role:${id}:receiver`);
   await click(ctx, A, `nx:am-roleok:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'roles_confirm', 'one confirmation is not enough');
   await click(ctx, B, `nx:am-roleok:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'describe');
-  await submit(ctx, B, `nx:am-descmodal:${id}`, { desc: 'He is giving me 20k Robux for $20 LTC' });
-  assert.match(text(await click(ctx, B, `nx:am-accept:${id}`)), /other trader has to accept/);
-  await click(ctx, A, `nx:am-decline:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'describe'); assert.equal(ctx.deals.get(id).item, '');
-  await submit(ctx, A, `nx:am-descmodal:${id}`, { desc: 'Second description attempt' }); await click(ctx, B, `nx:am-accept:${id}`);
+  { const j = JSON.stringify(ctx.chans.get(ctx.room).sent.at(-1).components.map((c) => c.toJSON())); for (const m of [/Write the deal terms/, /Add \/ Edit My Terms/, /nx:am-termsedit/, /Skip Terms/, /Accept Deal Terms/, /Cancel Deal/, /Not submitted yet/, /Sender acceptance/, /Receiver acceptance/, /line\.png/]) assert.match(j, m); }
+  assert.match(text(await click(ctx, A, `nx:am-termsok:${id}`)), /Nobody has written terms/);
+  assert.match(text(await click(ctx, RND, `nx:am-termsedit:${id}`)), /Only the two traders/);
+  await submit(ctx, A, `nx:am-termsmodal:${id}`, { terms: 'Receiving 20k Robux by trade' });
+  assert.match(text(await click(ctx, A, `nx:am-termsskip:${id}`)), /Terms were written/);
+  await click(ctx, A, `nx:am-termsok:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).votes[A], 'accepted'); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'describe', 'one approval is not enough');
+  await submit(ctx, B, `nx:am-termsmodal:${id}`, { terms: 'Sending $20 of LTC' }); assert.deepEqual(ctx.deals.setup(ctx.deals.get(id)).votes, {}, 'a change clears both approvals');
+  await click(ctx, A, `nx:am-termsok:${id}`); await click(ctx, B, `nx:am-termsok:${id}`);
+  assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount'); assert.match(ctx.deals.get(id).item, /Sender: Sending \$20 of LTC \| Receiver: Receiving 20k Robux by trade/);
   for (const bad of ['abc', '0', '-5', '1e3', '999999999']) assert.match(text(await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount: bad })), /between 1 and 100000/);
   await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount: '$20' }); assert.equal(ctx.deals.get(id).amount, '20.00');
   await click(ctx, A, `nx:am-amtno:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount');

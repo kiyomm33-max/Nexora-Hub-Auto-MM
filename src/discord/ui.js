@@ -254,7 +254,33 @@ export function stepPayload(cfg, d, set) {
         .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
       return { flags: 1 << 15, components: [text(`${parties(d)} Confirm the roles below.`), box], files: [lineFile()] };
     }
-    case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
+    case 'describe': {
+      const terms = set.terms ?? {}; const votes = set.votes ?? {};
+      const any = Object.values(terms).some(Boolean);
+      const mark = (u) => (votes[u] === 'accepted' ? '<:checkmark:1575069601312808970> accepted' : votes[u] === 'skipped' ? '<:checkmark:1575069601312808970> skipped' : '⏳ waiting');
+      const SENDER = '<:Sender:1575262944063787161>', RECEIVER = '<:download:1575100863473782855>';
+      const shown = (u) => (terms[u] ? `>>> ${terms[u]}` : '*Not submitted yet*');
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addSectionComponents(new SectionBuilder()
+          .addTextDisplayComponents(text('## <:tasks:1575100811950821467> Write the deal terms\nEach party may record their expectations. These terms become the reference point if the delivery is disputed later. Any change clears both approvals.'))
+          .setButtonAccessory(btn(`nx:am-termsedit:${d.id}`, 'Add / Edit My Terms', ButtonStyle.Primary).setEmoji('1575100811950821467')))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text('**Useful terms include:**\n- exact item or service and quantity\n- condition, account details, or delivery method\n- deadline and what counts as successful delivery'))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`**${SENDER} Sender's terms:** <@${d.sender_id}>\n${shown(d.sender_id)}`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`**${RECEIVER} Receiver's terms:** <@${d.receiver_id}>\n${shown(d.receiver_id)}`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`**${SENDER} Sender acceptance:** <@${d.sender_id}> ${mark(d.sender_id)}\n**${RECEIVER} Receiver acceptance:** <@${d.receiver_id}> ${mark(d.receiver_id)}`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(
+          btn(`nx:am-termsskip:${d.id}`, 'Skip Terms', ButtonStyle.Secondary).setEmoji('1575069601312808970').setDisabled(any),
+          btn(`nx:am-termsok:${d.id}`, 'Accept Deal Terms', ButtonStyle.Success).setEmoji('1575069601312808970').setDisabled(!any),
+          btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [text(`${parties(d)} Write your terms below, or skip them.`), box], files: [lineFile()] };
+    }
+    case 'describe_legacy': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
     case 'accept': return { embeds: [e('Accept the deal description', `**Description** by <@${d.desc_by}>:\n>>> ${d.item}\n\n<@${d.desc_by === d.party_a ? d.party_b : d.party_a}>, do you accept this description?`)],
       components: [row(btn(`nx:am-accept:${d.id}`, 'Accept', ButtonStyle.Success), btn(`nx:am-decline:${d.id}`, 'Decline', ButtonStyle.Danger))] };
@@ -379,6 +405,7 @@ export function roomButtons(d, cfg) {
 }
 export const partnerIdModal = (id) => modal(`nx:am-partnermodal:${id}`, 'Add the other trader', input('uid', 'Discord user ID', { min: 15, max: 25, placeholder: '123456789012345678' }));
 export const descModal = (id) => modal(`nx:am-descmodal:${id}`, 'Describe the deal', input('desc', 'What is being exchanged?', { style: TextInputStyle.Paragraph, min: 5, max: 300, placeholder: 'e.g. 20k Robux for $20 of LTC' }));
+export const termsModal = (id) => modal(`nx:am-termsmodal:${id}`, 'Your deal terms', input('terms', 'Your terms', { style: TextInputStyle.Paragraph, min: 5, max: 300, placeholder: 'e.g. 20k Robux, delivered by in-game trade within 1 hour' }));
 export const amountModal = (id) => modal(`nx:am-amountmodal:${id}`, 'Deal amount', input('amount', 'Amount in USD', { min: 1, max: 12, placeholder: '20' }));
 export const ticketButtons = (id) => [row(btn(`nx:tstaff:${id}`, 'Request staff'), btn(`nx:tclose:${id}`, 'Close & save transcript', ButtonStyle.Danger))];
 export const payoutModal = (id, asset) => modal(`nx:am-payaddrmodal:${id}`, `Your ${asset} address`, input('addr', `${asset} address to receive the payout`, { min: 20, max: 100 }));

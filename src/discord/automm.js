@@ -82,6 +82,19 @@ const done = async (i, ctx, d) => {
   const p = await payloadFor(ctx, d);
   await i.deferUpdate(); return putStep(ctx, i.channel, i.message, d, p);
 };
+async function termsVote(i, ctx, id, vote) {
+  const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'describe');
+  const nd = await locked(ctx, id, async () => {
+    const cur = load(ctx, id); const set = ctx.deals.setup(cur); const terms = set.terms ?? {}; const any = Object.values(terms).some(Boolean);
+    if (vote === 'accepted' && !any) throw new UserError('Nobody has written terms yet. Add terms first, or press **Skip Terms**.');
+    if (vote === 'skipped' && any) throw new UserError('Terms were written. Accept them, or edit your own.');
+    const votes = { ...set.votes, [i.user.id]: vote };
+    if (!(votes[cur.sender_id] && votes[cur.receiver_id])) return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes } }, 'setup.terms_vote', { silent: true });
+    const item = any ? [terms[cur.sender_id] && `Sender: ${terms[cur.sender_id]}`, terms[cur.receiver_id] && `Receiver: ${terms[cur.receiver_id]}`].filter(Boolean).join(' | ') : 'No terms recorded';
+    return ctx.deals.patch(id, i.user.id, { item, desc_by: null, setup: setStep(ctx, cur, 'amount') }, 'setup.terms_accepted');
+  });
+  return done(i, ctx, nd);
+}
 const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, votes });
 
 // ---------- start ----------
@@ -177,6 +190,16 @@ export const handlers = {
     const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'roles');
     return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { setup: setStep(ctx, d, 'roles') }, 'setup.roles_reset', { silent: true })));
   },
+  termsedit: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'describe'); return i.showModal(ui.termsModal(id)); },
+  async termsmodal(i, ctx, [id]) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'describe');
+    const t = V.text(i.fields.getTextInputValue('terms'), { min: 5, max: 300, label: 'Terms' });
+    const nd = await locked(ctx, id, async () => { const cur = load(ctx, id); const set = ctx.deals.setup(cur); // any change clears both approvals
+      return ctx.deals.patch(id, i.user.id, { setup: { ...set, terms: { ...(set.terms ?? {}), [i.user.id]: t }, votes: {} } }, 'setup.terms_set'); });
+    return done(i, ctx, nd);
+  },
+  termsok: (i, ctx, [id]) => termsVote(i, ctx, id, 'accepted'),
+  termsskip: (i, ctx, [id]) => termsVote(i, ctx, id, 'skipped'),
   describe: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'describe'); return i.showModal(ui.descModal(id)); },
   async descmodal(i, ctx, [id]) {
     const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'describe');
