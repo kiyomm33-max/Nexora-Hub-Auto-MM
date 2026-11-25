@@ -184,7 +184,7 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   assert.match(text(await click(ctx, B, `nx:am-relyes:${id}`)), /Only the sender/);
   const t0 = Date.now(); await click(ctx, A, `nx:am-relyes:${id}`); await ctx.settle();
   const d = ctx.deals.get(id); const secs = (Date.parse(d.release_at) - t0) / 1000; assert.ok(secs > 59 && secs <= 60.5, `countdown ~60s (got ${secs})`);
-  assert.match(JSON.stringify(room.sent.at(-1).embeds.map((e) => e.data)), /Release countdown[\s\S]*<t:\d+:R>/);
+  assert.ok(!JSON.stringify(room.sent.map((m) => m.embeds ?? [])).includes('Release countdown'), 'no separate countdown message');
   assert.match(status(), /Release countdown/);
   assert.match(text(await click(ctx, B, `nx:am-relcancel:${id}`)), /Only the person who started/);
   await click(ctx, A, `nx:am-relcancel:${id}`); assert.equal(ctx.deals.get(id).release_at, null);
