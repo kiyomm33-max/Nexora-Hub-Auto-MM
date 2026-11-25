@@ -913,3 +913,13 @@ test('the owner can open any number of deals; others stay capped at 2', async ()
   for (let n = 0; n < 5; n++) { const b = fake(ctx, 'btn', OWN, { customId: 'nx:am-start:BTC' }); await route(b, ctx); assert.doesNotMatch(text(b), /2 open deals|too quickly/); }
   assert.equal(ctx.deals.openCount(OWN), 5);
 });
+
+test('a stale setup step left behind by a late post is swept away when the next step posts', async () => {
+  const ctx = setup(); ctx.client = { ...(ctx.client ?? {}), user: { id: 'BOTID' } };
+  const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
+  ch.messages.fetch = async (a) => (typeof a === 'string' ? ch.msgs.get(a) : new Map(ch.msgs));
+  const stale = await ch.send({ components: [{ toJSON: () => ({ custom_id: `nx:am-roleok:${id}` }) }] }); stale.author = { id: 'BOTID' };
+  await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
+  assert.ok(!ch.msgs.has(stale.id), 'stale step message removed');
+  assert.ok(ch.msgs.has(ctx.deals.get(id).card_message_id), 'the deal card is kept');
+});
