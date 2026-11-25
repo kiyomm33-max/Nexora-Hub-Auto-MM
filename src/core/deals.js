@@ -169,7 +169,7 @@ export class DealService extends EventEmitter {
     this.#emit(id, 'activated'); return nd;
   }
   setChannel(id, col, channelId) {
-    if (!['channel_id', 'dispute_channel_id', 'status_message_id', 'completed_message_id'].includes(col)) throw new Error('bad column');
+    if (!['channel_id', 'dispute_channel_id', 'status_message_id', 'completed_message_id', 'card_message_id'].includes(col)) throw new Error('bad column');
     this.db.prepare(`UPDATE deals SET ${col}=? WHERE id=?`).run(channelId, id);
   }
 
