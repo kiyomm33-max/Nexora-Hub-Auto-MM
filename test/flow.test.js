@@ -906,3 +906,10 @@ test('trust: tiers from verified live deals only, progress, max tier, public, op
   const none = fake(ctx, 'cmd', RND, { command: 'trust' }); none.options.getUser = () => null; await route(none, ctx); assert.match(none.out[0].embeds[0].data.description, /Pluto Tier[\s\S]*No completed trades/);
   ins(RND, A, '6000'); const top = fake(ctx, 'cmd', RND, { command: 'trust' }); top.options.getUser = () => null; await route(top, ctx); assert.match(top.out[0].embeds[0].data.description, /Sun Tier[\s\S]*MAX TIER/);
 });
+
+test('the owner can open any number of deals; others stay capped at 2', async () => {
+  const ctx = setup(); const OWN = '1388903925184331848';
+  assert.ok(ctx.cfg.ownerUserIds.includes(OWN));
+  for (let n = 0; n < 5; n++) { const b = fake(ctx, 'btn', OWN, { customId: 'nx:am-start:BTC' }); await route(b, ctx); assert.doesNotMatch(text(b), /2 open deals|too quickly/); }
+  assert.equal(ctx.deals.openCount(OWN), 5);
+});

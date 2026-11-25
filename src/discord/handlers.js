@@ -120,7 +120,7 @@ async function callStaff(i, ctx, key, label) {
 
 // ---------- tickets ----------
 async function openTicket(i, ctx, subject, details) {
-  limit(ctx, i, 'ticket', 3, 600e3);
+  if (!(ctx.cfg.ownerUserIds ?? []).includes(i.user.id)) limit(ctx, i, 'ticket', 3, 600e3);
   subject = V.text(subject, { min: 3, max: 80, label: 'Subject' }); details = V.text(details, { min: 10, max: 1000, label: 'Details' });
   const id = rooms.newTicketId();
   const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: LEVELS.admin, topic: `Support ticket ${id}` });

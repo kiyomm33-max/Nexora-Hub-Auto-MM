@@ -101,8 +101,9 @@ const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, vo
 export async function startAuto(i, ctx, key) {
   const coin = ui.COINS[key]; if (!coin) throw new UserError('Unknown coin.');
   if (ctx.mode === 'live' && !ctx.cfg.coins.enabled.includes(key)) throw new UserError(`${coin.label} deals are not available right now.`);
-  const r = ctx.limiter.check(`amstart:${i.user.id}`, 3, 600e3); if (!r.ok) throw new UserError('Slow down — you are opening deals too quickly.');
-  if (ctx.deals.openCount(i.user.id) >= 2) throw new UserError('You already have 2 open deals. Finish or close one first.');
+  const owner = (ctx.cfg.ownerUserIds ?? []).includes(i.user.id); // the owner can open any number of deals
+  if (!owner) { const r = ctx.limiter.check(`amstart:${i.user.id}`, 3, 600e3); if (!r.ok) throw new UserError('Slow down — you are opening deals too quickly.'); }
+  if (!owner && ctx.deals.openCount(i.user.id) >= 2) throw new UserError('You already have 2 open deals. Finish or close one first.');
   await i.deferReply({ flags: EPH });
   const deal = ctx.deals.createAuto({ creator: i.user.id, asset: coin.asset, network: coin.network, channelId: null });
   let ch;
