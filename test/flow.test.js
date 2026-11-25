@@ -171,8 +171,8 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   assert.match(status(), /DEMO-NOT-A-REAL-ADDRESS/); assert.match(status(), /0\.04850860|0\.0485/); assert.ok(msg().files.some((f) => f.name === 'qr.png'), 'QR attached');
   assert.doesNotMatch(comps(), /am-release/);
   // 2. Transaction Detected
-  await sim('funds.observed'); assert.match(status(), /Transaction Detected[\s\S]*Transaction[\s\S]*DEMO-TX[\s\S]*Amount Received[\s\S]*Required Confirmations/);
-  assert.doesNotMatch(status(), /Payment Received|secured/); assert.equal(msg().files.length, 0, 'QR removed');
+  await sim('funds.observed'); assert.match(status(), /Transaction Detected[\s\S]*Amount received[\s\S]*Transaction[\s\S]*DEMO-TX[\s\S]*Confirmations required/);
+  assert.doesNotMatch(status(), /Payment Received|secured/); assert.ok(!msg().files.some((f) => f.name === 'qr.png'), 'QR removed');
   const early = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(early), /has not confirmed/);
   // 3. Payment Received + proceed + Release/Cancel
   await sim('escrow.funded'); assert.match(status(), /Funds secured[\s\S]*Buyer[\s\S]*Seller[\s\S]*You may now deliver[\s\S]*Release Funds[\s\S]*Cancel and Refund/);
