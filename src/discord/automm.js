@@ -408,9 +408,6 @@ export async function releaseYes(i, ctx, id) {
   const r = await locked(ctx, id, async () => ctx.deals.scheduleRelease(id, i.user.id, ctx.cfg.releaseDelaySec));
   await i.update({ components: [ui.notice(r.started ? 'Release countdown started.' : 'A release is already in progress.')] });
   if (!r.started) return;
-  const at = Math.floor(Date.parse(r.deal.release_at) / 1000);
-  const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`nx:am-relcancel:${id}`).setLabel('Cancel release').setStyle(ButtonStyle.Danger));
-  await i.channel.send({ embeds: [ui.base(ctx.cfg, 'Release countdown', `<@${i.user.id}> started a release.\nFunds are released <t:${at}:R> (at <t:${at}:T>).\nOnly <@${i.user.id}> can cancel before then.`, ui.BRAND.red)], components: [row], allowedMentions: { parse: [] } });
   await rooms.refreshStatus(ctx, ctx.deals.get(id));
   armRelease(ctx, id);
 }

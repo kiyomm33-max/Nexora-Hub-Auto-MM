@@ -496,7 +496,7 @@ function securedCard(cfg, d, { eur, txUrl }) {
     .addSeparatorComponents(sep())
     .addTextDisplayComponents(text(`**Buyer:** <@${d.sender_id}> Confirm release only after the complete delivery is received.\n**Seller:** <@${d.receiver_id}> You may now deliver. Your payout address is requested after the buyer releases the funds.`))
     .addSeparatorComponents(sep())
-    .addTextDisplayComponents(text(`**Transaction:** ${txLink(d.tx_hash)} | **Confirmations:** \`${d.confirmations}\`${d.release_at ? `\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R>. <@${d.release_by}> can cancel before it ends.` : ''}`));
+    .addTextDisplayComponents(text(`**Transaction:** ${txLink(d.tx_hash)} | **Confirmations:** \`${d.confirmations}\`${d.release_at ? `\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R>.` : ''}`));
   const btns = [
     btn(`nx:am-release:${d.id}`, 'Release Funds', ButtonStyle.Success).setEmoji(eid('lock', '🔓')).setDisabled(!!d.release_at),
     btn(`nx:am-cancelask:${d.id}`, 'Cancel and Refund', ButtonStyle.Secondary).setEmoji('1575259368771948705').setDisabled(!!d.release_at)];
@@ -577,7 +577,7 @@ export function releaseConfirmPayload(cfg, d) {
       .addTextDisplayComponents(text(`## ${ge('lock', '🔓')} Confirm release\nBuyer <@${d.sender_id}>, this is the final release approval for deal ${shortId(d)}.`))
       .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575259368771948705.png?size=128')))
     .addSeparatorComponents(sep())
-    .addTextDisplayComponents(text(`**Confirm only if:** the complete item or service has been received and verified.\n**Result:** after a ${cfg.releaseDelaySec}-second countdown (you can cancel it until it ends) the seller can enter the payout address. This decision cannot be undone after the transaction is sent.\n**Sends:** \`$${d.receive_usd} USD\` worth of ${d.asset} to <@${d.receiver_id}>.`))
+    .addTextDisplayComponents(text(`**Confirm only if:** the complete item or service has been received and verified.\n**Result:** after a ${cfg.releaseDelaySec}-second countdown the seller can enter the payout address. This decision cannot be undone after the transaction is sent.\n**Sends:** \`$${d.receive_usd} USD\` worth of ${d.asset} to <@${d.receiver_id}>.`))
     .addSeparatorComponents(sep())
     .addActionRowComponents(row(btn(`nx:am-relyes:${d.id}`, 'Confirm Release', ButtonStyle.Danger).setEmoji(eid('lock', '🔓')), btn(`nx:am-relno:${d.id}`, 'Keep Funds Locked', ButtonStyle.Secondary).setEmoji('1575259368771948705')));
   return { flags: (1 << 15) | 64, components: [box] };
