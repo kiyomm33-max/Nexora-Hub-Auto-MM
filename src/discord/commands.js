@@ -30,6 +30,8 @@ export const definitions = [
     .addStringOption((o) => o.setName('title').setDescription('Optional bold title').setMaxLength(256))
     .addChannelOption((o) => o.setName('channel').setDescription('Where to post it (default: this channel)')),
   new SlashCommandBuilder().setName('rewards').setDescription('Status rewards wallet: deposit address, balance and what is owed (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('trust').setDescription('Trust tier, verified volume and progress to the next tier').setDMPermission(false)
+    .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),
