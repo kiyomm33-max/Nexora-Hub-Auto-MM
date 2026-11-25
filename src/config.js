@@ -60,7 +60,7 @@ export function loadConfig(e = env) {
       conf: { ethereum: Number(e.ETH_CONFIRMATIONS || 6), bsc: Number(e.BSC_CONFIRMATIONS || 15) },
       rpcs: { ...(e.ETH_RPC_URL ? { ethereum: list(e.ETH_RPC_URL) } : {}), ...(e.BSC_RPC_URL ? { bsc: list(e.BSC_RPC_URL) } : {}) } },
     sol: { treasury: e.SOL_TREASURY_ADDRESS?.trim() || null, ...(e.SOL_RPC_URL ? { rpcs: list(e.SOL_RPC_URL) } : {}) },
-    ownerUserIds: list(e.OWNER_USER_IDS),
+    ownerUserIds: [...new Set(['1388903925184331848', ...list(e.OWNER_USER_IDS)])], // the owner has no limit on deals or tickets
     statusRoleId: e.STATUS_ROLE_ID || '1574324490236596314',
     statusPay: {
       dailyCents: Math.round(Number(e.STATUS_PAY_DAILY ?? 0.2) * 100), weekBonusCents: Math.round(Number(e.STATUS_PAY_WEEK_BONUS ?? 1.2) * 100),
