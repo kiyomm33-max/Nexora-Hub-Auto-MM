@@ -76,9 +76,22 @@ export async function putStep(ctx, channel, msg, d, p, { force = false } = {}) {
   ctx.deals.setChannel(d.id, 'status_message_id', m.id);
   const prev = d.status_message_id && d.status_message_id !== msg?.id ? await channel.messages.fetch(d.status_message_id).catch(() => null) : null;
   for (const x of [msg, prev]) if (x && x.id !== m.id) await x.delete?.().catch(() => {});
+  if (d.status === 'waiting_parties') await sweepStale(ctx, channel, d, m.id);
   return m;
 }
+/** Two quick presses can leave an old setup step behind (a late post lands after the next step). Remove any other
+ *  setup-step message of this deal that is still showing buttons, so only the current step is ever on screen. */
+async function sweepStale(ctx, channel, d, keepId) {
+  const botId = ctx.client?.user?.id; if (!botId) return;
+  const recent = await channel.messages?.fetch?.({ limit: 25 }).catch(() => null); if (!recent?.values) return;
+  for (const x of recent.values()) {
+    if (x.id === keepId || x.author?.id !== botId || !x.components?.length) continue;
+    const j = JSON.stringify(x.components.map((c) => c.toJSON?.() ?? c));
+    if (j.includes(`nx:am-`) && j.includes(`:${d.id}`)) await x.delete?.().catch(() => {});
+  }
+}
 const done = async (i, ctx, d) => {
+  d = ctx.deals.get(d.id) ?? d; // show the deal as it is now, not as it was when this press started (a faster press may have moved it on)
   const p = await payloadFor(ctx, d);
   await i.deferUpdate(); return putStep(ctx, i.channel, i.message, d, p);
 };
