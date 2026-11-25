@@ -39,8 +39,8 @@ export function completedEmbed(cfg, d, names, info, { test = false } = {}) {
     test ? '**Test post. The data below is a sample, not a real deal.**' : d.mode === 'demo' ? '**DEMO deal** - simulated, no real funds.' : null,
     test || d.mode === 'demo' ? '' : null,
     '**Deal Summary**',
-    `> **Sender** - ${names.sender ?? names.a}`, `> **Receiver** - ${names.receiver ?? names.b}`, names.middleman ? `> **Middleman** - ${names.middleman}` : null, `> **Deal ID** - \`${d.id}\``, '',
-    '**Value**', `> **USD Amount** - \`$${usd}\``, `> **Crypto Sent** - **${sent}** (${coinLabel})`,
+    `> <:bluestar:1575103080373157971> **Sender** - ${names.sender ?? names.a}`, `> <:bluediamond:1575104739690024980> **Receiver** - ${names.receiver ?? names.b}`, names.middleman ? `> **Middleman** - ${names.middleman}` : null, `> <:tasks:1575100811950821467> **Deal ID** - \`${d.id}\``, '',
+    '**Value**', `> <:Simbol_de_dolar_blau_neo_metalli:1575122530015125585> **USD Amount** - \`$${usd}\``, `> <:download:1575100863473782855> **Crypto Sent** - **${sent}** (${coinLabel})`,
     info?.txid ? '' : null, info?.txid ? '**Blockchain Proof**' : null, info?.txid ? `\`${shortTx(info.txid)}\`` : null, '',
     '*Want your name shown or hidden here? Use* `/set-privacy`',
   ].filter((x) => x !== null).join('\n');
