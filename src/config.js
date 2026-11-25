@@ -19,6 +19,7 @@ export function loadConfig(e = env) {
     token: e.DISCORD_TOKEN,
     clientId: e.DISCORD_CLIENT_ID,
     guildId: e.GUILD_ID,
+    autoRoleId: (e.AUTO_ROLE_ID === 'off' ? '' : e.AUTO_ROLE_ID || '1573327824188735658'), // given to every member, new and existing (set AUTO_ROLE_ID=off to disable)
     port: Number(e.PORT || 8080),
     dataDir: e.DATA_DIR || './data',
     backupIntervalHours: Number(e.BACKUP_INTERVAL_HOURS || 6),
