@@ -25,6 +25,10 @@ export const definitions = [
   new SlashCommandBuilder().setName('set-privacy').setDescription('Show or hide your name on completed deal posts').setDMPermission(false).setDefaultMemberPermissions(null)
     .addStringOption((o) => o.setName('name').setDescription('Show your name, or hide it as Anonymous').setRequired(true).addChoices({ name: 'Hide my name (Anonymous)', value: 'hide' }, { name: 'Show my name', value: 'show' })),
   new SlashCommandBuilder().setName('testdone').setDescription('Post a sample completed-deal message in this channel (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('say').setDescription('Post an embed with the Nexora thumbnail (staff)').setDMPermission(false)
+    .addStringOption((o) => o.setName('message').setDescription('What the embed says. Type \\n for a new line').setRequired(true).setMaxLength(4000))
+    .addStringOption((o) => o.setName('title').setDescription('Optional bold title').setMaxLength(256))
+    .addChannelOption((o) => o.setName('channel').setDescription('Where to post it (default: this channel)')),
   new SlashCommandBuilder().setName('rewards').setDescription('Status rewards wallet: deposit address, balance and what is owed (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),

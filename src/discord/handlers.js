@@ -24,6 +24,7 @@ import * as inv from '../core/invites.js';
 import * as privacy from '../core/privacy.js';
 import { fromSat } from '../providers/ltc.js';
 import * as mod from './moderation.js';
+import { logoFile } from './status.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -275,6 +276,21 @@ const commands = {
     const o = i.options;
     return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
       options: [1, 2, 3, 4, 5].map((n) => o.getString(`option${n}`)).filter(Boolean) });
+  },
+  async say(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const text = (i.options.getString('message', true) ?? '').replace(/\\n/g, '\n').trim(); const title = i.options.getString('title')?.trim();
+    if (!text) throw new UserError('Say something.');
+    if (text.length > 4000) throw new UserError('That is too long for an embed (4000 characters max).');
+    const target = i.options.getChannel?.('channel') ?? i.channel;
+    if (!target?.send) throw new UserError('I cannot post in that channel.');
+    const embed = ui.base(ctx.cfg, title || null, text).setThumbnail('attachment://status.png');
+    if (!title) embed.setTitle(null);
+    try { await target.send({ embeds: [embed], files: [logoFile()], allowedMentions: { parse: [] } }); }
+    catch (e) { throw new UserError('I could not post there. Check that I can **view** and **send messages** in that channel.'); }
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'say', detail: { staff: true, channel: target.id, length: text.length } });
+    if (i.prefix) { i.message?.delete?.().catch(() => {}); return; }
+    return say(ctx, i, 'Posted', `Your embed is in <#${target.id}>.`);
   },
   async ban(i, ctx) { return mod.ban(i, ctx, { need, say }); },
   async kick(i, ctx) { return mod.kick(i, ctx, { need, say }); },
