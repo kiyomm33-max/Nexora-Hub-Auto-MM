@@ -148,9 +148,9 @@ export function supportPanelPayload() {
 }
 // Icons of the deal card: custom emojis from the Nexora server. Change an ID here to swap one.
 export const CARD_ICONS = { title: '<:add:1575069932130140220>', sender: '<:bluestar:1575122626307948614>', receiver: '<:bluediamond:1575122581525237841>', instruction: '<:tasks:1575100811950821467>', amount: '<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585>', thumb: 'https://cdn.discordapp.com/emojis/1575069932130140220.png?size=128' };
-const STEP_STAGE = { type: 1, partner: 1, roles: 2, describe: 3, accept: 3, amount: 3, amount_confirm: 3, fee: 3, fee_confirm: 3 };
+const STEP_STAGE = { type: 1, partner: 1, roles: 2, roles_confirm: 2, describe: 3, accept: 3, amount: 3, amount_confirm: 3, fee: 3, fee_confirm: 3 };
 const STEP_TEXT = {
-  type: 'The opener must invite the other party.', partner: 'The opener must invite the other party.', roles: 'Both traders must pick a role: Sender or Receiver.',
+  type: 'The opener must invite the other party.', partner: 'The opener must invite the other party.', roles: 'Both traders must pick a role: Sender or Receiver.', roles_confirm: 'Both traders must confirm the roles.',
   describe: 'A trader must write the deal details.', accept: 'The other trader must accept the deal description.', amount: 'State the deal amount in USD.',
   amount_confirm: 'Both traders must confirm the amount.', fee: 'The sender must choose who pays the fee.', fee_confirm: 'The receiver must confirm the fee choice.',
 };
@@ -236,6 +236,23 @@ export function stepPayload(cfg, d, set) {
         .addActionRowComponents(row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Secondary), btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
         .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
       return { flags: 1 << 15, components: [text(`${parties(d)} Welcome! Select roles below.`), box], files: [lineFile()] };
+    }
+    case 'roles_confirm': {
+      const ok = (u) => (set.votes ?? {})[u] === 'confirmed';
+      const tick = (u) => (ok(u) ? ' (confirmed)' : '');
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addSectionComponents(new SectionBuilder()
+          .addTextDisplayComponents(text('## <:checkmark:1575069601312808970> Confirm your roles\nBoth parties must confirm before moving on. Select Again to change your pick.'))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575248196471492618.png?size=128')))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`**<:Sender:1575262944063787161> Sender:** <@${d.sender_id}>${tick(d.sender_id)}\n**<:download:1575100863473782855> Receiver:** <@${d.receiver_id}>${tick(d.receiver_id)}`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(
+          btn(`nx:am-roleok:${d.id}`, 'Confirm Roles', ButtonStyle.Success).setEmoji('1575069601312808970'),
+          btn(`nx:am-rolesagain:${d.id}`, 'Select Again', ButtonStyle.Secondary).setEmoji('1575069932130140220'),
+          btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [text(`${parties(d)} Confirm the roles below.`), box], files: [lineFile()] };
     }
     case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };

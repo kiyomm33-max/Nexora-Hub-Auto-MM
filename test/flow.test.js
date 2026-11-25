@@ -62,7 +62,7 @@ async function runToRoom(ctx, { amount = '20', feeChoice = 'receiver' } = {}) {
   const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const sel = async (u, cid, extra) => { const i = fake(ctx, 'select', u, { customId: cid, channel: ch, ...extra }); await route(i, ctx); return i; };
   await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: B } }, values: [] });
-  await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`);
+  await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`); await click(ctx, A, `nx:am-roleok:${id}`); await click(ctx, B, `nx:am-roleok:${id}`);
   await submit(ctx, A, `nx:am-descmodal:${id}`, { desc: '20k Robux for $20 of LTC' });
   await click(ctx, B, `nx:am-accept:${id}`);
   await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount });
@@ -111,6 +111,13 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   await click(ctx, A, `nx:am-rolereset:${id}`); assert.deepEqual(ctx.deals.setup(ctx.deals.get(id)).votes, {});
   await click(ctx, B, `nx:am-role:${id}:sender`); await click(ctx, A, `nx:am-role:${id}:receiver`);
   const r = ctx.deals.get(id); assert.equal(r.sender_id, B); assert.equal(r.receiver_id, A);
+  assert.equal(ctx.deals.setup(r).step, 'roles_confirm');
+  { const j = JSON.stringify(ctx.chans.get(ctx.room).sent.at(-1).components.map((c) => c.toJSON())); for (const m of [/Confirm your roles/, /Confirm Roles/, /Select Again/, /Cancel Deal/, /1575262944063787161/, /1575100863473782855/, /line\.png/]) assert.match(j, m); }
+  assert.match(text(await click(ctx, RND, `nx:am-roleok:${id}`)), /Only the two traders/);
+  await click(ctx, A, `nx:am-rolesagain:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'roles');
+  await click(ctx, B, `nx:am-role:${id}:sender`); await click(ctx, A, `nx:am-role:${id}:receiver`);
+  await click(ctx, A, `nx:am-roleok:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'roles_confirm', 'one confirmation is not enough');
+  await click(ctx, B, `nx:am-roleok:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'describe');
   await submit(ctx, B, `nx:am-descmodal:${id}`, { desc: 'He is giving me 20k Robux for $20 LTC' });
   assert.match(text(await click(ctx, B, `nx:am-accept:${id}`)), /other trader has to accept/);
   await click(ctx, A, `nx:am-decline:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'describe'); assert.equal(ctx.deals.get(id).item, '');

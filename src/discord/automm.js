@@ -155,8 +155,21 @@ export const handlers = {
       if (holder) throw new UserError(`That role is already taken by <@${holder[0]}>.`);
       votes[i.user.id] = role;
       const sender = Object.keys(votes).find((u) => votes[u] === 'sender'); const receiver = Object.keys(votes).find((u) => votes[u] === 'receiver');
-      if (sender && receiver) return ctx.deals.patch(id, i.user.id, { sender_id: sender, receiver_id: receiver, setup: { ...set, step: 'describe', votes: {} } }, 'setup.roles_set');
+      if (sender && receiver) return ctx.deals.patch(id, i.user.id, { sender_id: sender, receiver_id: receiver, setup: { ...set, step: 'roles_confirm', votes: {} } }, 'setup.roles_set');
       return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes } }, 'setup.role_vote', { silent: true });
+    });
+    return done(i, ctx, nd);
+  },
+  async rolesagain(i, ctx, [id]) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'roles_confirm');
+    return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { setup: setStep(ctx, d, 'roles') }, 'setup.roles_reselect', { silent: true })));
+  },
+  async roleok(i, ctx, [id]) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'roles_confirm');
+    const nd = await locked(ctx, id, async () => {
+      const cur = load(ctx, id); const set = ctx.deals.setup(cur); const votes = { ...set.votes, [i.user.id]: 'confirmed' };
+      if (Object.keys(votes).length < 2) return ctx.deals.patch(id, i.user.id, { setup: { ...set, votes } }, 'setup.roles_vote', { silent: true });
+      return ctx.deals.patch(id, i.user.id, { setup: setStep(ctx, cur, 'describe') }, 'setup.roles_confirmed');
     });
     return done(i, ctx, nd);
   },
