@@ -26,6 +26,7 @@ export const SPEC = {
   purge: { desc: 'Delete the last 1 to 100 messages here, optionally only from one member', args: [['amount', 'int', true], ['member', 'user', false]], textOnly: true },
   role: { desc: 'Add a role to a member, or remove it if they have it. `.role all @role` gives it to everyone', args: [['member', 'user', true], ['role', 'role', true]], textOnly: true },
   say: { desc: 'Post an embed with the Nexora thumbnail (also /say)', args: [['message', 'rest', true]], textOnly: true },
+  pause: { desc: 'Turn the welcome message and join ping off for a while: `.pause welcome|ping|both 12h`, `.pause off`, or `.pause` to see the status', args: [['what', 'string', false], ['duration', 'string', false]], textOnly: true },
   rewards: { desc: 'Show the status rewards wallet: deposit address, balance and what is owed', args: [] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },

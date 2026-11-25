@@ -1,3 +1,4 @@
+import { isPaused } from '../core/pause.js';
 import { EmbedBuilder } from 'discord.js';
 import { BRAND } from './ui.js';
 
@@ -19,7 +20,7 @@ export function welcomePayload(cfg, user) {
 }
 
 export async function sendWelcome(ctx, member) {
-  if (member.user?.bot) return;
+  if (member.user?.bot || (ctx.db && isPaused(ctx.db, 'welcome'))) return;
   const id = ctx.cfg.channels.welcome; if (!id) return;
   const ch = await ctx.client.channels.fetch(id).catch(() => null); if (!ch?.send) return;
   await ch.send(welcomePayload(ctx.cfg, member.user));
