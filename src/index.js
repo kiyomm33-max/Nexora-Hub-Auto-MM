@@ -11,6 +11,7 @@ import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
 import { sendWelcome } from './discord/welcome.js';
 import { pingNewMember } from './discord/joinping.js';
+import { seedPause } from './core/pause.js';
 import { giveAutoRole, sweepAutoRole } from './discord/autorole.js';
 import { commandFromMessage } from './discord/prefix.js';
 import { countFromMessage, startActivity } from './discord/activity.js';
@@ -81,6 +82,7 @@ function boot(level) {
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg, { clear: cfg.messageContent && !cfg.slashCommands }); if (cfg.messageContent && !cfg.slashCommands) log.info('only /giveaway and /poll are slash commands; the rest use the prefix', { prefix: cfg.prefix }); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
+    try { if (seedPause(db, '2026-11-25-12h', 12 * 3600e3)) log.info('welcome message and join ping paused for 12 hours'); } catch (e) { log.error('pause seed failed', e); }
     if (level >= 2 && cfg.autoRoleId) client.guilds.fetch(cfg.guildId).then((g) => sweepAutoRole(ctx, g)).catch((e) => log.error('auto role sweep failed', e));
     // After a restart, put the live status message (with its buttons) back at the bottom of rooms that are waiting on a person.
     for (const d of db.prepare("SELECT * FROM deals WHERE status='verification_pending' AND mode='live' AND escrow_status='provider_confirmed' AND release_at IS NULL AND (released_at IS NULL OR payout_address IS NULL)").all()) await refreshStatus(ctx, d, { bump: true }).catch((e) => log.error('status repost failed', e));

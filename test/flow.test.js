@@ -860,3 +860,17 @@ test('auto role: new joiners and existing members get the role; unsafe roles are
   added.length = 0; role.position = 60; assert.equal(await giveAutoRole(ctx, mk('n2')), false); role.position = 5;
   role.permissions = { has: (p) => p === 'Administrator' }; assert.equal(await giveAutoRole(ctx, mk('n3')), false); assert.equal(added.length, 0);
 });
+
+test('pause: welcome and join ping stay off until the time is up, .pause controls them', async () => {
+  const { sendWelcome } = await import('../src/discord/welcome.js'); const { pingNewMember } = await import('../src/discord/joinping.js'); const { seedPause, isPaused } = await import('../src/core/pause.js');
+  const ctx = setup(); const posts = []; const ch = { id: 'w', send: async (p) => { posts.push(p); return { delete: async () => {} }; } };
+  ctx.client.channels.fetch = async () => ch; ctx.cfg.channels.welcome = 'w'; ctx.cfg.channels.joinPing = ['w'];
+  const member = { id: A, user: { id: A, username: 'x', bot: false } };
+  assert.equal(seedPause(ctx.db, 't', 3600e3), true); assert.equal(seedPause(ctx.db, 't', 3600e3), false, 'seed runs once');
+  await sendWelcome(ctx, member); assert.equal(await pingNewMember(ctx, member, { ttl: 1 }), 0); assert.equal(posts.length, 0);
+  const st = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'pause' }); await route(st, ctx); assert.match(text(st), /off until/);
+  const deny = fake(ctx, 'cmd', RND, { command: 'pause', opts: { what: 'off' } }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  const on = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'pause', opts: { what: 'off' } }); await route(on, ctx); assert.equal(isPaused(ctx.db, 'welcome'), false);
+  await sendWelcome(ctx, member); assert.equal(await pingNewMember(ctx, member, { ttl: 1 }), 1); assert.equal(posts.length, 2);
+  const one = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'pause', opts: { what: 'ping', duration: '2h' } }); await route(one, ctx); assert.ok(isPaused(ctx.db, 'ping') && !isPaused(ctx.db, 'welcome'));
+});

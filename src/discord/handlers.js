@@ -24,6 +24,7 @@ import * as inv from '../core/invites.js';
 import * as privacy from '../core/privacy.js';
 import { fromSat } from '../providers/ltc.js';
 import * as mod from './moderation.js';
+import { PAUSABLE, pausedUntil, setPause } from '../core/pause.js';
 import { logoFile } from './status.js';
 
 export { UserError } from './automm.js';
@@ -276,6 +277,20 @@ const commands = {
     const o = i.options;
     return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
       options: [1, 2, 3, 4, 5].map((n) => o.getString(`option${n}`)).filter(Boolean) });
+  },
+  async pause(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const what = (i.options.getString('what') ?? '').toLowerCase(); const dur = i.options.getString('duration');
+    const label = { welcome: 'Welcome message', ping: 'Join ping' };
+    const state = () => PAUSABLE.map((n) => { const t = pausedUntil(ctx.db, n); return `**${label[n]}:** ${t ? `off until <t:${Math.floor(t / 1000)}:f> (<t:${Math.floor(t / 1000)}:R>)` : 'on'}`; }).join('\n');
+    if (!what) return say(ctx, i, 'Welcome and join ping', state());
+    const names = what === 'both' || what === 'off' || what === 'on' ? PAUSABLE : PAUSABLE.includes(what) ? [what] : null;
+    if (!names) throw new UserError('Usage: `.pause welcome|ping|both 12h`, or `.pause off` to turn both back on.');
+    const resume = what === 'off' || what === 'on' || /^(off|on|resume)$/i.test(dur ?? '');
+    const ms = resume ? null : mod.parseDuration(dur ?? '12h');
+    for (const n of names) setPause(ctx.db, n, ms);
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: resume ? 'pause.resume' : 'pause.set', detail: { staff: true, names, ms } });
+    return say(ctx, i, resume ? 'Back on' : 'Paused', state());
   },
   async say(i, ctx) {
     need(i, ctx, 'panel.post');
