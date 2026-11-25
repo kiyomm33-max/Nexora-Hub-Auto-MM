@@ -35,6 +35,7 @@ export function completedEmbed(cfg, d, names, info, { test = false } = {}) {
   const usd = Number(d.receive_usd || d.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const sent = info?.amount ? `${info.amount} ${d.asset}` : d.asset;
   const lines = [
+    '## <:checkmark:1575069601312808970> Funds Released',
     '*Nexora Auto MM - paid out to the receiver*', '',
     test ? '**Test post. The data below is a sample, not a real deal.**' : d.mode === 'demo' ? '**DEMO deal** - simulated, no real funds.' : null,
     test || d.mode === 'demo' ? '' : null,
@@ -44,7 +45,7 @@ export function completedEmbed(cfg, d, names, info, { test = false } = {}) {
     info?.txid ? '' : null, info?.txid ? '**Blockchain Proof**' : null, info?.txid ? `\`${shortTx(info.txid)}\`` : null, '',
     '*Want your name shown or hidden here? Use* `/set-privacy`',
   ].filter((x) => x !== null).join('\n');
-  return base(cfg, 'Funds Released', lines, BLUE);
+  return base(cfg, null, lines, BLUE).setTitle(null);
 }
 
 export function vouchEmbed(cfg, { dealId, author, target, rating, text, createdAt }) {
