@@ -138,9 +138,54 @@ export function supportPanelPayload() {
   return { flags: 1 << 15, components: [c] };
 }
 export const startedEmbeds = (cfg, d) => [
-  base(cfg, `${(() => { const c = Object.values(COINS).find((x) => x.asset === d.asset && x.network === d.network); return c ? coinIcon(c) : ''; })()}  Deal Started — ${coinName(d)}`, `Welcome to the **Nexora Hub** automated cryptocurrency middleman system.\n\n**Deal ID:** \`${d.id}\`\nPlease **contact support** if you need assistance.${d.mode === 'demo' ? '\n\n**DEMO MODE** — simulated escrow, no real funds.' : ''}`),
   base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal **inside this ticket**. Nobody from Nexora Hub will ever ask for **passwords, 2FA codes, cookies, seed phrases or private keys**.', BRAND.red),
 ];
+// Icons of the deal card: custom emojis from the Nexora server. Change an ID here to swap one.
+export const CARD_ICONS = { title: '<:add:1575069932130140220>', sender: '<:bluestar:1575122626307948614>', receiver: '<:bluediamond:1575122581525237841>', instruction: '<:tasks:1575100811950821467>', amount: '<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585>', thumb: 'https://cdn.discordapp.com/emojis/1575069932130140220.png?size=128' };
+const STEP_STAGE = { type: 1, partner: 1, roles: 2, describe: 3, accept: 3, amount: 3, amount_confirm: 3, fee: 3, fee_confirm: 3 };
+const STEP_TEXT = {
+  type: 'The opener must invite the other party.', partner: 'The opener must invite the other party.', roles: 'Both traders must pick a role: Sender or Receiver.',
+  describe: 'A trader must write the deal details.', accept: 'The other trader must accept the deal description.', amount: 'State the deal amount in USD.',
+  amount_confirm: 'Both traders must confirm the amount.', fee: 'The sender must choose who pays the fee.', fee_confirm: 'The receiver must confirm the fee choice.',
+};
+const PHASE_TEXT = {
+  invoice: 'The sender must send the exact amount to the address in the invoice.', detected: 'Payment detected. Waiting for confirmations.',
+  short: 'The payment is less than the deal amount. Both traders must decide.', received: 'Payment confirmed. The sender presses Release once the trade is delivered.',
+  payout: 'The receiver must send their payout address.', paying: 'Sending the payout to the receiver.', completed: 'Funds released. This deal is complete.',
+  cancelled: 'This deal was cancelled.', disputed: 'This deal is disputed and under staff review.',
+};
+const STAGE_LABEL = ['Waiting for counterparty', 'Choosing roles', 'Agreeing on the deal', 'Waiting for payment', 'Release'];
+/** Where the deal is, 1 to 5, and what the traders have to do next. */
+export function dealProgress(d, set) {
+  if (d.status === 'waiting_parties') { const step = set?.step ?? 'partner'; return { stage: STEP_STAGE[step] ?? 1, label: STAGE_LABEL[(STEP_STAGE[step] ?? 1) - 1], instruction: STEP_TEXT[step] ?? STEP_TEXT.partner }; }
+  const ph = phaseOf(d); const stage = ['invoice', 'detected', 'short'].includes(ph) ? 4 : 5;
+  const label = d.status === 'completed' ? 'Completed' : d.status === 'cancelled' ? 'Cancelled' : d.status === 'disputed' ? 'Disputed' : STAGE_LABEL[stage - 1];
+  return { stage, label, instruction: PHASE_TEXT[ph] ?? PHASE_TEXT.received };
+}
+/** The live card at the top of a deal room. It is edited in place as the deal moves. */
+export function dealCard(cfg, d, set) {
+  const { stage, label, instruction } = dealProgress(d, set);
+  const coin = Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network);
+  const dots = [1, 2, 3, 4, 5].map((n) => (n <= stage ? '●' : '○')).join(' ');
+  const who = (id) => (id ? `<@${id}>` : 'not assigned');
+  const lines = [
+    `## ${CARD_ICONS.title} Deal \`${d.id}\``,
+    `**Hello <@${d.party_a}>, welcome to Nexora Hub.**`, '',
+    `**${label}:** | ${dots} Stage ${stage}/5`,
+  ].join('\n');
+  const info = [
+    `${coin ? coinIcon(coin) : ''} **Asset:** ${coin?.label ?? `${d.asset} on ${d.network}`}`,
+    `${CARD_ICONS.sender} **Sender:** ${who(d.sender_id)}`,
+    `${CARD_ICONS.receiver} **Receiver:** ${who(d.receiver_id)}`,
+    d.amount ? `${CARD_ICONS.amount} **Amount:** \`$${Number(d.amount).toFixed(2)}\`` : null,
+  ].filter(Boolean).join('\n');
+  const c = new ContainerBuilder().setAccentColor(d.status === 'disputed' ? BRAND.danger : BLUE)
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(lines)).setThumbnailAccessory(new ThumbnailBuilder({ media: { url: CARD_ICONS.thumb } })))
+    .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(info))
+    .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(`## ${CARD_ICONS.instruction} Current instruction\n${instruction}${d.mode === 'demo' ? '\n**DEMO MODE** - simulated escrow, no real funds.' : ''}`))
+    .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(`**Opened** <t:${Math.floor(Date.parse(d.created_at) / 1000)}:R>`));
+  return { flags: 1 << 15, components: [c], allowedMentions: { parse: [] } };
+}
 export const closeButton = (id) => [row(btn(`nx:am-close:${id}`, 'Close'))];
 
 const votesText = (d, set) => Object.entries(set.votes ?? {}).map(([u, v]) => `<@${u}>: **${v}**`).join('\n') || 'No answers yet.';

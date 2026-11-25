@@ -5,7 +5,7 @@ import { ChannelType, PermissionFlagsBits as P, AttachmentBuilder, ActionRowBuil
 import { LEVELS, CAPS } from '../core/permissions.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
-import { base, dealEmbed, completedEmbed, BRAND, phaseOf } from './ui.js';
+import { base, dealEmbed, completedEmbed, dealCard, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
 import { isHidden, ANON } from '../core/privacy.js';
 import { metaOf, parseBody } from './transcript.js';
@@ -40,6 +40,9 @@ const lastPhase = new Map();
 export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   const ch = await fetchChannel(ctx, deal.channel_id);
   if (!ch) return;
+  if (deal.card_message_id) { // the card at the top of the room follows the deal
+    try { const card = await ch.messages.fetch(deal.card_message_id); await card.edit(dealCard(ctx.cfg, deal, ctx.deals.setup(deal))); } catch (e) { log.warn('deal card update failed', { err: String(e?.message ?? e) }); }
+  }
   const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: { users: pingIds(ctx, deal) } };
   const phase = deal.status === 'waiting_parties' ? `s:${ctx.deals.setup(deal).step}` : phaseOf(deal);
   const changed = lastPhase.get(deal.id) !== phase; lastPhase.set(deal.id, phase);
