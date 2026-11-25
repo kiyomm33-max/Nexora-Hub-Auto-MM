@@ -1,6 +1,6 @@
 import { AttachmentBuilder, MediaGalleryBuilder, UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { fileURLToPath } from 'node:url';
-import { usdWorth } from '../core/fees.js';
+import { usdWorth, calcFee, feeCfgFor } from '../core/fees.js';
 import { STATUS } from '../core/deals.js';
 import { LABELS } from '../core/permissions.js';
 
@@ -94,7 +94,7 @@ export const COINS = {
 };
 export const coinName = (d) => Object.values(COINS).find((c) => c.asset === d.asset && c.network === d.network)?.label ?? `${d.asset} (${d.network})`;
 const text = (t) => new TextDisplayBuilder().setContent(t);
-import { emojiMap } from './emojis.js';
+import { emojiMap, guildEmoji } from './emojis.js';
 export const coinIcon = (c) => emojiMap.get(c.asset) ?? c.mark;
 const section = (t, key) => new SectionBuilder().addTextDisplayComponents(text(t))
   .setButtonAccessory(new ButtonBuilder().setCustomId(`nx:am-start:${key}`).setLabel('Start').setStyle(ButtonStyle.Primary));
@@ -257,7 +257,7 @@ export function stepPayload(cfg, d, set) {
     case 'describe': {
       const terms = set.terms ?? {}; const votes = set.votes ?? {};
       const any = Object.values(terms).some(Boolean);
-      const mark = (u) => (votes[u] === 'accepted' ? '<:checkmark:1575069601312808970> accepted' : votes[u] === 'skipped' ? '<:checkmark:1575069601312808970> skipped' : '⏳ waiting');
+      const mark = (u) => (votes[u] === 'accepted' ? '<:checkmark:1575069601312808970> accepted' : votes[u] === 'skipped' ? '<:checkmark:1575069601312808970> skipped' : `${guildEmoji.get('hourglass') ?? '⏳'} waiting`);
       const SENDER = '<:Sender:1575262944063787161>', RECEIVER = '<:download:1575100863473782855>';
       const shown = (u) => (terms[u] ? `>>> ${terms[u]}` : '*Not submitted yet*');
       const box = new ContainerBuilder().setAccentColor(BLUE)
@@ -284,10 +284,43 @@ export function stepPayload(cfg, d, set) {
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
     case 'accept': return { embeds: [e('Accept the deal description', `**Description** by <@${d.desc_by}>:\n>>> ${d.item}\n\n<@${d.desc_by === d.party_a ? d.party_b : d.party_a}>, do you accept this description?`)],
       components: [row(btn(`nx:am-accept:${d.id}`, 'Accept', ButtonStyle.Success), btn(`nx:am-decline:${d.id}`, 'Decline', ButtonStyle.Danger))] };
-    case 'amount': return { embeds: [e('Deal Amount', 'State the **amount in USD** the bot is expected to receive (eg. 100.59)\n\n**Ticket will be closed in 30 minutes if left unattended**')],
-      components: [row(btn(`nx:am-amount:${d.id}`, 'Enter amount', ButtonStyle.Primary))] };
-    case 'amount_confirm': return { embeds: [e('Amount Confirmation', `**Both users** must confirm the USD deal amount\n\n**Amount:** \`$${d.amount}\`\n\n${votesText(d, set)}`)],
-      components: [row(btn(`nx:am-amtok:${d.id}`, 'Correct', ButtonStyle.Success), btn(`nx:am-amtno:${d.id}`, 'Incorrect', ButtonStyle.Secondary))] };
+    case 'amount': {
+      const DOLLAR = '1575122530015125585';
+      const menu = new StringSelectMenuBuilder().setCustomId(`nx:am-amountunit:${d.id}`).setPlaceholder('Choose how to enter the price').addOptions(
+        { label: 'US Dollars', description: 'Enter the agreed price in USD', value: 'usd', emoji: { id: DOLLAR } },
+        { label: 'Euros', description: 'Enter the agreed price in EUR', value: 'eur', emoji: { id: DOLLAR } },
+        { label: 'Crypto amount', description: 'Enter the exact coin amount', value: 'crypto', emoji: { id: '1575100863473782855' } });
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addSectionComponents(new SectionBuilder()
+          .addTextDisplayComponents(text(`## <:Simbol_de_dolar_blau_neo_metalli:${DOLLAR}> Set the deal amount\nOnly the buyer (<@${d.sender_id}>) enters the agreed price. Choose the unit you used while negotiating; the bot will show every conversion for both parties to approve.`))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${DOLLAR}.png?size=128`)))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(new ActionRowBuilder().addComponents(menu))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [text(`<@${d.sender_id}> Set the deal amount below.`), box], files: [lineFile()] };
+    }
+    case 'amount_confirm': {
+      const DOLLAR = '1575122530015125585'; const q = set.quote ?? {}; const votes = set.votes ?? {};
+      const hourglass = guildEmoji.get('hourglass') ?? '⏳';
+      const mark = (u) => (votes[u] === 'confirmed' ? '<:checkmark:1575069601312808970>' : hourglass);
+      const fee = calcFee(d.amount, feeCfgFor(cfg, d.asset));
+      const line = [q.crypto && `\`${q.crypto} ${d.asset}\``, `\`$${d.amount} USD\``, q.eur && `\`€${q.eur} EUR\``].filter(Boolean).join(' | ');
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addSectionComponents(new SectionBuilder()
+          .addTextDisplayComponents(text(`## <:Simbol_de_dolar_blau_neo_metalli:${DOLLAR}> Review the final amount\n### ${line}\n**Price source:** \`${(q.unit ?? 'usd') === 'crypto' ? d.asset : (q.unit ?? 'usd').toUpperCase()}\` | **Platform fee:** \`${fee > 0 ? `$${Number(fee).toFixed(2)}` : 'Free'}\``))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${DOLLAR}.png?size=128`)))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(text(`${mark(d.sender_id)} **Buyer approval:** <@${d.sender_id}>\n${mark(d.receiver_id)} **Seller approval:** <@${d.receiver_id}>`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(
+          btn(`nx:am-amtok:${d.id}`, 'Approve Amount', ButtonStyle.Success).setEmoji('1575069601312808970'),
+          btn(`nx:am-amtno:${d.id}`, 'Select Again', ButtonStyle.Secondary).setEmoji(DOLLAR),
+          btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [text(`${parties(d)} Review and approve the amount below.`), box], files: [lineFile()] };
+    }
     case 'fee': {
       const box = new ContainerBuilder().setAccentColor(BLUE)
         .addTextDisplayComponents(text('## Service Fee Selection\nOnly the **sender** can choose how the middleman service fee will be handled for this deal. The receiver will confirm the selection.\n\nThe selected option will be applied after the deal is completed.'))
@@ -406,7 +439,8 @@ export function roomButtons(d, cfg) {
 export const partnerIdModal = (id) => modal(`nx:am-partnermodal:${id}`, 'Add the other trader', input('uid', 'Discord user ID', { min: 15, max: 25, placeholder: '123456789012345678' }));
 export const descModal = (id) => modal(`nx:am-descmodal:${id}`, 'Describe the deal', input('desc', 'What is being exchanged?', { style: TextInputStyle.Paragraph, min: 5, max: 300, placeholder: 'e.g. 20k Robux for $20 of LTC' }));
 export const termsModal = (id) => modal(`nx:am-termsmodal:${id}`, 'Your deal terms', input('terms', 'Your terms', { style: TextInputStyle.Paragraph, min: 5, max: 300, placeholder: 'e.g. 20k Robux, delivered by in-game trade within 1 hour' }));
-export const amountModal = (id) => modal(`nx:am-amountmodal:${id}`, 'Deal amount', input('amount', 'Amount in USD', { min: 1, max: 12, placeholder: '20' }));
+export const amountModal = (id, unit = 'usd', asset = '') => modal(`nx:am-amountmodal:${id}${unit === 'usd' ? '' : `:${unit}`}`, 'Deal amount',
+  input('amount', unit === 'eur' ? 'Amount in EUR' : unit === 'crypto' ? `Amount in ${asset}` : 'Amount in USD', { min: 1, max: 20, placeholder: unit === 'eur' ? '18.50' : unit === 'crypto' ? '0.25' : '20' }));
 export const ticketButtons = (id) => [row(btn(`nx:tstaff:${id}`, 'Request staff'), btn(`nx:tclose:${id}`, 'Close & save transcript', ButtonStyle.Danger))];
 export const payoutModal = (id, asset) => modal(`nx:am-payaddrmodal:${id}`, `Your ${asset} address`, input('addr', `${asset} address to receive the payout`, { min: 20, max: 100 }));
 

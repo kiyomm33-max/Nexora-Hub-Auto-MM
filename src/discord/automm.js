@@ -7,6 +7,7 @@ import { audit } from '../core/audit.js';
 import { calcFee, calcTotals, usdWorth, feeCfgFor } from '../core/fees.js';
 import { CAPS, LEVELS } from '../core/permissions.js';
 import { log } from '../logger.js';
+import { eurPerUsd } from '../core/fx.js';
 import * as ui from './ui.js';
 import * as rooms from './rooms.js';
 
@@ -21,6 +22,7 @@ export function pingIds(ctx, d) {
     switch (set.step) {
       case 'type': case 'partner': return ids(d.party_a);
       case 'accept': return ids(d.desc_by === d.party_a ? d.party_b : d.party_a);
+      case 'amount': return ids(d.sender_id);
       case 'fee': return ids(d.sender_id);
       case 'fee_confirm': return ids(d.receiver_id);
       default: return ids(d.party_a, d.party_b);
@@ -108,6 +110,7 @@ async function termsVote(i, ctx, id, vote) {
   });
   return done(i, ctx, nd);
 }
+const onlySender = (d, i) => { if (d.sender_id !== i.user.id) throw new UserError('Only the sender (buyer) enters the price.'); };
 const setStep = (ctx, d, step, votes = {}) => ({ ...ctx.deals.setup(d), step, votes });
 
 // ---------- start ----------
@@ -231,11 +234,28 @@ export const handlers = {
     if (d.desc_by === i.user.id) throw new UserError('Only the other trader can decline.');
     return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { item: '', desc_by: null, setup: setStep(ctx, d, 'describe') }, 'setup.description_declined')));
   },
-  amount: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); return i.showModal(ui.amountModal(id)); },
-  async amountmodal(i, ctx, [id]) {
-    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount');
-    const amount = V.usdAmount(i.fields.getTextInputValue('amount'));
-    return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { amount, setup: setStep(ctx, d, 'amount_confirm') }, 'setup.amount_set')));
+  amount: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); return i.showModal(ui.amountModal(id)); }, // legacy button
+  amountunit: (i, ctx, [id]) => {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); onlySender(d, i);
+    const unit = i.values?.[0]; if (!['usd', 'eur', 'crypto'].includes(unit)) throw new UserError('Choose how you want to enter the price.');
+    return i.showModal(ui.amountModal(id, unit, d.asset));
+  },
+  async amountmodal(i, ctx, [id, unit = 'usd']) {
+    const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); onlySender(d, i);
+    const raw = i.fields.getTextInputValue('amount');
+    const live = async (fn) => { try { return await fn(); } catch (e) { if (e.userFacing) throw new UserError(e.message); throw e; } };
+    const eurRate = await live(() => (ctx.eurPerUsd ?? eurPerUsd)()).catch((e) => { if (unit === 'eur') throw e; return null; });
+    const rate = await live(() => ctx.provider.usdRate?.(d)).catch((e) => { if (unit === 'crypto') throw e; return null; });
+    let usd;
+    if (unit === 'usd') usd = V.usdAmount(raw);
+    else {
+      const n = Number(String(raw).replace(/[$€,\s]/g, '')); if (!/^\d{1,9}(\.\d{1,8})?$/.test(String(raw).replace(/[$€,\s]/g, '')) || !(n > 0)) throw new UserError(`Enter a number, e.g. \`${unit === 'eur' ? '18.50' : '0.25'}\`.`);
+      if (unit === 'crypto' && !rate) throw new UserError(`The ${d.asset} price is not available right now.`);
+      usd = V.usdAmount((unit === 'eur' ? n / eurRate : n * rate).toFixed(2));
+    }
+    const stable = ['USDT', 'USDC'].includes(d.asset);
+    const quote = { unit, usd, eur: eurRate ? (Number(usd) * eurRate).toFixed(2) : null, crypto: stable ? usd : rate ? (Number(usd) / rate).toFixed(8) : null };
+    return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { amount: usd, setup: { ...setStep(ctx, d, 'amount_confirm'), quote } }, 'setup.amount_set')));
   },
   async amtno(i, ctx, [id]) {
     const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount_confirm');

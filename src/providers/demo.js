@@ -10,6 +10,7 @@ export class DemoProvider {
     const rate = DEMO_RATES[deal.asset] ?? 1;
     return { reference: `DEMO-${tag}`, address: `DEMO-NOT-A-REAL-ADDRESS-${tag}`, payAmount: (Number(deal.send_usd) / rate).toFixed(8), rateUsd: rate.toFixed(2), instructions: 'DEMO MODE' };
   }
+  async usdRate(d) { return DEMO_RATES[d.asset] ?? 1; }
   async cancelEscrow() { return { ok: true }; }
   async referDispute() { return { ok: true, note: 'Demo: dispute recorded (no real provider contacted).' }; }
   /** The sender approved release. A real provider would now wait for the receiver's payout address. */
