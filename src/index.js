@@ -11,6 +11,7 @@ import { scheduleBackups } from './jobs/backup.js';
 import { audit } from './core/audit.js';
 import { sendWelcome } from './discord/welcome.js';
 import { pingNewMember } from './discord/joinping.js';
+import { giveAutoRole, sweepAutoRole } from './discord/autorole.js';
 import { commandFromMessage } from './discord/prefix.js';
 import { countFromMessage, startActivity } from './discord/activity.js';
 import { startStatusLoop } from './discord/status.js';
@@ -57,7 +58,7 @@ function boot(level) {
   const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildInvites, ...(withMessages ? [GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] : []), ...(level >= 2 ? [GatewayIntentBits.GuildMembers] : []), ...(level >= 3 ? [GatewayIntentBits.GuildPresences] : [])];
   client = new Client({ intents });
   ctx.client = client; cfg.messageContent = withMessages;
-  if (level >= 2) client.on(Events.GuildMemberAdd, (m) => { sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)); pingNewMember(ctx, m).catch((e) => log.error('join ping failed', e)); });
+  if (level >= 2) client.on(Events.GuildMemberAdd, (m) => { sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)); pingNewMember(ctx, m).catch((e) => log.error('join ping failed', e)); giveAutoRole(ctx, m).catch((e) => log.error('auto role failed', e)); });
   if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx), statusAddressFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
   ctx.presenceTracking = level >= 3;
   startStatusLoop(client, ctx);
@@ -80,6 +81,7 @@ function boot(level) {
     try { ctx.guildOwnerId = (await client.guilds.fetch(cfg.guildId)).ownerId; log.info('guild owner resolved'); } catch (e) { log.error('could not fetch guild owner (check GUILD_ID)', e); }
     try { await registerCommands(cfg, { clear: cfg.messageContent && !cfg.slashCommands }); if (cfg.messageContent && !cfg.slashCommands) log.info('only /giveaway and /poll are slash commands; the rest use the prefix', { prefix: cfg.prefix }); } catch (e) { log.error('command registration failed', e); }
     recoverReleases(ctx); scheduleIdleCloser(ctx);
+    if (level >= 2 && cfg.autoRoleId) client.guilds.fetch(cfg.guildId).then((g) => sweepAutoRole(ctx, g)).catch((e) => log.error('auto role sweep failed', e));
     // After a restart, put the live status message (with its buttons) back at the bottom of rooms that are waiting on a person.
     for (const d of db.prepare("SELECT * FROM deals WHERE status='verification_pending' AND mode='live' AND escrow_status='provider_confirmed' AND release_at IS NULL AND (released_at IS NULL OR payout_address IS NULL)").all()) await refreshStatus(ctx, d, { bump: true }).catch((e) => log.error('status repost failed', e));
     if (provider.live) provider.start((ev) => { try { deals.applyProviderEvent(ev); } catch (e) { log.error('applyProviderEvent failed', e); } });

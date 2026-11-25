@@ -847,3 +847,16 @@ test('/say posts an embed with the Nexora thumbnail, staff only', async () => {
   const e = target.sent[0].embeds[0].data; assert.equal(e.title, 'News'); assert.equal(e.description, 'Line one\nLine two'); assert.equal(e.thumbnail.url, 'attachment://status.png'); assert.equal(target.sent[0].files.length, 1);
   assert.deepEqual(target.sent[0].allowedMentions, { parse: [] }); assert.match(text(ok), /Posted/);
 });
+
+test('auto role: new joiners and existing members get the role; unsafe roles are refused', async () => {
+  const { giveAutoRole, sweepAutoRole } = await import('../src/discord/autorole.js');
+  const ctx = setup(); ctx.cfg.autoRoleId = 'R1'; const added = [];
+  const role = { id: 'R1', position: 5, managed: false, permissions: { has: () => false } };
+  const mk = (id, has = false, bot = false) => ({ user: { id, bot }, guild, roles: { cache: new Map(has ? [['R1', 1]] : []), add: async (r) => { added.push([id, r.id]); } } });
+  const guild = { roles: { cache: new Map([['R1', role]]), everyone: { id: 'ev' } }, members: { me: { roles: { highest: { position: 50 } } }, fetch: async () => new Map([['a', mk('a')], ['b', mk('b', true)], ['c', mk('c', false, true)], ['d', mk('d')]]) } };
+  assert.equal(await giveAutoRole(ctx, mk('new')), true); assert.deepEqual(added.pop(), ['new', 'R1']);
+  assert.equal(await giveAutoRole(ctx, mk('bot1', false, true)), false); assert.equal(await giveAutoRole(ctx, mk('old', true)), false);
+  const r = await sweepAutoRole(ctx, guild, { pause: 0 }); assert.deepEqual(r, { ok: 2, failed: 0 }); assert.deepEqual(added.map((x) => x[0]), ['a', 'd']);
+  added.length = 0; role.position = 60; assert.equal(await giveAutoRole(ctx, mk('n2')), false); role.position = 5;
+  role.permissions = { has: (p) => p === 'Administrator' }; assert.equal(await giveAutoRole(ctx, mk('n3')), false); assert.equal(added.length, 0);
+});
