@@ -124,6 +124,14 @@ export function panelPayload(cfg, mode) {
   return { flags: 1 << 15, components: [c] };
 }
 const usdFmt = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const trustBar = (p) => { const n = Math.round(p * 10); return `${'▰'.repeat(n)}${'▱'.repeat(10 - n)}`; };
+export const trustEmbed = (name, avatarUrl, t) => {
+  const e = new EmbedBuilder().setColor(BLUE).setTitle('Nexora Hub Trust Profile').setAuthor({ name, iconURL: avatarUrl ?? undefined }).setThumbnail(avatarUrl ?? null);
+  const head = `## ${t.tier.emoji} ${t.tier.name} Tier`;
+  const prog = t.max ? `**MAX TIER**\n${trustBar(1)} **100%**\nYou reached the highest trust tier. ${t.tier.emoji}`
+    : `${trustBar(t.progress)} **${Math.round(t.progress * 100)}%**\n**${usdFmt(t.remaining)}** to reach ${t.next.emoji} **${t.next.name}** (${usdFmt(t.next.min)}+)`;
+  return e.setDescription(`${head}\n${t.trades ? '' : '*No completed trades yet. Everyone starts on Pluto.*\n'}\n**Verified volume:** **${usdFmt(t.volume)}**\n**Completed trades:** **${t.trades}**\n\n**Progress**\n${prog}`);
+};
 export const statsEmbed = (name, avatarUrl, st) => new EmbedBuilder().setColor(BLUE)
   .setTitle(`${name} - Tier ${st.tier}`)
   .setDescription(`Global rank ${st.rank ? `\`#${st.rank}\`` : '`unranked`'} - ${st.next == null ? 'Max tier reached' : `Next tier in \`${usdFmt(st.next)}\``}\n\n## Deal Stats\n- **Completed:** ${st.completed}\n- **Total Dealt:** ${usdFmt(st.total)}\n- **Largest Deal:** ${usdFmt(st.largest)}\n- **Completion Rate:** ${st.rate}%`)

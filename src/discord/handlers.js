@@ -24,6 +24,7 @@ import * as inv from '../core/invites.js';
 import * as privacy from '../core/privacy.js';
 import { fromSat } from '../providers/ltc.js';
 import * as mod from './moderation.js';
+import { trustOf } from '../core/trust.js';
 import { PAUSABLE, pausedUntil, setPause } from '../core/pause.js';
 import { logoFile } from './status.js';
 
@@ -169,6 +170,13 @@ const commands = {
     const u = i.options.getUser('member') ?? i.user;
     const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
     return i.reply({ embeds: [ui.statsEmbed(name, u.displayAvatarURL?.({ size: 256 }), userStats(ctx.db, u.id))], allowedMentions: { parse: [] } });
+  },
+  async trust(i, ctx) {
+    limit(ctx, i, 'trust', 5, 60e3);
+    const u = i.options.getUser('member') ?? i.user;
+    if (u.bot) throw new UserError('Bots do not have a trust tier.');
+    const name = (u.id === i.user.id ? i.member?.displayName : null) ?? u.displayName ?? u.globalName ?? u.username ?? 'Member';
+    return i.reply({ embeds: [ui.trustEmbed(name, u.displayAvatarURL?.({ size: 256 }), trustOf(ctx.db, u.id))], allowedMentions: { parse: [] } });
   },
   async leaderboard(i, ctx) {
     limit(ctx, i, 'leaderboard', 5, 60e3);

@@ -4,7 +4,7 @@ import { route, staffOf, UserError } from './handlers.js';
 import * as ui from './ui.js';
 import { log } from '../logger.js';
 
-const PUBLIC = new Set(['stats', 'help', 'leaderboard', 'messages', 'invites', 'inviteboard']);
+const PUBLIC = new Set(['trust', 'stats', 'help', 'leaderboard', 'messages', 'invites', 'inviteboard']);
 const ALIASES = { invite: 'invites', top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
 
 // arg: [name, type, required]. Types: string, int, user, rest (everything that is left).
@@ -31,6 +31,7 @@ export const SPEC = {
   rewards: { desc: 'Show the status rewards wallet: deposit address, balance and what is owed', args: [] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
+  trust: { desc: 'Trust tier, verified volume and progress to the next tier (also /trust)', args: [['member', 'user', false]], textOnly: true },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },
   vouch: { desc: 'Leave feedback for a completed deal', args: [D, ['rating', 'int', true], ['feedback', 'rest', true]] },
   ticket: { desc: 'Open a private support ticket', args: [['text', 'rest', true]] },

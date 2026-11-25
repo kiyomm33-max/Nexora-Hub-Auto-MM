@@ -495,7 +495,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].textOnly).sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy', 'say'].includes(n)).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].textOnly).sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy', 'say', 'trust'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -877,4 +877,21 @@ test('pause: welcome and join ping stay off until the time is up, .pause control
   const on = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'pause', opts: { what: 'off' } }); await route(on, ctx); assert.equal(isPaused(ctx.db, 'welcome'), false);
   await sendWelcome(ctx, member); assert.equal(await pingNewMember(ctx, member, { ttl: 1 }), 1); assert.equal(posts.length, 2);
   const one = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'pause', opts: { what: 'ping', duration: '2h' } }); await route(one, ctx); assert.ok(isPaused(ctx.db, 'ping') && !isPaused(ctx.db, 'welcome'));
+});
+
+test('trust: tiers from verified live deals only, progress, max tier, public, optional member', async () => {
+  const { trustOf, tierFor, TRUST_TIERS } = await import('../src/core/trust.js');
+  assert.equal(tierFor(0).tier.name, 'Pluto'); assert.equal(tierFor(0.99).tier.name, 'Pluto'); assert.equal(tierFor(1).tier.name, 'Moon'); assert.equal(tierFor(50).tier.name, 'Earth');
+  assert.equal(tierFor(199.99).tier.name, 'Earth'); assert.equal(tierFor(200).tier.name, 'Venus'); assert.equal(tierFor(500).tier.name, 'Mars'); assert.equal(tierFor(1000).tier.name, 'Saturn'); assert.equal(tierFor(2000).tier.name, 'Jupiter');
+  assert.equal(tierFor(5000).tier.name, 'Sun'); assert.ok(tierFor(5000).max && tierFor(99999).max); assert.equal(TRUST_TIERS.length, 8);
+  const t = tierFor(125); assert.equal(t.next.name, 'Venus'); assert.equal(t.remaining, 75); assert.equal(t.progress, 0.5);
+  const ctx = setup(); const db = ctx.db; let n = 0;
+  const ins = (a, b, amount, { status = 'completed', mode = 'live', esc = 'provider_confirmed' } = {}) => db.prepare("INSERT INTO deals(id,mode,party_a,party_b,status,amount,escrow_status,asset,network,item,provider,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'LTC','litecoin','x','p',?,?)").run(`NXH-T${++n}`, mode, a, b, status, amount, esc, new Date().toISOString(), new Date().toISOString());
+  try { ins(A, B, '300'); ins(B, A, '250.50'); ins(A, B, '999', { status: 'cancelled' }); ins(A, B, '999', { mode: 'demo' }); ins(A, B, '999', { esc: 'pending' }); } catch (e) { assert.fail(`schema insert: ${e.message}`); }
+  const mine = trustOf(db, A); assert.equal(mine.trades, 2); assert.equal(mine.volume, 550.5); assert.equal(mine.tier.name, 'Mars'); assert.equal(mine.next.name, 'Saturn'); assert.equal(trustOf(db, RND).tier.name, 'Pluto'); assert.equal(trustOf(db, RND).trades, 0);
+  const me = fake(ctx, 'cmd', A, { command: 'trust' }); me.options.getUser = () => null; me.channel = { id: 'x' }; await route(me, ctx);
+  const d = me.out[0].embeds[0].data.description; assert.match(d, /🔴 Mars Tier/); assert.match(d, /\$550\.50/); assert.match(d, /Completed trades:\*\* \*\*2/); assert.match(d, /Saturn/);
+  const other = fake(ctx, 'cmd', RND, { command: 'trust' }); other.options.getUser = () => ({ id: A, username: 'alice', bot: false, displayAvatarURL: () => 'https://x/a.png' }); await route(other, ctx); assert.match(other.out[0].embeds[0].data.description, /Mars Tier/);
+  const none = fake(ctx, 'cmd', RND, { command: 'trust' }); none.options.getUser = () => null; await route(none, ctx); assert.match(none.out[0].embeds[0].data.description, /Pluto Tier[\s\S]*No completed trades/);
+  ins(RND, A, '6000'); const top = fake(ctx, 'cmd', RND, { command: 'trust' }); top.options.getUser = () => null; await route(top, ctx); assert.match(top.out[0].embeds[0].data.description, /Sun Tier[\s\S]*MAX TIER/);
 });
