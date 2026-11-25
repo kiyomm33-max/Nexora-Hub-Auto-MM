@@ -48,6 +48,18 @@ export async function finish(ctx, id) {
   await ch?.send({ content: text, allowedMentions: { parse: [] }, ...(p.message_id ? { reply: { messageReference: p.message_id, failIfNotExists: false } } : {}) }).catch((e) => log.error('poll result failed', e));
   return p;
 }
+/** Staff only: who voted for what. */
+export async function votes(i, ctx, id) {
+  const p = id == null ? P.latest(ctx.db) : P.get(ctx.db, id); if (!p) throw new UserError(id == null ? 'There is no poll yet.' : 'No poll with that ID.');
+  const opts = JSON.parse(p.options); const all = P.voters(ctx.db, p.id); const by = opts.map(() => []);
+  for (const v of all) if (by[v.choice]) by[v.choice].push(v.user_id);
+  let budget = 3500;
+  const blocks = opts.map((o, k) => {
+    const shown = []; for (const u of by[k]) { const t = `<@${u}>`; if (budget - t.length - 1 < 0) { shown.push(`...and ${by[k].length - shown.length} more`); break; } budget -= t.length + 1; shown.push(t); }
+    return `**${o}** - **${by[k].length}** vote${by[k].length === 1 ? '' : 's'}\n${shown.join(' ') || 'No votes'}`;
+  });
+  return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, `Poll ${p.id} - who voted`, `**${p.question}**\n**State:** ${p.state === 'open' ? 'open' : 'ended'} | **Voters:** **${all.length}**\n\n${blocks.join('\n\n')}`)] });
+}
 export async function endNow(i, ctx, id) { await finish(ctx, id); return i.reply({ ...eph, embeds: [ui.okEmbed(ctx.cfg, 'Poll ended', `Poll ${id} is closed and the result was posted.`)] }); }
 export async function sweep(ctx) { for (const p of P.due(ctx.db)) { try { await finish(ctx, p.id); } catch (e) { log.error('poll end failed', e); } } }
 export function startPollLoop(client, ctx) { client.once(Events.ClientReady, () => { sweep(ctx); setInterval(() => sweep(ctx), 15_000).unref?.(); }); }
