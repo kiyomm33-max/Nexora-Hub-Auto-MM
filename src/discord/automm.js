@@ -8,6 +8,7 @@ import { calcFee, calcTotals, usdWorth, feeCfgFor } from '../core/fees.js';
 import { CAPS, LEVELS } from '../core/permissions.js';
 import { log } from '../logger.js';
 import { eurPerUsd } from '../core/fx.js';
+import { dealChoice, setDealChoice } from '../core/privacy.js';
 import * as ui from './ui.js';
 import * as rooms from './rooms.js';
 
@@ -42,15 +43,32 @@ export async function payloadFor(ctx, d) {
     if (!((p.flags ?? 0) & (1 << 15))) p.content = pingIds(ctx, d).map((x) => `<@${x}>`).join(' ') || undefined;
     return p;
   }
-  const embeds = ui.statusEmbeds(ctx.cfg, d); const files = [];
-  if (ui.phaseOf(d) === 'invoice' && d.pay_address) {
-    try { files.push(new AttachmentBuilder(await QRCode.toBuffer(d.pay_address, { margin: 1, width: 220 }), { name: 'qr.png' })); embeds[1].setThumbnail('attachment://qr.png'); }
-    catch (e) { log.error('qr failed', e); }
-  }
   const ping = pingIds(ctx, d).map((x) => `<@${x}>`).join(' ') || null;
+  if (['invoice', 'short', 'received', 'payout', 'paying'].includes(ui.phaseOf(d))) { // these phases are Components V2 cards
+    const eur = await (ctx.eurPerUsd ?? eurPerUsd)().catch(() => null);
+    let txUrl = null; try { const u = d.tx_hash ? ctx.provider.explorerTx?.(d.tx_hash, d) : null; if (/^https?:\/\//.test(u ?? '')) txUrl = u; } catch { /* no explorer for this provider */ }
+    let qr = false; const extra = [];
+    if (ui.phaseOf(d) === 'invoice' && d.pay_address) {
+      try { extra.push(new AttachmentBuilder(await QRCode.toBuffer(d.pay_address, { margin: 1, width: 220 }), { name: 'qr.png' })); qr = true; } catch (e) { log.error('qr failed', e); }
+    }
+    let info = null; try { info = ctx.provider.payoutInfo?.(d.id) ?? null; } catch { /* none yet */ }
+    const p = ui.phasePayload(ctx.cfg, d, { eur, txUrl, qr, info });
+    return { ...p, components: [...(ping ? [ui.notice(ping)] : []), ...p.components], files: [...p.files, ...extra] };
+  }
+  const embeds = ui.statusEmbeds(ctx.cfg, d); const files = [];
   return { content: ping, embeds, files, components: ui.roomButtons(d, ctx.cfg) };
 }
 
+async function privChoice(i, ctx, id, hidden) {
+  const d = load(ctx, id); trader(ctx, d, i);
+  if (d.status !== 'completed') throw new UserError('This deal is not completed.');
+  setDealChoice(ctx.db, d.id, i.user.id, hidden);
+  audit(ctx.db, { category: 'deal', actor: i.user.id, action: 'privacy.deal_choice', dealId: d.id, detail: { hidden } });
+  const choices = Object.fromEntries([d.sender_id, d.receiver_id].map((u) => [u, dealChoice(ctx.db, d.id, u)]));
+  const p = ui.dealCompletePayload(ctx.cfg, d, choices);
+  await i.update({ components: p.components, allowedMentions: { parse: [] } });
+  if (Object.values(choices).every((v) => v !== null)) await rooms.publishCompleted(ctx, ctx.deals.get(d.id), { force: true });
+}
 const load = (ctx, id) => { const d = ctx.deals.get(V.dealId(id)); if (!d) throw new UserError('Deal not found.'); return d; };
 function trader(ctx, d, i) {
   if (!ctx.deals.isParty(d, i.user.id)) {
@@ -234,6 +252,12 @@ export const handlers = {
     if (d.desc_by === i.user.id) throw new UserError('Only the other trader can decline.');
     return done(i, ctx, await locked(ctx, id, async () => ctx.deals.patch(id, i.user.id, { item: '', desc_by: null, setup: setStep(ctx, d, 'describe') }, 'setup.description_declined')));
   },
+  // Discord cannot write to a clipboard, so the value is sent as a plain private message that is easy to long-press and copy
+  refresh: async (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); await i.deferUpdate(); await rooms.refreshStatus(ctx, ctx.deals.get(d.id)); },
+  privshow: (i, ctx, [id]) => privChoice(i, ctx, id, false),
+  privanon: (i, ctx, [id]) => privChoice(i, ctx, id, true),
+  copyaddr: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); if (!d.pay_address) throw new UserError('There is no address yet.'); return i.reply({ flags: EPH, content: d.pay_address, allowedMentions: { parse: [] } }); },
+  copyamt: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); if (!d.pay_amount) throw new UserError('There is no amount yet.'); return i.reply({ flags: EPH, content: String(d.pay_amount), allowedMentions: { parse: [] } }); },
   amount: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); return i.showModal(ui.amountModal(id)); }, // legacy button
   amountunit: (i, ctx, [id]) => {
     const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); onlySender(d, i);
@@ -377,15 +401,12 @@ export async function releaseAsk(i, ctx, id) {
   if (d.status !== 'verification_pending' || d.escrow_status !== 'provider_confirmed') throw new UserError('The provider has not confirmed the payment yet.');
   if (d.release_at) throw new UserError('A release is already in progress.');
   if (ctx.db.prepare('SELECT 1 FROM cancel_req WHERE deal_id=?').get(id)) throw new UserError('A cancel request is open. Finish or decline it before releasing.');
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`nx:am-relyes:${id}`).setLabel('Yes, release').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`nx:am-relno:${id}`).setLabel('No, go back').setStyle(ButtonStyle.Secondary));
-  return i.reply({ flags: EPH, embeds: [ui.base(ctx.cfg, 'Are you sure?', `Releasing sends **$${d.receive_usd} USD** worth of ${d.asset} to <@${d.receiver_id}>. **This cannot be undone.** Only release once you have received what you were promised.\n\nA ${ctx.cfg.releaseDelaySec}-second countdown starts, and you can cancel it until it ends.`, ui.BRAND.red)], components: [row] });
+  return i.reply(ui.releaseConfirmPayload(ctx.cfg, d));
 }
-export const releaseNo = (i) => i.update({ content: 'Release not started.', embeds: [], components: [] });
+export const releaseNo = (i) => i.update({ components: [ui.notice('Release not started. The funds stay locked.')] });
 export async function releaseYes(i, ctx, id) {
   const r = await locked(ctx, id, async () => ctx.deals.scheduleRelease(id, i.user.id, ctx.cfg.releaseDelaySec));
-  await i.update({ content: r.started ? 'Release countdown started.' : 'A release is already in progress.', embeds: [], components: [] });
+  await i.update({ components: [ui.notice(r.started ? 'Release countdown started.' : 'A release is already in progress.')] });
   if (!r.started) return;
   const at = Math.floor(Date.parse(r.deal.release_at) / 1000);
   const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`nx:am-relcancel:${id}`).setLabel('Cancel release').setStyle(ButtonStyle.Danger));

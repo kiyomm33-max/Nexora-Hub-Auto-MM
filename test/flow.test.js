@@ -20,7 +20,7 @@ const BOT = '888888888888888888';
 const ROLE = { mm: 'r-mm', sup: 'r-sup', adm: 'r-adm', trial: 'r-trial' };
 
 function setup() {
-  const cfg = loadConfig({ GUILD_ID: 'g', COMPLETED_CHANNEL_ID: 'completed', VOUCH_CHANNEL_ID: 'vouches', STAFF_LOG_CHANNEL_ID: 'slog', TRANSCRIPT_CHANNEL_ID: 'tr', PROVIDER_WEBHOOK_SECRET: 'whsec',
+  const cfg = loadConfig({ GUILD_ID: 'g', COMPLETED_CHANNEL_ID: 'completed', VOUCH_CHANNEL_ID: 'vouches', STAFF_LOG_CHANNEL_ID: 'slog', TRANSCRIPT_CHANNEL_ID: 'tr', PROVIDER_WEBHOOK_SECRET: 'whsec', PRIVACY_CHOICE_SEC: '0',
     ROLE_ADMIN_IDS: ROLE.adm, ROLE_MIDDLEMAN_IDS: ROLE.mm, ROLE_SUPPORT_IDS: ROLE.sup, ROLE_TRIAL_IDS: ROLE.trial, DATA_DIR: '/tmp/nx-flow' });
   const db = openDb(':memory:'); const deals = new DealService(db, { mode: 'demo' });
   const chans = new Map(); let seq = 0;
@@ -48,7 +48,7 @@ function fake(ctx, kind, user, { roles = [], customId, command, sub, opts = {}, 
     showModal: async (m) => { i.modal = m; } };
   return i;
 }
-const text = (i) => JSON.stringify(i.out.map((o) => [o.content, ...(o.embeds ?? []).map((e) => [e.data.title, e.data.description, ...(e.data.fields ?? []).map((f) => f.value)])]));
+const text = (i) => JSON.stringify(i.out.map((o) => [o.content, ...(o.embeds ?? []).map((e) => [e.data.title, e.data.description, ...(e.data.fields ?? []).map((f) => f.value)]), ...(o.components ?? []).filter((c) => (o.flags ?? 0) & 32768).map((c) => c.toJSON?.() ?? c)]));
 const modalFields = { roblox_you: 'Alice_1', roblox_partner: 'Bob22', item: 'Dominus', value: '25.00 USD', crypto: 'LTC litecoin' };
 
 const click = async (ctx, user, customId, extra = {}) => { const ch = ctx.chans.get(ctx.room); const i = fake(ctx, 'btn', user, { customId, channel: ch, ...extra }); await route(i, ctx); return i; };
@@ -164,22 +164,22 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   const sim = async (event) => { const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'staff', sub: 'simulate', opts: { deal_id: id, event } }); await route(i, ctx); await ctx.settle(); return text(i); };
   await refreshStatus(ctx, ctx.deals.get(id));
   const msg = () => room.msgs.get(ctx.deals.get(id).status_message_id);
-  const status = () => JSON.stringify(msg().embeds.map((e) => e.data));
+  const status = () => JSON.stringify([(msg().embeds ?? []).map((e) => e.data), msg().components.map((c) => c.toJSON())]);
   const comps = () => JSON.stringify(msg().components.map((c) => c.toJSON()));
   // 1. Deal Summary + Payment Invoice (with QR)
-  assert.match(status(), /Deal Summary[\s\S]*Sender[\s\S]*Receiver[\s\S]*Coin[\s\S]*Deal Amount[\s\S]*Payment Invoice[\s\S]*Address[\s\S]*Exchange Rate: 1 LTC = 41\.23 USD \(DEMO rate\)/);
-  assert.match(status(), /DEMO-NOT-A-REAL-ADDRESS/); assert.match(status(), /0\.04850860|0\.0485/); assert.ok(msg().files.length === 1 && msg().files[0].name === 'qr.png', 'QR attached');
+  assert.match(status(), /Payment Invoice[\s\S]*Address[\s\S]*Rate:\*\* 1 LTC = 41\.23 USD \(DEMO rate\)[\s\S]*Payment checks[\s\S]*Litecoin/); assert.match(status(), /Copy Address[\s\S]*Copy Amount/); assert.doesNotMatch(status(), /Expires in/);
+  assert.match(status(), /DEMO-NOT-A-REAL-ADDRESS/); assert.match(status(), /0\.04850860|0\.0485/); assert.ok(msg().files.some((f) => f.name === 'qr.png'), 'QR attached');
   assert.doesNotMatch(comps(), /am-release/);
   // 2. Transaction Detected
   await sim('funds.observed'); assert.match(status(), /Transaction Detected[\s\S]*Transaction[\s\S]*DEMO-TX[\s\S]*Amount Received[\s\S]*Required Confirmations/);
   assert.doesNotMatch(status(), /Payment Received|secured/); assert.equal(msg().files.length, 0, 'QR removed');
   const early = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(early), /has not confirmed/);
   // 3. Payment Received + proceed + Release/Cancel
-  await sim('escrow.funded'); assert.match(status(), /Payment Received[\s\S]*secured[\s\S]*You may now proceed with the deal[\s\S]*Release/);
+  await sim('escrow.funded'); assert.match(status(), /Funds secured[\s\S]*Buyer[\s\S]*Seller[\s\S]*You may now deliver[\s\S]*Release Funds[\s\S]*Cancel and Refund/);
   assert.match(comps(), /nx:am-release/); assert.doesNotMatch(comps(), /dispute|cancelpaid/);
   assert.match(text(await click(ctx, B, `nx:am-release:${id}`)), /Only the sender/);
   assert.match(text(await click(ctx, RND, `nx:am-release:${id}`)), /Only the sender/);
-  const ask = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(ask), /Are you sure/); assert.equal(ctx.deals.get(id).release_at, null, 'asking does not release');
+  const ask = await click(ctx, A, `nx:am-release:${id}`); assert.match(text(ask), /Confirm release[\s\S]*final release approval[\s\S]*Confirm only if[\s\S]*Confirm Release[\s\S]*Keep Funds Locked/); assert.equal(ctx.deals.get(id).release_at, null, 'asking does not release');
   await click(ctx, A, `nx:am-relno:${id}`); assert.equal(ctx.deals.get(id).release_at, null);
   assert.match(text(await click(ctx, B, `nx:am-relyes:${id}`)), /Only the sender/);
   const t0 = Date.now(); await click(ctx, A, `nx:am-relyes:${id}`); await ctx.settle();
@@ -194,7 +194,7 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   await new Promise((r) => setTimeout(r, 1500)); await ctx.settle();
   // 4. Provide your address
   let x = ctx.deals.get(id); assert.ok(x.released_at); assert.equal(x.status, 'verification_pending', 'release alone does not complete the deal');
-  assert.match(status(), /Send your Litecoin \(LTC\) address/); assert.match(comps(), /nx:am-payaddr/);
+  assert.match(status(), /Where should the payout go[\s\S]*Expected payout[\s\S]*Required network:\*\* LTC on Litecoin/); assert.match(comps(), /nx:am-payaddr/);
   assert.equal(ctx.chans.get('completed').sent.length, 0);
   assert.match(text(await click(ctx, A, `nx:am-payaddr:${id}`)), /Only the receiver/);
   const m = await click(ctx, B, `nx:am-payaddr:${id}`); assert.ok(m.modal);
@@ -217,6 +217,25 @@ test('invoice, transaction detected, payment received, release (confirm + 60s co
   assert.equal(ctx.chans.get('completed').sent.length, 1);
   assert.equal(ctx.db.prepare("SELECT COUNT(*) n FROM audit_log WHERE action='release.sent_to_provider'").get().n, 1);
   assert.ok(verifyAuditChain(ctx.db).ok);
+});
+
+test('deal complete card: each trader picks for themselves; anonymous choice hides name and stats; post waits for both', async () => {
+  const { dealChoice } = await import('../src/core/privacy.js'); const { trustOf } = await import('../src/core/trust.js'); const { userStats } = await import('../src/core/stats.js');
+  const ctx = setup(); ctx.cfg.privacyChoiceSec = 60; const id = await runToRoom(ctx, { amount: '2' }); const room = ctx.chans.get(ctx.room);
+  ctx.deals.applyProviderEvent({ id: 'f1', type: 'escrow.funded', reference: ctx.deals.get(id).provider_ref }, { simulated: true });
+  ctx.cfg.releaseDelaySec = 0; await click(ctx, A, `nx:am-relyes:${id}`); await ctx.settle(); await new Promise((r) => setTimeout(r, 50)); await ctx.settle();
+  await click(ctx, B, `nx:am-payyes:${id}:${LTC}`); await ctx.settle();
+  assert.equal(ctx.deals.get(id).status, 'completed');
+  const card = room.sent.at(-1); const body = () => JSON.stringify(card.components.map((c) => c.toJSON()));
+  assert.match(JSON.stringify(room.sent.map((m) => (m.components ?? []).map((c) => c.toJSON()))), /Deal complete[\s\S]*broadcast successfully[\s\S]*Choice status[\s\S]*Pending[\s\S]*am-privshow[\s\S]*am-privanon/);
+  assert.equal(ctx.chans.get('completed').sent.length, 0, 'post waits for the choices');
+  assert.match(text(await click(ctx, RND, `nx:am-privanon:${id}`)), /Only the two traders/);
+  await click(ctx, A, `nx:am-privshow:${id}`); assert.equal(dealChoice(ctx.db, id, A), false); assert.equal(dealChoice(ctx.db, id, B), null);
+  assert.equal(ctx.chans.get('completed').sent.length, 0);
+  await click(ctx, B, `nx:am-privanon:${id}`); await ctx.settle(); assert.equal(dealChoice(ctx.db, id, B), true);
+  assert.equal(ctx.chans.get('completed').sent.length, 1, 'published once both chose');
+  assert.match(JSON.stringify(ctx.chans.get('completed').sent[0]), /Anonymous/);
+  assert.equal(userStats(ctx.db, B).completed, 0); assert.equal(userStats(ctx.db, A).completed, 1);
 });
 
 test('dispute during the countdown stops the release', async () => {
@@ -469,8 +488,8 @@ test('short payment: warning with the real amount; sender continues or cancels a
     return { ctx, id, room }; };
   // continue
   { const { ctx, id, room } = await mk(); const d = ctx.deals.get(id); assert.equal(d.short_state, 'pending');
-    const msg = room.msgs.get(d.status_message_id); const body = JSON.stringify(msg.embeds.map((e) => e.toJSON ? e.toJSON() : e));
-    assert.match(body, /less than the deal amount/); assert.match(body, /only sent \*\*\$/); assert.match(JSON.stringify(msg.components.map((c) => c.toJSON())), /am-shortyes[\s\S]*am-shortno/);
+    const msg = room.msgs.get(d.status_message_id); const body = JSON.stringify(msg.components.map((c) => c.toJSON()));
+    assert.match(body, /Partial Payment Detected/); assert.match(body, /Expected[\s\S]*Confirmed received[\s\S]*Still needed/); assert.match(body, /only sent \*\*\$/); assert.match(JSON.stringify(msg.components.map((c) => c.toJSON())), /am-shortyes[\s\S]*am-shortno/);
     ctx.provider.acceptShort = async () => ({ amount: '0.2' });
     assert.match(text(await click(ctx, RND, `nx:am-shortyes:${id}`)), /Only the two traders/);
     await click(ctx, B, `nx:am-shortyes:${id}`); await ctx.settle();
