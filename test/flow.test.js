@@ -493,7 +493,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
 test('text commands: .help lists them, staff commands need a role, replies stay out of others\' way', async () => {
   const { commandFromMessage, SPEC, parseArgs } = await import('../src/discord/prefix.js');
   const { definitions } = await import('../src/discord/commands.js');
-  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help').sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy'].includes(n)).sort(), 'every slash command has a text command');
+  assert.deepEqual(Object.keys(SPEC).filter((n) => n !== 'help' && !SPEC[n].textOnly).sort(), definitions.map((d) => d.name).filter((n) => !['giveaway', 'poll', 'role', 'set-privacy'].includes(n)).sort(), 'every slash command has a text command');
   const ctx = setup(); const lobby = ctx.chans.get('lobby') ?? fake(ctx, 'btn', A).channel;
   const dms = [];
   const msg = (author, content, { admin = false, roles = [], attachments } = {}) => { const out = [];
@@ -803,4 +803,39 @@ test('completed post: new layout, /set-privacy hides a name as Anonymous, .testd
   const out = []; const t = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'testdone' }); t.channel = { send: async (p) => { out.push(p); } }; await route(t, ctx);
   assert.match(out[0].embeds[0].data.description, /Test post/); assert.match(out[0].embeds[0].data.description, /Anonymous/); assert.equal(out[0].components.length, 1 - 1 + out[0].components.length);
   const deny = fake(ctx, 'cmd', RND, { command: 'testdone' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+});
+
+test('moderation text commands: permissions, hierarchy, and each action', async () => {
+  const { commandFromMessage } = await import('../src/discord/prefix.js');
+  const ctx = setup(); const lobby = fake(ctx, 'btn', A).channel; const calls = [];
+  const mkMember = (id, pos, extra = {}) => ({ id, displayName: id, roles: { highest: { position: pos }, cache: new Map(), add: async (r) => { calls.push(['add', id, r.id]); const m = ctx.members.get(id); m.roles.cache.set(r.id, 1); }, remove: async (r) => { calls.push(['remove', id, r.id]); ctx.members.get(id).roles.cache.delete(r.id); } },
+    kick: async () => calls.push(['kick', id]), setNickname: async (n) => calls.push(['nick', id, n]), timeout: async (ms) => calls.push(['timeout', id, ms]), ...extra });
+  ctx.members = new Map([['111111111111111111', mkMember('111111111111111111', 10)], ['222222222222222222', mkMember('222222222222222222', 90)]]);
+  ctx.client.users.fetch = async (id) => ({ id, username: `u${id.slice(0, 3)}` });
+  ctx.guild.ownerId = 'owner'; ctx.guild.members.me = { id: 'bot', roles: { highest: { position: 50 } } };
+  ctx.guild.members.fetch = async (id) => { const m = ctx.members.get(id); if (!m) throw new Error('unknown'); return m; };
+  ctx.guild.members.ban = async (id) => calls.push(['ban', id]);
+  const role = { id: '333333333333333333', name: 'Vip', position: 5, permissions: { has: () => false } }; const high = { id: '444444444444444444', name: 'Top', position: 70, permissions: { has: () => false } };
+  ctx.guild.roles.cache = new Map([[role.id, role], [high.id, high]]);
+  const deleted = []; lobby.bulkDelete = async (x) => { calls.push(['purge', Array.isArray(x) ? x.length : x]); return { size: Array.isArray(x) ? x.length : x }; }; lobby.messages = { fetch: async () => new Map([['m1', { id: 'm1', author: { id: '111111111111111111' } }], ['m2', { id: 'm2', author: { id: 'x' } }]]) };
+  const msg = (content, { admin = true, pos = 60 } = {}) => { const out = []; return { out, author: { id: ADM, bot: false }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, member: { roles: { cache: new Map(), highest: { position: pos } }, permissions: { has: (p) => admin && p === 'Administrator' } }, mentions: { users: new Map() }, attachments: { first: () => null }, delete: async () => deleted.push('cmd'), reply: async (p) => { out.push(p); return { edit: async () => {} }; } }; };
+  const run = async (c, o) => { const m = msg(c, o); await commandFromMessage(m, ctx); return JSON.stringify(m.out.map((p) => p.embeds?.map((e) => [e.data.title, e.data.description]))); };
+  assert.match(await run('.ban 111111111111111111 spam', { admin: false }), /do not have permission/);
+  assert.match(await run('.ban 111111111111111111 spamming'), /Member banned/); assert.deepEqual(calls.pop(), ['ban', '111111111111111111']);
+  assert.match(await run('.ban 888888888888888888'), /Member banned/); calls.pop();
+  assert.match(await run('.ban 222222222222222222 x'), /equal to or above yours/);
+  assert.match(await run('.ban owner'), /user ID|Mention/);
+  assert.match(await run('.kick 111111111111111111'), /Member kicked/); assert.deepEqual(calls.pop(), ['kick', '111111111111111111']);
+  assert.match(await run('.nick 111111111111111111 Cool Guy'), /Cool Guy/); assert.deepEqual(calls.pop(), ['nick', '111111111111111111', 'Cool Guy']);
+  assert.match(await run('.nick 111111111111111111'), /reset/); assert.deepEqual(calls.pop(), ['nick', '111111111111111111', null]);
+  assert.match(await run('.timeout 111111111111111111 10m spam'), /10 minutes/); assert.deepEqual(calls.pop(), ['timeout', '111111111111111111', 600000]);
+  assert.match(await run('.timeout 111111111111111111 off'), /talk again/); assert.deepEqual(calls.pop(), ['timeout', '111111111111111111', null]);
+  assert.match(await run('.timeout 111111111111111111 60d'), /28 days/); assert.match(await run('.timeout 111111111111111111 soon'), /duration like/);
+  await run('.purge 5'); assert.match(JSON.stringify(lobby.sent.at(-1).embeds[0].data), /5\*\* messages/); assert.deepEqual(calls.pop(), ['purge', 5]); assert.ok(deleted.includes('cmd'));
+  assert.match(await run('.purge 500'), /1 to 100/);
+  await run('.purge 10 111111111111111111'); assert.match(JSON.stringify(lobby.sent.at(-1).embeds[0].data), /1\*\* message/); assert.deepEqual(calls.pop(), ['purge', 1]);
+  assert.match(await run(`.role 111111111111111111 <@&${role.id}>`), /Role added/); assert.deepEqual(calls.pop(), ['add', '111111111111111111', role.id]);
+  assert.match(await run(`.role 111111111111111111 ${role.id}`), /Role removed/); assert.deepEqual(calls.pop(), ['remove', '111111111111111111', role.id]);
+  assert.match(await run(`.role 111111111111111111 ${high.id}`), /above my highest role|equal to or above your/);
+  assert.match(await run(`.role 111111111111111111 ${role.id}`, { pos: 3 }), /equal to or above your highest/);
 });
