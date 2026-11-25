@@ -82,7 +82,7 @@ test('panel is a Components V2 message with a Start button per coin; posted to t
   const deny = fake(ctx, 'cmd', RND, { command: 'panel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
 
-test('start: private room with Deal Started + Safety Warning + Close + straight to adding the trader (no deal type); max 2 open deals', async () => {
+test('start: private room with the deal card + straight to adding the trader (no deal type); max 2 open deals', async () => {
   const ctx = setup(); const { d } = await startDeal(ctx, 'USDT-BEP20');
   assert.equal(d.status, 'waiting_parties'); assert.equal(d.network, 'bsc');
   const room = ctx.chans.get(d.channel_id);
@@ -90,9 +90,8 @@ test('start: private room with Deal Started + Safety Warning + Close + straight 
   assert.ok(room.opts.permissionOverwrites.some((o) => o.id === A) && !room.opts.permissionOverwrites.some((o) => o.id === ROLE.trial));
   const card = JSON.stringify(room.sent[0].components.map((c) => c.toJSON())); assert.match(card, /Stage 1\/5/); assert.match(card, /Current instruction/); assert.match(card, /not assigned/); assert.match(card, /The opener must invite the other party/); assert.match(card, /emojis\/1575069932130140220/);
   assert.ok(ctx.deals.get(d.id).card_message_id); assert.match(card, /attachment:\/\/line.png/); assert.equal(room.sent[0].files.length, 1);
-  assert.match(JSON.stringify(room.sent[1].embeds.map((e) => e.data)), /Safety Warning[\s\S]*NEVER/);
-  assert.match(JSON.stringify(room.sent[1].components.map((c) => c.toJSON())), /nx:am-close/);
-  const first = JSON.stringify(room.sent[2].embeds.map((e) => e.toJSON ? e.toJSON() : e)); assert.match(first, /Add the other trader/); assert.doesNotMatch(first + JSON.stringify((room.sent[2].components ?? []).map((c) => c.toJSON())), /Deal Type|Select Deal Type/);
+  assert.ok(!JSON.stringify(room.sent).includes('Safety Warning'), 'safety warning removed');
+  const first = JSON.stringify(room.sent[1].components.map((c) => c.toJSON())); assert.match(first, /Add the other party/); assert.match(first, /Invite Other Party/); assert.match(first, /nx:am-partnerid/); assert.match(first, /Cancel Deal/); assert.match(first, /line\.png/); assert.doesNotMatch(first, /Deal Type|Select Deal Type/);
   await startDeal(ctx, 'BTC'); const third = fake(ctx, 'btn', A, { customId: 'nx:am-start:ETH' }); await route(third, ctx); assert.match(text(third), /2 open deals/);
 });
 
@@ -411,7 +410,7 @@ test('every step posts a NEW message that pings the right person, and the previo
   const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
   const live = () => [...ch.msgs.values()].filter((m) => m.id === ctx.deals.get(id).status_message_id);
   const before = ctx.deals.get(id).status_message_id;
-  assert.match(ch.msgs.get(before).content, new RegExp(`<@${A}>`), 'the first step pings the creator');
+  assert.match(JSON.stringify(ch.msgs.get(before).components.map((c) => c.toJSON())), new RegExp(`<@${A}>`), 'the first step pings the creator');
   await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
   const m1 = ctx.deals.get(id).status_message_id; assert.notEqual(m1, before, 'new message, not an edit'); assert.ok(!ch.msgs.has(before), 'previous message deleted');
   const m2 = m1;
