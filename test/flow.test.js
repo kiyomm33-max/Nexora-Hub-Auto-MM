@@ -797,7 +797,7 @@ test('completed post: new layout, /set-privacy hides a name as Anonymous, .testd
   ctx.db.prepare("UPDATE deals SET status='completed', sender_id=?, receiver_id=?, completed_at=? WHERE id=?").run(A, B, new Date().toISOString(), d.id);
   const set = fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'hide' } }); await route(set, ctx); assert.equal(privacy.isHidden(ctx.db, A), true);
   await rooms.publishCompleted(ctx, ctx.deals.get(d.id));
-  const e = posts[0].embeds[0].data; assert.equal(e.title, 'Funds Released'); assert.match(e.description, /\*\*Sender\*\* - Anonymous/); assert.match(e.description, new RegExp(`<@${B}>`)); assert.match(e.description, /\/set-privacy/); assert.match(e.description, /USD Amount/);
+  const e = posts[0].embeds[0].data; assert.match(e.description, /^## <:checkmark:1575069601312808970> Funds Released/); assert.match(e.description, /\*\*Sender\*\* - Anonymous/); assert.match(e.description, new RegExp(`<@${B}>`)); assert.match(e.description, /\/set-privacy/); assert.match(e.description, /USD Amount/);
   assert.doesNotMatch(e.description, new RegExp(`<@${A}>`)); assert.ok(!JSON.stringify(posts[0].components).includes('Transcript'));
   await route(fake(ctx, 'cmd', A, { command: 'set-privacy', opts: { name: 'show' } }), ctx); assert.equal(privacy.isHidden(ctx.db, A), false);
   const out = []; const t = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'testdone' }); t.channel = { send: async (p) => { out.push(p); } }; await route(t, ctx);
