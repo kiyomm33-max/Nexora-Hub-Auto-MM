@@ -1,4 +1,5 @@
-import { UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { AttachmentBuilder, MediaGalleryBuilder, UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { fileURLToPath } from 'node:url';
 import { usdWorth } from '../core/fees.js';
 import { STATUS } from '../core/deals.js';
 import { LABELS } from '../core/permissions.js';
@@ -162,6 +163,7 @@ export function dealProgress(d, set) {
   const label = d.status === 'completed' ? 'Completed' : d.status === 'cancelled' ? 'Cancelled' : d.status === 'disputed' ? 'Disputed' : STAGE_LABEL[stage - 1];
   return { stage, label, instruction: PHASE_TEXT[ph] ?? PHASE_TEXT.received };
 }
+export const lineFile = () => new AttachmentBuilder(fileURLToPath(new URL('../../assets/line.png', import.meta.url)), { name: 'line.png' });
 /** The live card at the top of a deal room. It is edited in place as the deal moves. */
 export function dealCard(cfg, d, set) {
   const { stage, label, instruction } = dealProgress(d, set);
@@ -183,7 +185,8 @@ export function dealCard(cfg, d, set) {
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(lines)).setThumbnailAccessory(new ThumbnailBuilder({ media: { url: CARD_ICONS.thumb } })))
     .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(info))
     .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(`## ${CARD_ICONS.instruction} Current instruction\n${instruction}${d.mode === 'demo' ? '\n**DEMO MODE** - simulated escrow, no real funds.' : ''}`))
-    .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(`**Opened** <t:${Math.floor(Date.parse(d.created_at) / 1000)}:R>`));
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }))
+    .addTextDisplayComponents(text(`**Opened** <t:${Math.floor(Date.parse(d.created_at) / 1000)}:R>`));
   return { flags: 1 << 15, components: [c], allowedMentions: { parse: [] } };
 }
 export const closeButton = (id) => [row(btn(`nx:am-close:${id}`, 'Close'))];
