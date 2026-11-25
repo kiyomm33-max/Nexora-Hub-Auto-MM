@@ -58,6 +58,7 @@ export const definitions = [
       for (const n of [3, 4, 5]) s.addStringOption((o) => o.setName(`option${n}`).setDescription(`Choice ${n} (optional)`).setMaxLength(80));
       return s.addChannelOption((o) => o.setName('channel').setDescription('Channel to post in (default: here)').addChannelTypes(0, 5));
     })
+    .addSubcommand((s) => s.setName('votes').setDescription('Show who voted for what').addIntegerOption((o) => o.setName('id').setDescription('Poll ID (default: the latest poll)')))
     .addSubcommand((s) => s.setName('end').setDescription('End a poll now and show the result').addIntegerOption((o) => o.setName('id').setDescription('Poll ID').setRequired(true))),
   new SlashCommandBuilder().setName('giveaway').setDescription('Run giveaways (staff)').setDMPermission(false)
     .addSubcommand((s) => s.setName('create').setDescription('Start a giveaway with a random winner')

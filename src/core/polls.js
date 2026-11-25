@@ -26,6 +26,9 @@ export function vote(db, id, uid, choice) {
   db.prepare('INSERT INTO poll_votes(poll_id, user_id, choice) VALUES(?,?,?) ON CONFLICT(poll_id, user_id) DO UPDATE SET choice=excluded.choice').run(id, uid, choice);
   return cur ? 'changed' : 'added';
 }
+/** Latest poll (an open one first). */
+export const latest = (db) => db.prepare("SELECT * FROM polls ORDER BY (state='open') DESC, id DESC LIMIT 1").get();
+export const voters = (db, id) => db.prepare('SELECT user_id, choice FROM poll_votes WHERE poll_id=? ORDER BY choice, rowid').all(id);
 export function end(db, id) {
   if (!get(db, id)) throw new PollError('No poll with that ID.');
   if (!db.prepare("UPDATE polls SET state='ended' WHERE id=? AND state='open'").run(id).changes) throw new PollError('That poll has already ended.');

@@ -273,6 +273,7 @@ const commands = {
   },
   async poll(i, ctx) {
     need(i, ctx, 'panel.post');
+    if (i.options.getSubcommand() === 'votes') return pl.votes(i, ctx, i.options.getInteger('id'));
     if (i.options.getSubcommand() === 'end') return pl.endNow(i, ctx, i.options.getInteger('id', true));
     const o = i.options;
     return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
@@ -291,6 +292,10 @@ const commands = {
     for (const n of names) setPause(ctx.db, n, ms);
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: resume ? 'pause.resume' : 'pause.set', detail: { staff: true, names, ms } });
     return say(ctx, i, resume ? 'Back on' : 'Paused', state());
+  },
+  async votes(i, ctx) {
+    need(i, ctx, 'panel.post');
+    return pl.votes(i, ctx, i.options.getInteger('id'));
   },
   async say(i, ctx) {
     need(i, ctx, 'panel.post');
