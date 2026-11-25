@@ -113,7 +113,7 @@ export function panelPayload(cfg, mode) {
   }));
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`## <:aaaaaaaa:1575247365198061638> Nexora Auto MM\nAutomated crypto escrow\nPlease read ${rules} before you start.${demo}`))
-      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575208406531444906.png?size=128' } })))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(text('<:add:1575069932130140220> **Add the other side of the deal**\n<:aaaaaaaaaaaaa:1575248196471492618> **Agree on the item, terms and price**\n<:959d67ae71c14b229c46f416110461ab:1575197569808728104> **Fund the escrow and release when ready**'))
     .addSeparatorComponents(new SeparatorBuilder())

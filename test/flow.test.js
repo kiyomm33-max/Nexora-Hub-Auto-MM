@@ -78,7 +78,7 @@ test('panel is a Components V2 message with a Start button per coin; posted to t
   const json = JSON.stringify(p.components.map((c) => c.toJSON()));
   assert.ok(json.includes('nx:am-pick')); assert.ok(!json.includes('nx:am-start'), 'one dropdown, no per-coin buttons');
   for (const k of ['ETH', 'LTC', 'SOL', 'USDT-ERC20', 'USDC-ERC20', 'USDT-BEP20']) assert.ok(json.includes(`"value":"${k}"`), k);
-  assert.match(json, /LTC \| Litecoin/); assert.match(json, /Open a protected LTC deal on Litecoin/); assert.equal(p.files.length, 1);
+  assert.match(json, /LTC \| Litecoin/); assert.match(json, /Open a protected LTC deal on Litecoin/); assert.match(json, /emojis\/1575208406531444906/); assert.ok(!p.files?.length);
   const deny = fake(ctx, 'cmd', RND, { command: 'panel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
 
