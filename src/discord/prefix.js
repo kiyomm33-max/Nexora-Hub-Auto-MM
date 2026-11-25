@@ -19,6 +19,7 @@ export const SPEC = {
   totals: { desc: 'Create the locked voice channels showing total volume and deals', args: [] },
   steal: { desc: 'Add a custom emoji to this server (reply to a message with it, or put it after the command)', args: [['emoji', 'rest', false]] },
   testdone: { desc: 'Post a sample completed-deal message in this channel', args: [] },
+  rewards: { desc: 'Show the status rewards wallet: deposit address, balance and what is owed', args: [] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
   stats: { desc: 'Deal stats and rank', args: [['member', 'user', false]] },

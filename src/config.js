@@ -64,6 +64,7 @@ export function loadConfig(e = env) {
     statusPay: {
       dailyCents: Math.round(Number(e.STATUS_PAY_DAILY ?? 0.2) * 100), weekBonusCents: Math.round(Number(e.STATUS_PAY_WEEK_BONUS ?? 1.2) * 100),
       minPayoutCents: Math.round(Number(e.STATUS_MIN_PAYOUT ?? e.STATUS_PAY_DAILY ?? 0.2) * 100),
+      autoMaxCents: Math.round(Number(e.STATUS_AUTO_MAX ?? 10) * 100), // payouts above this wait for staff instead of being sent by the bot
     },
     statusPhrase: (e.STATUS_PHRASE ?? '.gg/nexorra').trim().replace(/^\./, '').toLowerCase(),
     prefix: (e.COMMAND_PREFIX || '.').trim().slice(0, 3) || '.',

@@ -176,3 +176,18 @@ test('short payment: topping up to the full amount clears the warning and funds 
   await c.w.scan(c.emit); await c.w.scan(c.emit);
   const d = c.svc.get(id); assert.equal(d.escrow_status, 'provider_confirmed'); assert.equal(d.short_state, null);
 });
+
+test('rewards wallet: its own address, pays the exact USD amount in LTC, returns change, ignores unconfirmed coins, reports shortfalls', async () => {
+  const c = setup({ utxos: [{ txid: 'a'.repeat(64), vout: 0, value: 5_000_000, status: { confirmed: true, block_height: 900 } }, { txid: 'b'.repeat(64), vout: 1, value: 9_000_000, status: { confirmed: false } }] });
+  const addr = c.w.rewardsAddress(); assert.match(addr, /^tltc1q/); assert.notEqual(addr, c.w.treasury);
+  assert.deepEqual(await c.w.rewardsBalance(), { confirmedSat: 5_000_000, pendingSat: 9_000_000 });
+  const r = await c.w.sendReward(RECV, 100); // $1.00 at $50/LTC
+  assert.equal(r.sat, 2_000_000); assert.equal(c.state.broadcasts.length, 1);
+  const tx = bitcoin.Transaction.fromHex(c.state.broadcasts[0]);
+  assert.equal(tx.ins.length, 1, 'only the confirmed coin is spent'); assert.equal(tx.outs.length, 2);
+  assert.equal(bitcoin.address.fromOutputScript(tx.outs[0].script, NETWORKS.testnet.net), RECV); assert.equal(tx.outs[0].value, 2_000_000);
+  assert.equal(bitcoin.address.fromOutputScript(tx.outs[1].script, NETWORKS.testnet.net), addr); assert.ok(tx.outs[1].value > 2_900_000 && tx.outs[1].value < 3_000_000, 'change minus a small miner fee');
+  await assert.rejects(() => c.w.sendReward(RECV, 100000), (e) => e.insufficient?.haveSat === 5_000_000 && e.insufficient.needSat > 5_000_000 && /enough/.test(e.message));
+  await assert.rejects(() => c.w.sendReward('nope', 100), /valid Litecoin/);
+  assert.equal(c.state.broadcasts.length, 1, 'failures send nothing');
+});

@@ -22,6 +22,7 @@ import * as totals from './totals.js';
 import { inviteStats } from './invites.js';
 import * as inv from '../core/invites.js';
 import * as privacy from '../core/privacy.js';
+import { fromSat } from '../providers/ltc.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -194,6 +195,17 @@ const commands = {
     const info = { amount: '0.98412345', txid: '0224d0c9f1b83a5e77c1d0e4f2a9b6385c7d1e0f4a2b9c6d8e3f1a5b7c9d0a0c387' };
     await i.channel.send(await rooms.completedPayload(ctx, deal, { sender: privacy.ANON, receiver: me }, info, { test: true }));
     return say(ctx, i, 'Test post sent', 'Posted a sample completed-deal message in this channel. Nothing was saved.');
+  },
+  async rewards(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const ltc = ctx.provider?.ltc; if (!ltc?.rewardsAddress) throw new UserError('The rewards wallet only exists in live mode.');
+    let bal = null; try { bal = await ltc.rewardsBalance(); } catch { /* chain API down */ }
+    const o = ctx.db.prepare("SELECT COUNT(*) n, COALESCE(SUM(cents),0) c FROM status_payouts WHERE state='pending'").get();
+    const lines = [`**Deposit LTC here:**\n\`${ltc.rewardsAddress()}\``,
+      bal ? `**Balance:** **${fromSat(bal.confirmedSat)} LTC** confirmed${bal.pendingSat ? `, ${fromSat(bal.pendingSat)} LTC waiting for a confirmation` : ''}` : '**Balance:** I could not read the chain right now.',
+      `**Owed to members:** **$${(Number(o.c) / 100).toFixed(2)}** in **${o.n}** open request${o.n === 1 ? '' : 's'}`,
+      `**Sent automatically up to** $${(ctx.cfg.statusPay.autoMaxCents / 100).toFixed(2)} per payout. Payouts send by themselves once the wallet has enough confirmed LTC.`];
+    return say(ctx, i, 'Status rewards wallet', lines.join('\n'));
   },
   async inviteboard(i, ctx) {
     limit(ctx, i, 'inviteboard', 5, 60e3);
@@ -402,7 +414,9 @@ const buttons = {
   'st-start': (i, ctx) => st.start(i, ctx),
   'st-time': (i, ctx) => st.time(i, ctx),
   'st-payout': (i, ctx) => st.payout(i, ctx),
-  'st-pm': (i, ctx, a) => st.pickMethod(i, ctx, a),
+  'st-addryes': (i, ctx, a) => st.addrYes(i, ctx, a),
+  'st-addrno': (i, ctx, a) => st.addrNo(i, ctx, a),
+  'st-cancel': (i, ctx, a) => st.cancel(i, ctx, a, { isStaff: LEVELS[staffOf(i, ctx)] >= LEVELS.admin }),
   'st-paid': (i, ctx, a) => { need(i, ctx, 'panel.post'); return st.paidAsk(i, ctx, a); },
   'st-rej': (i, ctx, a) => { need(i, ctx, 'panel.post'); return st.reject(i, ctx, a); },
   'am-start': (i, ctx, [key]) => am.startAuto(i, ctx, key),
@@ -438,7 +452,6 @@ const buttons = {
   tview: () => { throw new UserError('Transcript viewing is turned off for now.'); }, // old posts may still carry this button
 };
 const modals = {
-  'st-pay': (i, ctx, [m]) => st.payoutSubmit(i, ctx, m, i.fields.getTextInputValue('details')),
   'st-paidm': (i, ctx, [id]) => { need(i, ctx, 'panel.post'); return st.paidSubmit(i, ctx, id, i.fields.getTextInputValue('ref').trim()); },
   disputemodal: (i, ctx, [id]) => openDispute(i, ctx, id === 'ask' ? i.fields.getTextInputValue('deal_id') : id, i.fields.getTextInputValue('reason')),
   evidencemodal: (i, ctx, [id]) => submitEvidence(i, ctx, id, i.fields.getTextInputValue('note'), i.fields.getTextInputValue('url')),

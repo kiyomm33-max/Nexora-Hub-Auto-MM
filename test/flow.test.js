@@ -546,7 +546,7 @@ test('text commands: .leaderboard and .messages are public, .tag and .tags are s
 
 test('status rewards: panel is staff-only; start, request and staff payout flow', async () => {
   const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexorra';
-  ctx.cfg.statusPay = { dailyCents: 20, weekBonusCents: 120, minPayoutCents: 20 };
+  ctx.cfg.statusPay = { dailyCents: 20, weekBonusCents: 120, minPayoutCents: 20, autoMaxCents: 1000 };
   ctx.cfg.channels.statusPanel = 'stp'; ctx.cfg.channels.statusPayouts = 'stq';
   ctx.chans.set('stp', { id: 'stp', sent: [], async send(p) { this.sent.push(p); } }); ctx.chans.set('stq', { id: 'stq', sent: [], async send(p) { this.sent.push(p); return { id: 'm1' }; } });
   const deny = fake(ctx, 'cmd', RND, { command: 'status' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
@@ -561,15 +561,58 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   // two days of time, then request
   ctx.db.prepare('UPDATE status_earn SET seconds=?, since=NULL WHERE user_id=?').run(2 * 86400 + 5, RND);
   const t = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-time' }); await route(t, ctx); assert.match(text(t), /\$0\.40/);
-  const pr = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-payout' }); await route(pr, ctx); assert.ok(JSON.stringify(pr.out[0].components.map((c) => c.toJSON())).includes('nx:st-pm:paypal'));
-  const pm = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-pm:paypal' }); await route(pm, ctx); assert.ok(pm.modal);
-  const bad = fake(ctx, 'modal', RND, { roles: ['ROLE_X'], customId: 'nx:st-pay:paypal', fields: { details: 'nope' } }); await route(bad, ctx); assert.match(text(bad), /valid PayPal/);
-  const good = fake(ctx, 'modal', RND, { roles: ['ROLE_X'], customId: 'nx:st-pay:paypal', fields: { details: 'me@x.com' } }); await route(good, ctx); assert.match(text(good), /Payout requested/);
-  const staffMsg = ctx.chans.get('stq').sent[0]; assert.ok(JSON.stringify(staffMsg.components.map((c) => c.toJSON())).includes('nx:st-paid:1'));
-  const again = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-payout' }); await route(again, ctx); assert.match(text(again), /at least/);
-  const rd = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-rej:1' }); await route(rd, ctx); assert.match(text(rd), /do not have permission/);
-  const paid = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:1', fields: { ref: 'tx9' } }); await route(paid, ctx);
-  assert.equal(ctx.db.prepare('SELECT state, ref FROM status_payouts WHERE id=1').get().state, 'paid');
+  const presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexorra' }] };
+  const press = async (u, id, { pres = presence, roles = ['ROLE_X'] } = {}) => { const i = fake(ctx, 'btn', u, { roles, customId: id }); i.member.presence = pres; await route(i, ctx); return i; };
+  // no wallet (demo): refused
+  assert.match(text(await press(RND, 'nx:st-payout')), /not available/);
+  const sends = []; let short = 0;
+  const ltc = { validateAddress: (a) => { if (!/^ltc1q/.test(a)) throw new Error('That is not a valid Litecoin mainnet address.'); return a; }, rewardsAddress: () => 'ltc1qrewardswallet', rewardsBalance: async () => ({ confirmedSat: 5, pendingSat: 0 }),
+    sendReward: async (to, cents) => { if (short) { short--; const e = new Error('short'); e.insufficient = { needSat: 300000, haveSat: 10 }; throw e; } sends.push([to, cents]); return { txid: 'tx'.repeat(32), sat: 250000, url: 'https://x/tx' }; } };
+  ctx.provider = { ltc };
+  // not showing the status: refused, nothing reserved
+  assert.match(text(await press(RND, 'nx:st-payout', { pres: { status: 'idle', activities: [] } })), /custom status must say/);
+  assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM status_payouts').get().n, 0);
+  assert.match(text(await press(RND, 'nx:st-payout', { roles: [] })), /need the/);
+  // qualified: a private ticket opens and the balance is reserved
+  const open = await press(RND, 'nx:st-payout'); assert.match(text(open), /Ticket opened/);
+  const row = ctx.db.prepare('SELECT * FROM status_payouts WHERE id=1').get(); assert.equal(row.cents, 40); assert.equal(row.state, 'pending'); assert.ok(row.room_id);
+  const room = ctx.chans.get(row.room_id); assert.ok(room.opts.permissionOverwrites.some((o) => o.id === RND)); assert.match(JSON.stringify(room.sent[0].embeds[0].data), /LTC\) address/);
+  assert.match(text(await press(RND, 'nx:st-payout')), /already have an open payout request/);
+  // the address is typed in the room: bad ones are bounced, a good one asks for confirmation
+  const { addressFromMessage } = await import('../src/discord/status.js');
+  const say = async (u, content) => { const out = []; await addressFromMessage({ author: { id: u, bot: false }, guild: ctx.guild, channelId: row.room_id, channel: room, content, reply: async (p) => { out.push(p); }, delete: async () => {} }, ctx); return out; };
+  assert.match((await say(RND, 'hello'))[0].content, /valid LTC address/);
+  assert.equal((await say(ADM, LTC)).length, 0, 'someone else typing is ignored'); const before = room.sent.length;
+  await say(RND, LTC); const confirm = room.sent.at(-1); assert.equal(room.sent.length, before + 1); assert.match(JSON.stringify(confirm.components.map((c) => c.toJSON())), new RegExp(`nx:st-addryes:1:${LTC}`));
+  assert.match(text(await press(ADM, `nx:st-addryes:1:${LTC}`, { roles: [ROLE.adm] })), /Only the member/);
+  assert.equal(sends.length, 0);
+  // wallet is empty: waiting, told once, nothing lost
+  short = 2;
+  assert.match(text(await press(RND, `nx:st-addryes:1:${LTC}`)), /Address confirmed/);
+  assert.equal(sends.length, 0); assert.equal(ctx.db.prepare('SELECT state, send_state, notified FROM status_payouts WHERE id=1').get().notified, 1);
+  assert.match(JSON.stringify(ctx.chans.get('stq').sent.map((p) => p.embeds[0].data)), /Rewards wallet is short[\s\S]*ltc1qrewardswallet/);
+  assert.match(text(await press(RND, `nx:st-addryes:1:${LTC}`)), /already confirmed/);
+  const { payoutLoop } = await import('../src/discord/status.js');
+  await payoutLoop(ctx); assert.equal(sends.length, 0, 'still short'); const stqBefore = ctx.chans.get('stq').sent.length;
+  await payoutLoop(ctx); assert.equal(sends.length, 1, 'funded: sent once'); assert.deepEqual(sends[0], [LTC, 40]);
+  await payoutLoop(ctx); assert.equal(sends.length, 1, 'never sent twice');
+  const done = ctx.db.prepare('SELECT state, ref, send_state, handled_by FROM status_payouts WHERE id=1').get(); assert.equal(done.state, 'paid'); assert.equal(done.send_state, 'sent'); assert.equal(done.handled_by, 'system'); assert.match(done.ref, /^txtx/);
+  assert.match(JSON.stringify(room.sent.at(-1).embeds[0].data), /Payment sent/);
+  assert.match(text(await press(ADM, 'nx:st-rej:1', { roles: [ROLE.adm] })), /already handled/);
+  // cancel returns the balance; a stranger cannot cancel
+  ctx.db.prepare('UPDATE status_earn SET seconds=? WHERE user_id=?').run(4 * 86400 + 5, RND);
+  await press(RND, 'nx:st-payout'); const r2 = ctx.db.prepare('SELECT * FROM status_payouts WHERE id=2').get(); assert.equal(r2.cents, 40);
+  assert.match(text(await press(B, 'nx:st-cancel:2', { roles: [] })), /Only the member or staff/);
+  assert.match(text(await press(RND, 'nx:st-cancel:2')), /back in your balance/); assert.equal(ctx.db.prepare('SELECT state FROM status_payouts WHERE id=2').get().state, 'rejected');
+  // staff mark paid still works for manual cases and is refused while the bot is sending
+  await press(RND, 'nx:st-payout'); ctx.db.prepare("UPDATE status_payouts SET send_state='sending' WHERE id=3").run();
+  const busy = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:3', fields: { ref: 'x' } }); await route(busy, ctx); assert.match(text(busy), /sending this one right now/);
+  ctx.db.prepare("UPDATE status_payouts SET send_state=NULL WHERE id=3").run();
+  const paid = fake(ctx, 'modal', ADM, { roles: [ROLE.adm], customId: 'nx:st-paidm:3', fields: { ref: 'tx9' } }); await route(paid, ctx);
+  assert.equal(ctx.db.prepare('SELECT state, ref FROM status_payouts WHERE id=3').get().state, 'paid');
+  // .rewards: staff only
+  const rw = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'rewards' }); await route(rw, ctx); assert.match(text(rw), /ltc1qrewardswallet[\s\S]*Owed to members/);
+  const rwd = fake(ctx, 'cmd', RND, { command: 'rewards' }); await route(rwd, ctx); assert.match(text(rwd), /do not have permission/);
 });
 
 test('fee panel: staff-only, shows the tiers from config', async () => {

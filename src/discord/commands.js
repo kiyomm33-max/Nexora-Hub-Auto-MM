@@ -25,6 +25,7 @@ export const definitions = [
   new SlashCommandBuilder().setName('set-privacy').setDescription('Show or hide your name on completed deal posts').setDMPermission(false).setDefaultMemberPermissions(null)
     .addStringOption((o) => o.setName('name').setDescription('Show your name, or hide it as Anonymous').setRequired(true).addChoices({ name: 'Hide my name (Anonymous)', value: 'hide' }, { name: 'Show my name', value: 'show' })),
   new SlashCommandBuilder().setName('testdone').setDescription('Post a sample completed-deal message in this channel (staff)').setDMPermission(false),
+  new SlashCommandBuilder().setName('rewards').setDescription('Status rewards wallet: deposit address, balance and what is owed (staff)').setDMPermission(false),
   new SlashCommandBuilder().setName('tag').setDescription('Server tag and status history of a member (staff)').setDMPermission(false)
     .addUserOption((o) => o.setName('member').setDescription('Member to look up (default: you)')),
   new SlashCommandBuilder().setName('tags').setDescription('Server tag and status leaderboard (staff)').setDMPermission(false),

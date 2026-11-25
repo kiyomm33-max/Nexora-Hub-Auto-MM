@@ -148,6 +148,6 @@ test('MultiProvider routes by coin, and describe() lists the addresses the owner
   assert.ok(p.supports('LTC', 'litecoin') && p.supports('USDT', 'bsc') && p.supports('USDC', 'ethereum') && p.supports('SOL', 'solana') && !p.supports('BTC', 'bitcoin'));
   assert.equal(p.validateAddress(RECV_EVM, { asset: 'USDT', network: 'bsc' }), RECV_EVM); assert.equal(p.validateAddress(RECV_SOL, { asset: 'SOL', network: 'solana' }), RECV_SOL);
   assert.throws(() => p.validateAddress(RECV_EVM, { asset: 'SOL', network: 'solana' }), /Solana/); assert.throws(() => p.validateAddress(RECV_SOL, { asset: 'ETH', network: 'ethereum' }), /EVM/);
-  assert.equal(p.describe().length, 4); assert.equal(p.describe()[2].value, evm.gasAddress);
+  assert.equal(p.describe().length, 5); assert.equal(p.describe()[2].value, ltc.rewardsAddress()); assert.equal(p.describe()[3].value, evm.gasAddress); assert.notEqual(ltc.rewardsAddress(), ltc.treasury);
   assert.equal(evm.validateAddress(evm.gasAddress), evm.gasAddress); assert.notEqual(evm.gasAddress, evm.treasury);
 });

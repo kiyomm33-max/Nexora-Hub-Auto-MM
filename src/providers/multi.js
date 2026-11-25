@@ -40,6 +40,7 @@ export class MultiProvider {
     return [
       { label: 'LTC fee address', value: this.ltc.treasury },
       { label: 'ETH / BNB / token fee address', value: this.evm.treasury },
+      { label: 'Status rewards wallet (deposit LTC here; the bot pays status payouts from it)', value: this.ltc.rewardsAddress() },
       { label: 'Gas wallet (fund with a little ETH and BNB so USDT/USDC payouts can pay network fees)', value: this.evm.gasAddress },
       { label: 'SOL fee address', value: this.sol.treasury },
     ];
