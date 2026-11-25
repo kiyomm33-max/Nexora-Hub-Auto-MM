@@ -146,9 +146,6 @@ export function supportPanelPayload() {
       .setButtonAccessory(new ButtonBuilder().setCustomId('nx:ticket-start').setLabel('Open Ticket').setStyle(ButtonStyle.Primary)));
   return { flags: 1 << 15, components: [c] };
 }
-export const startedEmbeds = (cfg, d) => [
-  base(cfg, 'Safety Warning', 'The bot and our support team will **NEVER** direct message you. Keep every conversation about the deal **inside this ticket**. Nobody from Nexora Hub will ever ask for **passwords, 2FA codes, cookies, seed phrases or private keys**.', BRAND.red),
-];
 // Icons of the deal card: custom emojis from the Nexora server. Change an ID here to swap one.
 export const CARD_ICONS = { title: '<:add:1575069932130140220>', sender: '<:bluestar:1575122626307948614>', receiver: '<:bluediamond:1575122581525237841>', instruction: '<:tasks:1575100811950821467>', amount: '<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585>', thumb: 'https://cdn.discordapp.com/emojis/1575069932130140220.png?size=128' };
 const STEP_STAGE = { type: 1, partner: 1, roles: 2, describe: 3, accept: 3, amount: 3, amount_confirm: 3, fee: 3, fee_confirm: 3 };
@@ -197,7 +194,6 @@ export function dealCard(cfg, d, set) {
     .addTextDisplayComponents(text(`**Opened** <t:${Math.floor(Date.parse(d.created_at) / 1000)}:R>`));
   return { flags: 1 << 15, components: [c], allowedMentions: { parse: [] } };
 }
-export const closeButton = (id) => [row(btn(`nx:am-close:${id}`, 'Close'))];
 
 const votesText = (d, set) => Object.entries(set.votes ?? {}).map(([u, v]) => `<@${u}>: **${v}**`).join('\n') || 'No answers yet.';
 const parties = (d) => `<@${d.party_a}>${d.party_b ? ` and <@${d.party_b}>` : ''}`;
@@ -208,10 +204,19 @@ export function stepPayload(cfg, d, set) {
   const e = (t, desc) => base(cfg, t, desc);
   switch (step) {
     case 'type': // legacy rooms created before the Deal Type step was removed: skip straight to adding the trader
-    case 'partner': return cfg.messageContent
-      ? { embeds: [e('Add the other trader', `<@${d.party_a}>, **mention the trader** you are dealing with (**@user**) or send their **Discord user ID** in this channel.`)], components: [] }
-      : { embeds: [e('Add the other trader', `<@${d.party_a}>, press the button and enter the **Discord user ID** of the trader you are dealing with.`)],
-          components: [row(btn(`nx:am-partnerid:${d.id}`, 'Enter user ID', ButtonStyle.Primary))] };
+    case 'partner': {
+      const lines = cfg.messageContent
+        ? `**Two ways to add them:**\n- Click **Invite Other Party** and paste their Discord ID\n- Mention them directly in this channel`
+        : `**How to add them:**\n- Click **Invite Other Party** and paste their Discord ID`;
+      const box = new ContainerBuilder().setAccentColor(BLUE)
+        .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`## ${CARD_ICONS.title} Add the other party\nChoose who you are dealing with, <@${d.party_a}>.`))
+          .setButtonAccessory(btn(`nx:am-partnerid:${d.id}`, 'Invite Other Party', ButtonStyle.Primary).setEmoji(CARD_ICONS.title.match(/:(\d+)>/)[1])))
+        .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(lines))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger)))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [box], files: [lineFile()] };
+    }
     case 'roles': {
       const who = (r) => { const u = Object.keys(set.votes ?? {}).find((x) => set.votes[x] === r); return u ? `<@${u}>` : 'None'; };
       const coin = coinName(d);

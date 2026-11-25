@@ -100,7 +100,6 @@ export async function startAuto(i, ctx, key) {
   const d = ctx.deals.get(deal.id);
   const card = await ch.send({ ...ui.dealCard(ctx.cfg, d, ctx.deals.setup(d)), files: [ui.lineFile()], allowedMentions: { users: [i.user.id] } });
   ctx.deals.setChannel(d.id, 'card_message_id', card.id);
-  await ch.send({ content: `<@${i.user.id}>`, embeds: ui.startedEmbeds(ctx.cfg, d), components: ui.closeButton(d.id), allowedMentions: { users: [i.user.id] } });
   const m = await ch.send({ ...(await payloadFor(ctx, d)), allowedMentions: { parse: [] } });
   ctx.deals.setChannel(d.id, 'status_message_id', m.id);
   return i.editReply({ embeds: [ui.okEmbed(ctx.cfg, 'Deal room created', `Continue in <#${ch.id}>.`)] });
@@ -251,7 +250,7 @@ export async function closeDeal(i, ctx, id, { staffCan }) {
     const final = ['completed', 'cancelled'].includes(d.status);
     if (!final && d.status === 'disputed') throw new UserError('Disputed deals are resolved by the provider and cannot be closed.');
     if (!final && (d.escrow_status === 'provider_confirmed' || d.observed_status !== 'none')) throw new UserError('Funds have been seen or secured by the provider, so the room cannot just be closed. Use **Cancel & refund** or ask staff.');
-    if (!d.party_b) throw new UserError('Add the other trader first, or ask staff to close this room.');
+    if (!d.party_b) { if (d.party_a === i.user.id) return performClose(i, ctx, d, true); throw new UserError('Add the other trader first, or ask staff to close this room.'); } // the creator can cancel alone before anyone joined
     const req = ctx.db.prepare('SELECT * FROM close_req WHERE deal_id=?').get(id);
     if (req && req.requested_by !== i.user.id) return performClose(i, ctx, d, true); // the other trader pressed Close too: that is agreement
     if (req) throw new UserError('You already asked to close. The other trader must agree.');
