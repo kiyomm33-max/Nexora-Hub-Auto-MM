@@ -226,8 +226,8 @@ export function stepPayload(cfg, d, set) {
         .setButtonAccessory(btn(`nx:am-role:${d.id}:${r}`, cta, ButtonStyle.Primary).setEmoji(id(icon)));
       const box = new ContainerBuilder().setAccentColor(BLUE)
         .addSectionComponents(new SectionBuilder()
-          .addTextDisplayComponents(text(`## ${CARD_ICONS.title} Who is sending and receiving?\nChoose your own role. The other party must choose the opposite role before the deal can continue.`))
-          .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${id(CARD_ICONS.title)}.png?size=128`)))
+          .addTextDisplayComponents(text(`## <:aaaaaaaa:1575247365198061638> Who is sending and receiving?\nChoose your own role. The other party must choose the opposite role before the deal can continue.`))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/1575248196471492618.png?size=128`)))
         .addSeparatorComponents(new SeparatorBuilder())
         .addSectionComponents(pick(SENDER, 'Sender', `Sends ${coinName(d)} into the escrow wallet.`, 'sender', "I'm sending"))
         .addSeparatorComponents(new SeparatorBuilder())
