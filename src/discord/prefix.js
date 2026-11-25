@@ -19,6 +19,12 @@ export const SPEC = {
   totals: { desc: 'Create the locked voice channels showing total volume and deals', args: [] },
   steal: { desc: 'Add a custom emoji to this server (reply to a message with it, or put it after the command)', args: [['emoji', 'rest', false]] },
   testdone: { desc: 'Post a sample completed-deal message in this channel', args: [] },
+  ban: { desc: 'Ban a member (mention or ID, works for people who left)', args: [['member', 'user', true], ['reason', 'rest', false]], textOnly: true },
+  kick: { desc: 'Kick a member', args: [['member', 'user', true], ['reason', 'rest', false]], textOnly: true },
+  nick: { desc: 'Change a member\'s nickname (leave it empty to reset)', args: [['member', 'user', true], ['nickname', 'rest', false]], textOnly: true },
+  timeout: { desc: 'Time a member out: 10m, 2h, 1d, up to 28d (off removes it)', args: [['member', 'user', true], ['duration', 'string', true], ['reason', 'rest', false]], textOnly: true },
+  purge: { desc: 'Delete the last 1 to 100 messages here, optionally only from one member', args: [['amount', 'int', true], ['member', 'user', false]], textOnly: true },
+  role: { desc: 'Add a role to a member, or remove it if they have it. `.role all @role` gives it to everyone', args: [['member', 'user', true], ['role', 'role', true]], textOnly: true },
   rewards: { desc: 'Show the status rewards wallet: deposit address, balance and what is owed', args: [] },
   tag: { desc: 'Server tag and status history of a member', args: [['member', 'user', false]] },
   tags: { desc: 'Server tag and status leaderboard', args: [] },
@@ -69,7 +75,7 @@ export function helpLines(prefix, { all }) {
 const USER_RE = /^<@!?(\d{15,25})>$|^(\d{15,25})$/;
 
 /** Split "a b rest of the text" into the values for `args`. Throws UserError with the usage line when something is missing or malformed. */
-export async function parseArgs(raw, args, { usage, resolveUser }) {
+export async function parseArgs(raw, args, { usage, resolveUser, resolveRole }) {
   const toks = [...raw.matchAll(/\S+/g)].map((m) => ({ v: m[0], at: m.index }));
   const vals = {}; let k = 0;
   for (const [name, type, req] of args) {
@@ -81,6 +87,9 @@ export async function parseArgs(raw, args, { usage, resolveUser }) {
     else if (type === 'user') {
       const m = USER_RE.exec(t.v); if (!m) throw new UserError(`Mention a member or send their user ID. Usage: \`${usage}\``);
       vals[name] = await resolveUser(m[1] ?? m[2]);
+    } else if (type === 'role') {
+      const m = /^<@&(\d{15,25})>$|^(\d{15,25})$/.exec(t.v); if (!m) throw new UserError(`Mention a role or send its ID. Usage: \`${usage}\``);
+      vals[name] = await resolveRole(m[1] ?? m[2]);
     } else vals[name] = t.v;
   }
   return vals;
@@ -88,7 +97,7 @@ export async function parseArgs(raw, args, { usage, resolveUser }) {
 
 function optionsOf(sub, vals, attachment) {
   const get = (n, req) => { const v = vals[n]; if (v === undefined && req) throw new UserError(`Missing \`${n}\`.`); return v ?? null; };
-  return { getSubcommand: () => sub, getString: get, getInteger: get, getUser: (n) => vals[n] ?? null, getAttachment: () => attachment ?? null };
+  return { getSubcommand: () => sub, getString: get, getInteger: get, getUser: (n) => vals[n] ?? null, getRole: (n, req) => { const v = vals[n]; if (!v && req) throw new UserError(`Missing \`${n}\`.`); return v ?? null; }, getAttachment: () => attachment ?? null };
 }
 
 /** Looks enough like a ChatInputCommandInteraction for the command handlers. Replies go to the channel as a reply to the message. */
@@ -106,7 +115,7 @@ function interactionFrom(msg, name, options, { dm = false } = {}) {
     return msg.reply(clean(p));
   };
   const i = {
-    prefix: true, commandName: name, options, user: msg.author, member: msg.member, guild: msg.guild, channel: msg.channel, channelId: msg.channelId,
+    prefix: true, message: msg, commandName: name, options, user: msg.author, member: msg.member, guild: msg.guild, channel: msg.channel, channelId: msg.channelId,
     memberPermissions: msg.member?.permissions, deferred: false, replied: false,
     isChatInputCommand: () => true, isButton: () => false, isModalSubmit: () => false,
     async reply(p) { i.replied = true; sent = await send(p); return sent; },
@@ -142,13 +151,19 @@ export async function commandFromMessage(msg, ctx) {
       if (!sub || !spec.subs[sub]) { await err(`Usage: \`${prefix}${name} <${Object.keys(spec.subs).join('|')}>\``); return true; }
       s = spec.subs[sub]; rest = rest.slice(m[0].length);
     }
-    const usage = usageOf(prefix, name, sub, s);
+    if (name === 'role' && /^all(\s|$)/i.test(rest)) { sub = 'all'; s = { args: [['role', 'role', true]] }; rest = rest.replace(/^all\s*/i, ''); }
+    const usage = sub === 'all' ? `${prefix}role all <role>` : usageOf(prefix, name, sub, s);
     const resolveUser = async (id) => {
       const u = msg.mentions?.users?.get?.(id) ?? await msg.client?.users?.fetch?.(id).catch(() => null);
       if (!u) throw new UserError('I could not find that user.');
       return u;
     };
-    const vals = await parseArgs(rest, s.args, { usage, resolveUser });
+    const resolveRole = async (id) => {
+      const r = msg.mentions?.roles?.get?.(id) ?? msg.guild.roles?.cache?.get?.(id) ?? await msg.guild.roles?.fetch?.(id).catch(() => null);
+      if (!r) throw new UserError('I could not find that role.');
+      return r;
+    };
+    const vals = await parseArgs(rest, s.args, { usage, resolveUser, resolveRole });
     if (name === 'steal') { const ref = msg.reference?.messageId ? await msg.fetchReference?.().catch(() => null) : null; vals.emoji = `${vals.emoji ?? ''} ${ref?.content ?? ''}`.trim(); }
     const att = msg.attachments?.first?.();
     if (name === 'ticket') { if (vals.text.length < 10) throw new UserError('Describe your problem in at least 10 characters.'); vals.subject = vals.text.slice(0, 80); vals.details = vals.text; }

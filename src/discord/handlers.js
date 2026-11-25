@@ -23,6 +23,7 @@ import { inviteStats } from './invites.js';
 import * as inv from '../core/invites.js';
 import * as privacy from '../core/privacy.js';
 import { fromSat } from '../providers/ltc.js';
+import * as mod from './moderation.js';
 
 export { UserError } from './automm.js';
 import { UserError } from './automm.js';
@@ -275,7 +276,13 @@ const commands = {
     return pl.create(i, ctx, { channel: o.getChannel('channel') ?? i.channel, question: o.getString('question', true), duration: o.getString('duration', true),
       options: [1, 2, 3, 4, 5].map((n) => o.getString(`option${n}`)).filter(Boolean) });
   },
+  async ban(i, ctx) { return mod.ban(i, ctx, { need, say }); },
+  async kick(i, ctx) { return mod.kick(i, ctx, { need, say }); },
+  async nick(i, ctx) { return mod.nick(i, ctx, { need, say }); },
+  async timeout(i, ctx) { return mod.timeout(i, ctx, { need, say }); },
+  async purge(i, ctx) { return mod.purge(i, ctx, { need, say }); },
   async role(i, ctx) {
+    if (i.options.getSubcommand?.() !== 'all') return mod.roleToggle(i, ctx, { need, say });
     need(i, ctx, 'panel.post');
     const role = i.options.getRole('role', true); const g = i.guild;
     if (role.id === g.roles.everyone?.id || role.managed) throw new UserError('That role cannot be given out: it is @everyone or managed by an integration.');

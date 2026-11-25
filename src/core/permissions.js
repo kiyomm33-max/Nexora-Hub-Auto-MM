@@ -3,7 +3,7 @@ export const LEVELS = { owner: 100, admin: 80, senior: 60, middleman: 40, suppor
 export const LABELS = { owner: 'Owner', admin: 'Administrator', senior: 'Senior Middleman', middleman: 'Middleman', support: 'Support', trial: 'Trial Staff' };
 export const CAPS = {
   'ticket.handle': 10, 'dispute.review': 20, 'history.view': 20, 'deal.claim': 40,
-  'deal.cancel': 60, 'activity.view': 60, 'panel.post': 80, 'simulate': 80, 'audit.verify': 80, 'backup': 80, 'wallet': 100, 'refund': 100,
+  'deal.cancel': 60, 'activity.view': 60, 'panel.post': 80, 'mod.light': 60, 'mod.heavy': 80, 'simulate': 80, 'audit.verify': 80, 'backup': 80, 'wallet': 100, 'refund': 100,
 };
 
 /** Highest staff role for a set of Discord role IDs. */
