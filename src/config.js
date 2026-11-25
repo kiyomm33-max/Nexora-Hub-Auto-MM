@@ -26,7 +26,7 @@ export function loadConfig(e = env) {
     channels: {
       dealCategory: e.DEAL_CATEGORY_ID,
       disputeCategory: e.DISPUTE_CATEGORY_ID,
-      ticketCategory: e.TICKET_CATEGORY_ID,
+      ticketCategory: e.TICKET_CATEGORY_ID || '1575091205534912584',
       completed: e.COMPLETED_CHANNEL_ID,
       staffLog: e.STAFF_LOG_CHANNEL_ID,
       transcripts: e.TRANSCRIPT_CHANNEL_ID,
