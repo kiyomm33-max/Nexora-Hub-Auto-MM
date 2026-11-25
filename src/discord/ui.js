@@ -469,6 +469,24 @@ function shortCard(cfg, d, { eur, txUrl }) {
   return box;
 }
 
+function detectedCard(cfg, d, { eur, txUrl }) {
+  const got = d.received_crypto ? trio(d, d.received_crypto, usdWorth(d, d.received_crypto), eur) : '`pending`';
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## ${ge('hourglass', '⏳')} Transaction Detected\nDeal ${shortId(d)} | ${coinName(d)} on ${networkName(d)}`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${eid('hourglass', '1575069601312808970')}.png?size=128`)))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Amount received:** ${got}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Transaction:** ${txLink(d.tx_hash)}\n**Confirmations required:** \`${d.required_conf}\` (seen: \`${d.confirmations}\`)`));
+  const btns = [btn(`nx:am-close:${d.id}`, 'Close', ButtonStyle.Secondary)];
+  if (txUrl) btns.unshift(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(txUrl).setLabel('View transaction'));
+  return box.addActionRowComponents(row(...btns))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**${ge('clock', '🕒')} Waiting for network confirmation:**\nNo action is needed. The next card appears automatically when the payment is ready. This is a blockchain observation only, not escrow confirmation.`))
+    .addMediaGalleryComponents(lineGallery());
+}
+
 function securedCard(cfg, d, { eur, txUrl }) {
   const crypto = d.received_crypto ?? d.pay_amount;
   const box = new ContainerBuilder().setAccentColor(GREEN)
@@ -547,7 +565,7 @@ export function dealCompletePayload(cfg, d, choices = {}) {
 /** V2 card for the phases that have one (invoice, short payment, funds secured); null for the others. */
 export function phasePayload(cfg, d, opts = {}) {
   const ph = phaseOf(d);
-  const make = ph === 'invoice' ? invoiceCard : ph === 'short' ? shortCard : ph === 'received' ? securedCard : ph === 'payout' ? payoutCard : ph === 'paying' ? payingCard : null;
+  const make = ph === 'invoice' ? invoiceCard : ph === 'short' ? shortCard : ph === 'detected' ? detectedCard : ph === 'received' ? securedCard : ph === 'payout' ? payoutCard : ph === 'paying' ? payingCard : null;
   if (!make) return null;
   return { flags: 1 << 15, components: [make(cfg, d, opts)], files: [lineFile()] };
 }

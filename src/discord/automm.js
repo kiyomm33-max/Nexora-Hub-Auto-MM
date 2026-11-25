@@ -44,7 +44,7 @@ export async function payloadFor(ctx, d) {
     return p;
   }
   const ping = pingIds(ctx, d).map((x) => `<@${x}>`).join(' ') || null;
-  if (['invoice', 'short', 'received', 'payout', 'paying'].includes(ui.phaseOf(d))) { // these phases are Components V2 cards
+  if (['invoice', 'short', 'detected', 'received', 'payout', 'paying'].includes(ui.phaseOf(d))) { // these phases are Components V2 cards
     const eur = await (ctx.eurPerUsd ?? eurPerUsd)().catch(() => null);
     let txUrl = null; try { const u = d.tx_hash ? ctx.provider.explorerTx?.(d.tx_hash, d) : null; if (/^https?:\/\//.test(u ?? '')) txUrl = u; } catch { /* no explorer for this provider */ }
     let qr = false; const extra = [];
