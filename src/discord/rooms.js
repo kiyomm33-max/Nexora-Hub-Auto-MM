@@ -44,6 +44,10 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   if (deal.card_message_id) { // the card at the top of the room follows the deal
     try { const card = await ch.messages.fetch(deal.card_message_id); await card.edit(dealCard(ctx.cfg, deal, ctx.deals.setup(deal))); } catch (e) { log.warn('deal card update failed', { err: String(e?.message ?? e) }); }
   }
+  if (deal.status === 'completed') { // the Deal completed status card is gone: the Deal complete card and the #completed post replace it
+    if (deal.status_message_id) { try { await (await ch.messages.fetch(deal.status_message_id)).delete(); } catch { /* already gone */ } ctx.deals.setChannel(deal.id, 'status_message_id', null); }
+    return;
+  }
   const payload = { ...(await payloadFor(ctx, deal)), allowedMentions: { users: pingIds(ctx, deal) } };
   const phase = deal.status === 'waiting_parties' ? `s:${ctx.deals.setup(deal).step}` : phaseOf(deal);
   const changed = lastPhase.get(deal.id) !== phase; lastPhase.set(deal.id, phase);
