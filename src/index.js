@@ -21,6 +21,7 @@ import { startInvites } from './discord/invites.js';
 import { recoverReleases, partnerFromMessage, payoutFromMessage, refundFromMessage } from './discord/automm.js';
 import { scheduleIdleCloser } from './jobs/idle.js';
 import { route } from './discord/handlers.js';
+import { addressFromMessage as statusAddressFromMessage } from './discord/status.js';
 import { syncDeal, publishCompleted, refreshStatus } from './discord/rooms.js';
 import { registerCommands } from './discord/register.js';
 
@@ -57,7 +58,7 @@ function boot(level) {
   client = new Client({ intents });
   ctx.client = client; cfg.messageContent = withMessages;
   if (level >= 2) client.on(Events.GuildMemberAdd, (m) => { sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)); pingNewMember(ctx, m).catch((e) => log.error('join ping failed', e)); });
-  if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
+  if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx), statusAddressFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
   ctx.presenceTracking = level >= 3;
   startStatusLoop(client, ctx);
   startGiveawayLoop(client, ctx);

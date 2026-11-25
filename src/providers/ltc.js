@@ -229,6 +229,40 @@ export class LtcWallet {
     return txid;
   }
 
+  // ---- status rewards wallet: m/84'/coin'/2'/0/0. The owner deposits LTC here; the bot pays status payouts from it. ----
+  rewardsAddress() { return this.#addr(this.#key(2, 0)); }
+  async rewardsBalance() {
+    const u = await this.#utxos(this.rewardsAddress());
+    return { confirmedSat: u.filter((x) => x.status?.confirmed).reduce((s, x) => s + x.value, 0), pendingSat: u.filter((x) => !x.status?.confirmed).reduce((s, x) => s + x.value, 0) };
+  }
+  /** Send `cents` USD worth of LTC (at the current rate) from the rewards wallet. Uses confirmed coins only; change returns to the same address. */
+  async sendReward(to, cents) {
+    this.validateAddress(to);
+    const rate = await this.rate();
+    const sat = Math.ceil(((cents / 100) / rate) * SAT);
+    if (sat < DUST) throw new Error('payout amount is too small to send');
+    const key = this.#key(2, 0);
+    const kp = ECPair.fromPrivateKey(Buffer.from(key.privateKey), { network: this.n.net });
+    const pay = bitcoin.payments.p2wpkh({ pubkey: Buffer.from(key.publicKey), network: this.n.net });
+    const utxos = (await this.#utxos(pay.address)).filter((u) => u.status?.confirmed).sort((a, b) => b.value - a.value);
+    const feeRate = await this.#feeRate();
+    const chosen = []; let sum = 0; let miner = 0;
+    for (const u of utxos) { chosen.push(u); sum += u.value; miner = Math.ceil(Math.ceil(10.5 + 68 * chosen.length + 31 * 2) * feeRate); if (sum >= sat + miner) break; }
+    if (!chosen.length) miner = Math.ceil(Math.ceil(10.5 + 68 + 62) * feeRate);
+    if (sum < sat + miner) { const e = new Error('The rewards wallet does not hold enough confirmed LTC.'); e.insufficient = { needSat: sat + miner, haveSat: sum }; throw e; }
+    const change = sum - sat - miner;
+    const psbt = new bitcoin.Psbt({ network: this.n.net });
+    for (const u of chosen) psbt.addInput({ hash: u.txid, index: u.vout, witnessUtxo: { script: pay.output, value: u.value } });
+    psbt.addOutput({ address: to, value: sat });
+    if (change >= DUST) psbt.addOutput({ address: pay.address, value: change });
+    psbt.signAllInputs(kp); psbt.finalizeAllInputs();
+    let txid;
+    try { txid = await this.#broadcast(psbt.extractTransaction().toHex()); }
+    catch (e) { if (!/rejected/i.test(String(e?.message))) e.uncertain = true; throw e; } // a timeout may still have reached the network: never retry blindly
+    try { audit(this.db, { category: 'provider', actor: 'ltc-wallet', action: 'reward.broadcast', detail: { txid, to, sat, usdCents: cents } }); } catch { /* the coins are already sent */ }
+    return { txid, sat, rate, url: this.explorerTx(txid) };
+  }
+
   /** Owner-only refund/override: send everything at a deal's address (minus miner fee) to `to`. No treasury cut. */
   async sweep(dealId, to) {
     const d = this.db.prepare('SELECT d.*, w.payout_state FROM deals d JOIN ltc_wallet w ON w.deal_id=d.id WHERE d.id=?').get(dealId);

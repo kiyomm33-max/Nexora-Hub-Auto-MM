@@ -346,8 +346,8 @@ export const statusPanelPayload = (cfg) => {
 };
 export const earnTimeEmbed = (cfg, s) => base(cfg, 'Online Time', !s.enrolled ? 'You have not started yet. Press **Start Earning** on the panel.' :
   `**Status:** ${s.counting ? 'counting now' : 'not counting (status or presence is not matching)'}\n**Time online:** **${dur(s.seconds)}**\n**Earned:** **${cusd(s.earned)}**\n**Pending payout:** ${cusd(s.pending)}\n**Paid out:** ${cusd(s.paid)}\n**Available:** **${cusd(s.available)}**\n\nNext day in ${dur(s.nextDayIn)}, week bonus in ${dur(s.nextWeekIn)}.`);
-export const payMethodRow = (methods) => [row(...Object.entries(methods).map(([k, v]) => btn(`nx:st-pm:${k}`, v, ButtonStyle.Primary)))];
-export const earnPayModal = (method, label) => modal(`nx:st-pay:${method}`, `${label} payout`, input('details', method === 'paypal' ? 'PayPal email' : `${label} address`, { max: 120 }));
+export const earnRoomButtons = (id) => [row(btn(`nx:st-cancel:${id}`, 'Cancel request', ButtonStyle.Secondary))];
+export const earnAddrButtons = (id, addr) => [row(btn(`nx:st-addryes:${id}:${addr}`, 'Yes, this is correct', ButtonStyle.Primary), btn(`nx:st-addrno:${id}`, 'No, re-enter'))];
 export const earnPaidModal = (id) => modal(`nx:st-paidm:${id}`, 'Mark as paid', input('ref', 'Transaction ID or note (optional)', { required: false, max: 200 }));
 export const earnPayoutEmbed = (cfg, r, methods) => base(cfg, `Status payout #${r.id}`,
   `**Member:** <@${r.user_id}>\n**Amount:** **${cusd(r.cents)}**\n**Method:** ${methods[r.method]}\n**Send to:** \`${r.details}\`\n**State:** **${r.state}**${r.handled_by ? `\nHandled by <@${r.handled_by}>` : ''}${r.ref ? `\n**Reference:** ${r.ref}` : ''}`);

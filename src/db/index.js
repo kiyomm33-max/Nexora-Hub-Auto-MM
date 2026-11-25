@@ -122,6 +122,8 @@ export function openDb(file) {
   const have = new Set(db.prepare('PRAGMA table_info(deals)').all().map((c) => c.name));
   const want = { deal_type: 'TEXT', sender_id: 'TEXT', receiver_id: 'TEXT', desc_by: 'TEXT', fee_usd: "TEXT NOT NULL DEFAULT '0'", fee_payer: 'TEXT', send_usd: 'TEXT', receive_usd: 'TEXT', pay_address: 'TEXT', pay_amount: 'TEXT', rate_usd: 'TEXT', tx_hash: 'TEXT', received_crypto: 'TEXT', short_state: 'TEXT', short_crypto: 'TEXT', short_votes: 'TEXT', required_conf: 'INTEGER NOT NULL DEFAULT 1', released_at: 'TEXT', payout_address: 'TEXT', payout_requested_at: 'TEXT', release_at: 'TEXT', release_by: 'TEXT', setup: "TEXT NOT NULL DEFAULT '{}'", completed_message_id: 'TEXT' };
   for (const [c, t] of Object.entries(want)) if (!have.has(c)) db.exec(`ALTER TABLE deals ADD COLUMN ${c} ${t}`);
+  const sp = new Set(db.prepare('PRAGMA table_info(status_payouts)').all().map((c) => c.name));
+  for (const [c, t] of Object.entries({ room_id: 'TEXT', address_ok: 'INTEGER NOT NULL DEFAULT 0', send_state: 'TEXT', notified: 'INTEGER NOT NULL DEFAULT 0' })) if (!sp.has(c)) db.exec(`ALTER TABLE status_payouts ADD COLUMN ${c} ${t}`);
   db.tx = (fn) => {
     db.exec('BEGIN IMMEDIATE');
     try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; }
