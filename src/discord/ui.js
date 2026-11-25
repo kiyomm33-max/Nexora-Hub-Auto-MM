@@ -112,10 +112,10 @@ export function panelPayload(cfg, mode) {
     const em = emojiOf(c); if (em) o.emoji = em; return o;
   }));
   const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`## Nexora Auto MM\nAutomated crypto escrow\nPlease read ${rules} before you start.${demo}`))
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(`## <:aaaaaaaa:1575247365198061638> Nexora Auto MM\nAutomated crypto escrow\nPlease read ${rules} before you start.${demo}`))
       .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text('**Add the other side of the deal**\n**Agree on the item, terms and price**\n**Fund the escrow and release when ready**'))
+    .addTextDisplayComponents(text('<:add:1575069932130140220> **Add the other side of the deal**\n<:aaaaaaaaaaaaa:1575248196471492618> **Agree on the item, terms and price**\n<:959d67ae71c14b229c46f416110461ab:1575197569808728104> **Fund the escrow and release when ready**'))
     .addSeparatorComponents(new SeparatorBuilder())
     .addActionRowComponents(new ActionRowBuilder().addComponents(menu))
     .addSeparatorComponents(new SeparatorBuilder())
