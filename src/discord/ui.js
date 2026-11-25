@@ -213,7 +213,7 @@ export function stepPayload(cfg, d, set) {
           .setButtonAccessory(btn(`nx:am-partnerid:${d.id}`, 'Invite Other Party', ButtonStyle.Primary).setEmoji(CARD_ICONS.title.match(/:(\d+)>/)[1])))
         .addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(lines))
         .addSeparatorComponents(new SeparatorBuilder())
-        .addActionRowComponents(row(btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger)))
+        .addActionRowComponents(row(btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
         .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
       return { flags: 1 << 15, components: [box], files: [lineFile()] };
     }

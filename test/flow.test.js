@@ -91,7 +91,7 @@ test('start: private room with the deal card + straight to adding the trader (no
   const card = JSON.stringify(room.sent[0].components.map((c) => c.toJSON())); assert.match(card, /Stage 1\/5/); assert.match(card, /Current instruction/); assert.match(card, /not assigned/); assert.match(card, /The opener must invite the other party/); assert.match(card, /emojis\/1575069932130140220/);
   assert.ok(ctx.deals.get(d.id).card_message_id); assert.match(card, /attachment:\/\/line.png/); assert.equal(room.sent[0].files.length, 1);
   assert.ok(!JSON.stringify(room.sent).includes('Safety Warning'), 'safety warning removed');
-  const first = JSON.stringify(room.sent[1].components.map((c) => c.toJSON())); assert.match(first, /Add the other party/); assert.match(first, /Invite Other Party/); assert.match(first, /nx:am-partnerid/); assert.match(first, /Cancel Deal/); assert.match(first, /line\.png/); assert.doesNotMatch(first, /Deal Type|Select Deal Type/);
+  const first = JSON.stringify(room.sent[1].components.map((c) => c.toJSON())); assert.match(first, /Add the other party/); assert.match(first, /Invite Other Party/); assert.match(first, /nx:am-partnerid/); assert.match(first, /Cancel Deal/); assert.match(first, /1575259368771948705/); assert.match(first, /line\.png/); assert.doesNotMatch(first, /Deal Type|Select Deal Type/);
   await startDeal(ctx, 'BTC'); const third = fake(ctx, 'btn', A, { customId: 'nx:am-start:ETH' }); await route(third, ctx); assert.match(text(third), /2 open deals/);
 });
 
