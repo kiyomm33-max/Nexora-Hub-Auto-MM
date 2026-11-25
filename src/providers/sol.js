@@ -68,6 +68,7 @@ export class SolWallet {
     for (const s of sources) { try { const v = Number(await s()); if (v > 1 && v < 1e6) return v; } catch { /* next */ } }
     const e = new Error('Could not fetch the SOL price right now. Try again in a minute.'); e.userFacing = true; throw e;
   }
+  async usdRate(d) { return ['USDT', 'USDC'].includes(d.asset) ? 1 : this.rate(); }
   async createEscrow(deal) {
     const usd = Number(deal.send_usd);
     if (usd > this.cfg.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }

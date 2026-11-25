@@ -121,6 +121,7 @@ export class LtcWallet {
     const e = new Error('Could not fetch the LTC price right now. Try again in a minute.'); e.userFacing = true; throw e;
   }
 
+  async usdRate() { return this.rate(); }
   async createEscrow(deal) {
     const usd = Number(deal.send_usd);
     if (usd > this.cfg.ltc.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.ltc.maxDealUsd} for now.`); e.userFacing = true; throw e; }

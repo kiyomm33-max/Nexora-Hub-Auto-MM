@@ -4,6 +4,13 @@ import { log } from '../logger.js';
 
 const ICONS = ['btc', 'eth', 'ltc', 'sol', 'usdt', 'usdc'];
 export const emojiMap = new Map();
+/** Emojis of the Nexora server by name (e.g. hourglass), so they can be used without hard-coding every ID. */
+export const guildEmoji = new Map();
+export async function syncGuildEmojis(client, guildId) {
+  const g = await client.guilds.fetch(guildId); const all = await g.emojis.fetch();
+  for (const e of all.values()) guildEmoji.set(e.name, `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>`);
+  log.info('server emojis loaded', { count: guildEmoji.size });
+}
 
 export async function syncEmojis(client) {
   const have = await client.application.emojis.fetch();

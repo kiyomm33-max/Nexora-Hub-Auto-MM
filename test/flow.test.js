@@ -32,7 +32,7 @@ function setup() {
   const guild = { ownerId: 'owner', roles: { everyone: { id: 'ev' } }, members: { me: { id: 'bot' }, fetch: async (id) => { if (id === '000000000000000000') throw new Error('unknown'); return { user: { bot: id === BOT } }; } }, channels: { create: async (o) => { const c = mkChan(`c${++seq}`, o.name); c.opts = o; return c; } } };
   const client = { channels: { fetch: async (id) => { const c = chans.get(id); if (!c || c.deleted) throw new Error('nf'); return c; } }, guilds: { fetch: async () => guild }, users: { fetch: async (id) => ({ username: `user${id.slice(0, 3)}` }) } };
   const limiter = new RateLimiter(); const check = limiter.check.bind(limiter); limiter.check = (k, ...r) => (k.startsWith('global:') && !process.env.TEST_GLOBAL_LIMIT ? { ok: true } : check(k, ...r));
-  const ctx = { cfg, db, deals, provider: new DemoProvider(), mode: 'demo', limiter, client };
+  const ctx = { cfg, db, deals, provider: new DemoProvider(), mode: 'demo', limiter, client, eurPerUsd: async () => 0.9 };
   let chain = Promise.resolve(); deals.on('update', (d, c) => { chain = chain.then(() => syncDeal(ctx, d, c)); });
   ctx.settle = () => chain;
   ctx.guild = guild; ctx.chans = chans; return ctx;
@@ -64,7 +64,7 @@ async function runToRoom(ctx, { amount = '20', feeChoice = 'receiver' } = {}) {
   await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: B } }, values: [] });
   await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`); await click(ctx, A, `nx:am-roleok:${id}`); await click(ctx, B, `nx:am-roleok:${id}`);
   await submit(ctx, A, `nx:am-termsmodal:${id}`, { terms: '20k Robux for $20 of LTC' }); await click(ctx, A, `nx:am-termsok:${id}`); await click(ctx, B, `nx:am-termsok:${id}`);
-  await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount });
+  await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount });
   await click(ctx, A, `nx:am-amtok:${id}`); await click(ctx, B, `nx:am-amtok:${id}`);
   if (Number(amount) >= 50) { await click(ctx, A, `nx:am-fee:${id}:${feeChoice}`); await click(ctx, B, `nx:am-feeok:${id}`); }
   return id;
@@ -126,10 +126,10 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   await submit(ctx, B, `nx:am-termsmodal:${id}`, { terms: 'Sending $20 of LTC' }); assert.deepEqual(ctx.deals.setup(ctx.deals.get(id)).votes, {}, 'a change clears both approvals');
   await click(ctx, A, `nx:am-termsok:${id}`); await click(ctx, B, `nx:am-termsok:${id}`);
   assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount'); assert.match(ctx.deals.get(id).item, /Sender: Sending \$20 of LTC \| Receiver: Receiving 20k Robux by trade/);
-  for (const bad of ['abc', '0', '-5', '1e3', '999999999']) assert.match(text(await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount: bad })), /between 1 and 100000/);
-  await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount: '$20' }); assert.equal(ctx.deals.get(id).amount, '20.00');
+  for (const bad of ['abc', '0', '-5', '1e3', '999999999']) assert.match(text(await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount: bad })), /between 1 and 100000/);
+  await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount: '$20' }); assert.equal(ctx.deals.get(id).amount, '20.00');
   await click(ctx, A, `nx:am-amtno:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount');
-  await submit(ctx, A, `nx:am-amountmodal:${id}`, { amount: '20' });
+  await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount: '20' });
   await click(ctx, A, `nx:am-amtok:${id}`); assert.equal(ctx.deals.get(id).status, 'waiting_parties', 'one confirmation is not enough');
   await click(ctx, A, `nx:am-amtok:${id}`); assert.equal(ctx.deals.get(id).status, 'waiting_parties');
   await click(ctx, B, `nx:am-amtok:${id}`);
@@ -922,4 +922,24 @@ test('a stale setup step left behind by a late post is swept away when the next 
   await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
   assert.ok(!ch.msgs.has(stale.id), 'stale step message removed');
   assert.ok(ch.msgs.has(ctx.deals.get(id).card_message_id), 'the deal card is kept');
+});
+
+test('amount step: only the sender enters the price; USD, EUR and crypto units convert; review card shows every conversion', async () => {
+  const ctx = setup(); const { d } = await startDeal(ctx); const id = d.id; const ch = ctx.chans.get(ctx.room);
+  await route(fake(ctx, 'select', A, { customId: `nx:am-partner:${id}`, channel: ch, opts: { user: { id: B } }, values: [] }), ctx);
+  await click(ctx, A, `nx:am-role:${id}:sender`); await click(ctx, B, `nx:am-role:${id}:receiver`); await click(ctx, A, `nx:am-roleok:${id}`); await click(ctx, B, `nx:am-roleok:${id}`);
+  await submit(ctx, A, `nx:am-termsmodal:${id}`, { terms: 'x y z test' }); await click(ctx, A, `nx:am-termsok:${id}`); await click(ctx, B, `nx:am-termsok:${id}`);
+  const card = JSON.stringify(ch.sent.at(-1).components.map((c) => c.toJSON()));
+  for (const m of [/Set the deal amount/, /Only the buyer/, /Choose how to enter the price/, /US Dollars/, /Euros/, /Crypto amount/, /nx:am-amountunit/, /Cancel Deal/, /line\.png/]) assert.match(card, m);
+  assert.match(text(await submit(ctx, B, `nx:am-amountmodal:${id}`, { amount: '20' })), /Only the sender/);
+  const pick = async (u, v) => { const i = fake(ctx, 'select', u, { customId: `nx:am-amountunit:${id}`, channel: ch, values: [v] }); i.values = [v]; await route(i, ctx); return i; };
+  assert.match(text(await pick(B, 'eur')), /Only the sender/);
+  await pick(A, 'eur'); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount'); // opens a modal, no step change
+  await submit(ctx, A, `nx:am-amountmodal:${id}:eur`, { amount: '18' });
+  let g = ctx.deals.get(id); assert.equal(g.amount, '20.00'); assert.equal(ctx.deals.setup(g).step, 'amount_confirm'); assert.equal(ctx.deals.setup(g).quote.unit, 'eur');
+  const rev = JSON.stringify(ch.sent.at(-1).components.map((c) => c.toJSON()));
+  for (const m of [/Review the final amount/, /\$20\.00 USD/, /€18\.00 EUR/, /LTC/, /Price source/, /EUR/, /Buyer approval/, /Seller approval/, /Approve Amount/, /Select Again/, /Cancel Deal/]) assert.match(rev, m);
+  await click(ctx, A, `nx:am-amtno:${id}`); assert.equal(ctx.deals.setup(ctx.deals.get(id)).step, 'amount');
+  await submit(ctx, A, `nx:am-amountmodal:${id}:crypto`, { amount: '1' }); g = ctx.deals.get(id); assert.equal(g.amount, '41.23', 'crypto at the demo rate');
+  await click(ctx, A, `nx:am-amtno:${id}`); assert.match(text(await submit(ctx, A, `nx:am-amountmodal:${id}:eur`, { amount: 'abc' })), /Enter a number/);
 });

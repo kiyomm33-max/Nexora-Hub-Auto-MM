@@ -24,6 +24,7 @@ export class MultiProvider {
   #byId(id) { return this.#for(this.db.prepare('SELECT asset, network FROM deals WHERE id=?').get(id)); }
   supports(asset, network) { return asset === 'LTC' || this.evm.supports(asset, network) || this.sol.supports(asset, network); }
   validateAddress(addr, deal) { return this.#for(deal).validateAddress(addr); }
+  usdRate(deal) { return this.#for(deal).usdRate(deal); }
   createEscrow(deal) { return this.#for(deal).createEscrow(deal); }
   cancelEscrow(deal) { return this.#for(deal).cancelEscrow(deal); }
   referDispute(deal, reason) { return this.#for(deal).referDispute(deal, reason); }

@@ -83,6 +83,7 @@ export class EvmWallet {
     for (const s of sources) { try { const v = Number(await s()); if (v > 1 && v < 1e7) return v; } catch { /* next source */ } }
     const e = new Error(`Could not fetch the ${m.symbol} price right now. Try again in a minute.`); e.userFacing = true; throw e;
   }
+  async usdRate(d) { return this.rate(this.#meta(d)); }
   async createEscrow(deal) {
     const m = this.#meta(deal); const usd = Number(deal.send_usd);
     if (usd > this.cfg.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }
