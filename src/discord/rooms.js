@@ -5,9 +5,10 @@ import { ChannelType, PermissionFlagsBits as P, AttachmentBuilder, ActionRowBuil
 import { LEVELS, CAPS } from '../core/permissions.js';
 import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
+import * as ui from './ui.js';
 import { base, dealEmbed, completedEmbed, dealCard, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
-import { isHidden, ANON } from '../core/privacy.js';
+import { hiddenFor, ANON } from '../core/privacy.js';
 import { metaOf, parseBody } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
@@ -49,6 +50,8 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   let old = null;
   if (deal.status_message_id) { try { old = await ch.messages.fetch(deal.status_message_id); } catch { /* already gone */ } }
   // progress ticks inside one phase (confirmation counts) edit in place; everything else is a fresh message with a ping
+  // a V2 card of the same phase (confirmation count, countdown) is edited in place; its attachments stay on the message
+  if (old && !bump && !changed && deal.status !== 'waiting_parties' && (payload.flags ?? 0) & (1 << 15)) { try { markPosted(deal.id, payload); return await old.edit({ flags: payload.flags, components: payload.components }); } catch (e) { log.error('status edit failed, reposting', e); } }
   if (old && !bump && !changed && deal.status !== 'waiting_parties' && payload.flags == null) { try { markPosted(deal.id, payload); return await old.edit({ ...payload, content: payload.content ?? null }); } catch (e) { log.error('status edit failed, reposting', e); } }
   return putStep(ctx, ch, old, deal, payload, { force: !old || bump });
 }
@@ -63,12 +66,20 @@ export async function completedPayload(ctx, deal, names, info, { test = false } 
   if (crow.components.length) components.push(crow);
   return { embeds: [embed], files, components, allowedMentions: { parse: [] } };
 }
-export async function publishCompleted(ctx, deal) {
+const pendingPublish = new Set();
+export async function publishCompleted(ctx, deal, { force = false } = {}) {
   if (deal.status !== 'completed' || deal.completed_message_id) return;
+  const wait = ctx.cfg.privacyChoiceSec;
+  if (!force && wait > 0) { // give both traders time to pick Show on Profile / Keep Anonymous
+    if (pendingPublish.has(deal.id)) return;
+    pendingPublish.add(deal.id);
+    setTimeout(() => { pendingPublish.delete(deal.id); const fresh = ctx.deals.get(deal.id); if (fresh) publishCompleted(ctx, fresh, { force: true }).catch((e) => log.error('completed post failed', e)); }, wait * 1000).unref?.();
+    return;
+  }
   const ch = await fetchChannel(ctx, ctx.cfg.channels.completed);
   if (!ch) return;
   const name = async (id) => {
-    if (isHidden(ctx.db, id)) return ANON;
+    if (hiddenFor(ctx.db, deal.id, id)) return ANON;
     try { const u = await ctx.client.users.fetch(id); return `**${u.username}** (<@${id}>)`; } catch { return `<@${id}>`; }
   };
   const names = { a: await name(deal.party_a), b: await name(deal.party_b), middleman: deal.middleman_id ? await name(deal.middleman_id) : null };
@@ -94,9 +105,12 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'activated' || change === 'confirmed') return;
   await refreshStatus(ctx, deal, { bump: ['escrow', 'released'].includes(change) });
   const room = await fetchChannel(ctx, deal.channel_id);
-  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change)) await room.send({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } }).catch(() => {});
+  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } }).catch(() => {});
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
-  if (change === 'completed') await publishCompleted(ctx, deal);
+  if (change === 'completed') {
+    if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });
+    await publishCompleted(ctx, deal);
+  }
   if (['disputed', 'completed', 'cancelled'].includes(change))
     await staffLog(ctx, base(ctx.cfg, `Deal ${change}`, `\`${deal.id}\` is now **${deal.status}**.`));
 }

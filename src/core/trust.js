@@ -14,7 +14,7 @@ export function tierFor(volume) {
   return { tier, next, progress, remaining: next ? +(next.min - volume).toFixed(2) : 0, max: !next };
 }
 export function trustOf(db, userId) {
-  const r = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(CAST(amount AS REAL)),0) v FROM deals WHERE ${VERIFIED} AND (party_a=@u OR party_b=@u)`).get({ u: String(userId) });
+  const r = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(CAST(amount AS REAL)),0) v FROM deals WHERE ${VERIFIED} AND (party_a=@u OR party_b=@u) AND NOT EXISTS (SELECT 1 FROM deal_privacy p WHERE p.deal_id=deals.id AND p.user_id=@u AND p.hidden=1)`).get({ u: String(userId) });
   const volume = +Number(r.v).toFixed(2);
   return { trades: Number(r.n), volume, ...tierFor(volume) };
 }

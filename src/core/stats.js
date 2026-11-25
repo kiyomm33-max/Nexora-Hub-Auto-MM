@@ -9,9 +9,10 @@ export function tierOf(total) {
 
 export function userStats(db, userId) {
   const mine = `(party_a=@u OR party_b=@u)`;
-  const done = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(${val}),0) total, COALESCE(MAX(${val}),0) largest FROM deals WHERE status='completed' AND ${mine}`).get({ u: userId });
+  const anon = (col) => `NOT EXISTS (SELECT 1 FROM deal_privacy p WHERE p.deal_id=deals.id AND p.user_id=${col} AND p.hidden=1)`; // deals the member chose to keep anonymous
+  const done = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(${val}),0) total, COALESCE(MAX(${val}),0) largest FROM deals WHERE status='completed' AND ${mine} AND ${anon('@u')}`).get({ u: userId });
   const closed = db.prepare(`SELECT COUNT(*) n FROM deals WHERE status IN ('completed','cancelled','disputed') AND ${mine}`).get({ u: userId });
-  const totals = db.prepare(`SELECT u, SUM(v) t FROM (SELECT party_a u, ${val} v FROM deals WHERE status='completed' UNION ALL SELECT party_b u, ${val} v FROM deals WHERE status='completed' AND party_b IS NOT NULL) GROUP BY u`).all();
+  const totals = db.prepare(`SELECT u, SUM(v) t FROM (SELECT party_a u, ${val} v FROM deals WHERE status='completed' AND ${anon('deals.party_a')} UNION ALL SELECT party_b u, ${val} v FROM deals WHERE status='completed' AND party_b IS NOT NULL AND ${anon('deals.party_b')}) GROUP BY u`).all();
   const rank = done.n ? 1 + totals.filter((r) => r.t > done.total).length : null;
   return { completed: done.n, total: +done.total.toFixed(2), largest: +done.largest.toFixed(2), rate: closed.n ? Math.round((done.n / closed.n) * 100) : 100, rank, ...tierOf(done.total) };
 }

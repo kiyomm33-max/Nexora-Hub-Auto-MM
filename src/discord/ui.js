@@ -409,6 +409,163 @@ export function receivedEmbeds(cfg, d) {
 }
 export const payoutEmbed = (cfg, d) => base(cfg, `Send your ${coinName(d).replace(/ \[.*\]/, '')} (${d.asset}) address`, `<@${d.receiver_id}> the sender **released the payment**.\n**Send your ${d.asset} (${d.network}) address in this channel** as a message. You will be asked to confirm it before the payout starts.\nDouble-check it: **payouts cannot be reversed**.`);
 
+
+// ---------- payment phase cards (Components V2) ----------
+const GREEN = 0x2ecc71;
+const ge = (name, fallback) => guildEmoji.get(name) ?? fallback;
+const eid = (name, fallback) => /:(\d+)>$/.exec(guildEmoji.get(name) ?? '')?.[1] ?? fallback;
+const NETWORKS = { litecoin: 'Litecoin', bitcoin: 'Bitcoin', solana: 'Solana', bsc: 'BNB Smart Chain (BEP-20)' };
+export const networkName = (d) => (d.network === 'ethereum' ? (d.asset === 'ETH' ? 'Ethereum' : 'Ethereum (ERC-20)') : NETWORKS[d.network] ?? d.network);
+const STABLE = ['USDT', 'USDC'];
+const cfmt = (d, n) => Number(n).toFixed(STABLE.includes(d.asset) ? 2 : 8);
+/** `0.0242 LTC | $1.03 USD | €0.94 EUR` (EUR only when a rate is known). */
+const trio = (d, crypto, usdv, eur) => [crypto != null && `\`${crypto} ${d.asset}\``, `\`$${Number(usdv).toFixed(2)} USD\``, eur && `\`€${(Number(usdv) * eur).toFixed(2)} EUR\``].filter(Boolean).join(' | ');
+const shortId = (d) => `\`${d.id}\``;
+const lineGallery = () => new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } });
+const sep = () => new SeparatorBuilder();
+
+function invoiceCard(cfg, d, { eur, qr }) {
+  const demo = d.mode === 'demo';
+  const head = `## ${ge('hourglass', '⏳')} Payment Invoice\n<@${d.sender_id}> **Send the funds** to the escrow address below. Copy the **exact amount**.${demo ? '\n**DEMO: this address is NOT real. Do not send real funds.**' : ''}`;
+  const top = new SectionBuilder().addTextDisplayComponents(text(head));
+  const box = new ContainerBuilder().setAccentColor(BLUE);
+  if (qr) box.addSectionComponents(top.setThumbnailAccessory(new ThumbnailBuilder().setURL('attachment://qr.png'))); else box.addTextDisplayComponents(text(head));
+  const fee = Number(d.fee_usd) ? `\n**Fee:** \`${usd(d.fee_usd)}\` - ${FEE_LABEL[d.fee_payer]}. Sender sends \`${usd(d.send_usd)}\`, receiver gets \`${usd(d.receive_usd)}\`` : '';
+  box.addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Address:** \`${d.pay_address}\`\n**Amount:** ${trio(d, d.pay_amount, d.send_usd, eur)}\n**Rate:** 1 ${d.asset} = ${d.rate_usd} USD${demo ? ' (DEMO rate)' : ''}${fee}`))
+    .addActionRowComponents(row(
+      btn(`nx:am-copyaddr:${d.id}`, 'Copy Address', ButtonStyle.Secondary).setEmoji('1575100863473782855'),
+      btn(`nx:am-copyamt:${d.id}`, 'Copy Amount', ButtonStyle.Secondary).setEmoji('1575122530015125585'),
+      btn(`nx:am-close:${d.id}`, 'Close', ButtonStyle.Secondary)))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**${ge('hourglass', '⏳')} Waiting for blockchain confirmation:**\nThe bot detects payment automatically. Keep this ticket open; no screenshot is required.`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**${ge('Sheild', '🛡️')} Payment checks:**\n- Network must be **${networkName(d)}**\n- Amount must be exactly \`${d.pay_amount} ${d.asset}\`\n- Send it in **one** transaction`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Deal:** ${d.item}\n**Sender:** <@${d.sender_id}> | **Receiver:** <@${d.receiver_id}>`))
+    .addMediaGalleryComponents(lineGallery());
+  return box;
+}
+
+function shortCard(cfg, d, { eur, txUrl }) {
+  const got = usdWorth(d, d.short_crypto); const needUsd = Math.max(0, Number(d.send_usd) - got);
+  const needCrypto = Math.max(0, Number(d.pay_amount) - Number(d.short_crypto));
+  const box = new ContainerBuilder().setAccentColor(BRAND.red)
+    .addTextDisplayComponents(text(`## ${ge('hourglass', '⏳')} Partial Payment Detected\nDeal ${shortId(d)} | ${coinName(d)} on ${networkName(d)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Expected:** ${trio(d, d.pay_amount, d.send_usd, eur)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Confirmed received:** ${trio(d, d.short_crypto, got, eur)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Still needed:** ${trio(d, cfmt(d, needCrypto), needUsd, eur)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Transaction:** ${txLink(d.tx_hash)}`));
+  const links = [];
+  if (txUrl) links.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(txUrl).setLabel('View transaction'));
+  box.addActionRowComponents(row(btn(`nx:am-shortyes:${d.id}`, `Continue with ${usd(got)}`, ButtonStyle.Primary), btn(`nx:am-shortno:${d.id}`, 'Cancel & refund', ButtonStyle.Danger), ...links))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**${ge('clock', '🕒')} Your choice:** <@${d.sender_id}> only sent **${usd(got)} USD**. **Both traders must press Continue** to proceed with the smaller amount, or the **sender** can **cancel** and get back what arrived (minus the network fee).\n*If you send the rest to the same address, it is added automatically.*`))
+    .addMediaGalleryComponents(lineGallery());
+  return box;
+}
+
+function securedCard(cfg, d, { eur, txUrl }) {
+  const crypto = d.received_crypto ?? d.pay_amount;
+  const box = new ContainerBuilder().setAccentColor(GREEN)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:checkmark:1575069601312808970> Funds secured\n### ${trio(d, crypto, d.send_usd, eur)}`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575069601312808970.png?size=128')))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Buyer:** <@${d.sender_id}> Confirm release only after the complete delivery is received.\n**Seller:** <@${d.receiver_id}> You may now deliver. Your payout address is requested after the buyer releases the funds.`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Transaction:** ${txLink(d.tx_hash)} | **Confirmations:** \`${d.confirmations}\`${d.release_at ? `\n**Release countdown:** <t:${Math.floor(Date.parse(d.release_at) / 1000)}:R>. <@${d.release_by}> can cancel before it ends.` : ''}`));
+  const btns = [
+    btn(`nx:am-release:${d.id}`, 'Release Funds', ButtonStyle.Success).setEmoji(eid('lock', '🔓')).setDisabled(!!d.release_at),
+    btn(`nx:am-cancelask:${d.id}`, 'Cancel and Refund', ButtonStyle.Secondary).setEmoji('1575259368771948705').setDisabled(!!d.release_at)];
+  if (txUrl) btns.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(txUrl).setLabel('View transaction'));
+  box.addActionRowComponents(row(...btns))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('If something goes wrong, open a support ticket and staff will help. Funds stay locked until the buyer releases them or both traders cancel and refund.'))
+    .addMediaGalleryComponents(lineGallery());
+  return box;
+}
+
+function payoutCard(cfg, d, { eur }) {
+  const rate = Number(d.rate_usd) || 1; const usdv = Number(d.receive_usd ?? d.send_usd);
+  const crypto = cfmt(d, STABLE.includes(d.asset) ? usdv : usdv / rate);
+  return new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## ${ge('lock', '🔓')} Where should the payout go?\nRelease is approved for deal ${shortId(d)}. <@${d.receiver_id}> must provide the final receiving address.`))
+      .setButtonAccessory(btn(`nx:am-payaddr:${d.id}`, 'Enter Payout Address', ButtonStyle.Primary)))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Expected payout:** ${trio(d, crypto, usdv, eur)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Required network:** ${d.asset} on ${networkName(d)}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`${ge('Sheild', '🛡️')} The address is validated against this deal's asset and network before funds are sent. Always use an address you control. Exchanges may require a memo or tag that this flow does not support.`))
+    .addMediaGalleryComponents(lineGallery());
+}
+
+function payingCard(cfg, d, { eur, info }) {
+  const usdv = Number(d.receive_usd ?? d.send_usd);
+  if (!info?.txid) {
+    return new ContainerBuilder().setAccentColor(BLUE)
+      .addTextDisplayComponents(text(`## ${ge('hourglass', '⏳')} Payout requested\nThe payout of ${trio(d, null, usdv, eur)} to \`${d.payout_address}\` is being prepared. This card updates when it is sent.`))
+      .addActionRowComponents(row(btn(`nx:am-refresh:${d.id}`, 'Refresh Status', ButtonStyle.Secondary)))
+      .addMediaGalleryComponents(lineGallery());
+  }
+  const box = new ContainerBuilder().setAccentColor(GREEN)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:checkmark:1575069601312808970> Seller payout submitted\n### ${trio(d, info.amount ?? null, usdv, eur)}\nDeal ${shortId(d)} | ${coinName(d)} on ${networkName(d)}`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575069601312808970.png?size=128')))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Transaction:**\n\`\`\`\n${info.txid}\n\`\`\``));
+  const btns = [btn(`nx:am-refresh:${d.id}`, 'Refresh Status', ButtonStyle.Secondary)];
+  if (/^https?:\/\//.test(info.url ?? '')) btns.unshift(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(info.url).setLabel('View transaction'));
+  return box.addActionRowComponents(row(...btns))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('Submitted to the network | The receiver\'s wallet may wait for confirmations before showing the funds.'))
+    .addMediaGalleryComponents(lineGallery());
+}
+
+/** Posted in the room when the payout went out: each trader picks whether this deal counts on their public profile. */
+export function dealCompletePayload(cfg, d, choices = {}) {
+  const st = (id) => (choices[id] === undefined || choices[id] === null ? `${ge('hourglass', '⏳')} Pending` : choices[id] ? 'Keep Anonymous' : 'Show on Profile');
+  const box = new ContainerBuilder().setAccentColor(GREEN)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:checkmark:1575069601312808970> Deal complete\nPayout for deal ${shortId(d)} was broadcast successfully. Choose how this completed deal contributes to your reputation.`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575069601312808970.png?size=128')))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Choice status**\n**Buyer:** <@${d.sender_id}> - ${st(d.sender_id)}\n**Seller:** <@${d.receiver_id}> - ${st(d.receiver_id)}`))
+    .addActionRowComponents(row(btn(`nx:am-privshow:${d.id}`, 'Show on Profile', ButtonStyle.Primary), btn(`nx:am-privanon:${d.id}`, 'Keep Anonymous', ButtonStyle.Secondary)))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('**Show on Profile** adds this deal and its volume to your public statistics.\n**Keep Anonymous** leaves it out of your public profile and shows you as Anonymous on the completed post. Internal records stay intact.\nEach person controls only their own profile history.'))
+    .addMediaGalleryComponents(lineGallery());
+  return { flags: 1 << 15, components: [box], files: [lineFile()] };
+}
+
+/** V2 card for the phases that have one (invoice, short payment, funds secured); null for the others. */
+export function phasePayload(cfg, d, opts = {}) {
+  const ph = phaseOf(d);
+  const make = ph === 'invoice' ? invoiceCard : ph === 'short' ? shortCard : ph === 'received' ? securedCard : ph === 'payout' ? payoutCard : ph === 'paying' ? payingCard : null;
+  if (!make) return null;
+  return { flags: 1 << 15, components: [make(cfg, d, opts)], files: [lineFile()] };
+}
+
+/** The final release approval, shown only to the buyer (ephemeral). */
+export function releaseConfirmPayload(cfg, d) {
+  const box = new ContainerBuilder().setAccentColor(BRAND.red)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## ${ge('lock', '🔓')} Confirm release\nBuyer <@${d.sender_id}>, this is the final release approval for deal ${shortId(d)}.`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575259368771948705.png?size=128')))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**Confirm only if:** the complete item or service has been received and verified.\n**Result:** after a ${cfg.releaseDelaySec}-second countdown (you can cancel it until it ends) the seller can enter the payout address. This decision cannot be undone after the transaction is sent.\n**Sends:** \`$${d.receive_usd} USD\` worth of ${d.asset} to <@${d.receiver_id}>.`))
+    .addSeparatorComponents(sep())
+    .addActionRowComponents(row(btn(`nx:am-relyes:${d.id}`, 'Confirm Release', ButtonStyle.Danger).setEmoji(eid('lock', '🔓')), btn(`nx:am-relno:${d.id}`, 'Keep Funds Locked', ButtonStyle.Secondary).setEmoji('1575259368771948705')));
+  return { flags: (1 << 15) | 64, components: [box] };
+}
+export const notice = (t) => text(t);
+
 /** Everything the single status message shows for the current phase. */
 export function statusEmbeds(cfg, d) {
   switch (phaseOf(d)) {

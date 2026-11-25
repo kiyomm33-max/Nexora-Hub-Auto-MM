@@ -88,7 +88,7 @@ function boot(level) {
     // After a restart, put the live status message (with its buttons) back at the bottom of rooms that are waiting on a person.
     for (const d of db.prepare("SELECT * FROM deals WHERE status='verification_pending' AND mode='live' AND escrow_status='provider_confirmed' AND release_at IS NULL AND (released_at IS NULL OR payout_address IS NULL)").all()) await refreshStatus(ctx, d, { bump: true }).catch((e) => log.error('status repost failed', e));
     if (provider.live) provider.start((ev) => { try { deals.applyProviderEvent(ev); } catch (e) { log.error('applyProviderEvent failed', e); } });
-    for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d).catch((e) => log.error('republish failed', e));
+    for (const d of db.prepare("SELECT * FROM deals WHERE status='completed' AND completed_message_id IS NULL").all()) await publishCompleted(ctx, d, { force: true }).catch((e) => log.error('republish failed', e));
   });
   client.login(cfg.token).catch((e) => {
     if (level > 0 && /disallowed intents/i.test(String(e?.message))) {
