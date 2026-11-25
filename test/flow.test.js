@@ -89,7 +89,7 @@ test('start: private room with Deal Started + Safety Warning + Close + straight 
   assert.ok(room.opts.permissionOverwrites.some((o) => o.deny && o.id === 'ev'));
   assert.ok(room.opts.permissionOverwrites.some((o) => o.id === A) && !room.opts.permissionOverwrites.some((o) => o.id === ROLE.trial));
   const card = JSON.stringify(room.sent[0].components.map((c) => c.toJSON())); assert.match(card, /Stage 1\/5/); assert.match(card, /Current instruction/); assert.match(card, /not assigned/); assert.match(card, /The opener must invite the other party/); assert.match(card, /emojis\/1575069932130140220/);
-  assert.ok(ctx.deals.get(d.id).card_message_id);
+  assert.ok(ctx.deals.get(d.id).card_message_id); assert.match(card, /attachment:\/\/line.png/); assert.equal(room.sent[0].files.length, 1);
   assert.match(JSON.stringify(room.sent[1].embeds.map((e) => e.data)), /Safety Warning[\s\S]*NEVER/);
   assert.match(JSON.stringify(room.sent[1].components.map((c) => c.toJSON())), /nx:am-close/);
   const first = JSON.stringify(room.sent[2].embeds.map((e) => e.toJSON ? e.toJSON() : e)); assert.match(first, /Add the other trader/); assert.doesNotMatch(first + JSON.stringify((room.sent[2].components ?? []).map((c) => c.toJSON())), /Deal Type|Select Deal Type/);

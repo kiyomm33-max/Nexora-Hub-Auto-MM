@@ -98,7 +98,7 @@ export async function startAuto(i, ctx, key) {
   } catch (e) { ctx.deals.cancel(deal.id, 'system', 'room creation failed', { staff: true }); throw e; }
   ctx.deals.db.prepare('UPDATE deals SET channel_id=? WHERE id=?').run(ch.id, deal.id);
   const d = ctx.deals.get(deal.id);
-  const card = await ch.send({ ...ui.dealCard(ctx.cfg, d, ctx.deals.setup(d)), allowedMentions: { users: [i.user.id] } });
+  const card = await ch.send({ ...ui.dealCard(ctx.cfg, d, ctx.deals.setup(d)), files: [ui.lineFile()], allowedMentions: { users: [i.user.id] } });
   ctx.deals.setChannel(d.id, 'card_message_id', card.id);
   await ch.send({ content: `<@${i.user.id}>`, embeds: ui.startedEmbeds(ctx.cfg, d), components: ui.closeButton(d.id), allowedMentions: { users: [i.user.id] } });
   const m = await ch.send({ ...(await payloadFor(ctx, d)), allowedMentions: { parse: [] } });
