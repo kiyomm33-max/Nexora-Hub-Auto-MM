@@ -471,11 +471,11 @@ test('cancel & refund: both traders must agree, the sender types an address, fun
   const say = async (u, content) => { const sent = []; const m = { author: { id: u, bot: false }, guild: {}, channelId: room.id, content, channel: room, delete: async () => {}, reply: async (x) => sent.push(x) }; await refundFromMessage(m, ctx); return sent; };
   assert.equal((await say(B, LTC)).length, 0); const before = room.sent.length; await say(B, LTC); assert.equal(room.sent.length, before, 'only the sender is listened to');
   const bad = await say(A, 'not-an-address'); assert.match(bad[0].content, /valid LTC address/);
-  await say(A, LTC); assert.match(JSON.stringify(room.sent.at(-1).embeds.map((e) => e.toJSON())), /Confirm your refund address/);
+  await say(A, LTC); assert.match(JSON.stringify(room.sent.at(-1).components.map((c) => c.toJSON())), /Confirm your refund address/);
   assert.match(text(await click(ctx, B, `nx:am-refyes:${id}:${LTC}`)), /Only the sender/);
   await click(ctx, A, `nx:am-refyes:${id}:${LTC}`); await ctx.settle();
   assert.deepEqual(swept, [[id, LTC]]); assert.equal(ctx.deals.get(id).status, 'cancelled'); assert.equal(ctx.db.prepare('SELECT COUNT(*) n FROM cancel_req').get().n, 0);
-  assert.match(JSON.stringify(room.sent.map((m) => (m.embeds ?? []).map((e) => e.toJSON ? e.toJSON() : e))), /refunded[\s\S]*c{64}/);
+  assert.match(JSON.stringify(room.sent.map((m) => (m.components ?? []).map((c) => c.toJSON()))), /refunded[\s\S]*c{64}/);
   assert.match(text(await click(ctx, A, `nx:am-refyes:${id}:${LTC}`)), /already being processed|agreed/);
   assert.equal(swept.length, 1, 'never refunded twice');
 });
@@ -494,7 +494,7 @@ test('short payment: warning with the real amount; sender continues or cancels a
     assert.match(text(await click(ctx, RND, `nx:am-shortyes:${id}`)), /Only the two traders/);
     await click(ctx, B, `nx:am-shortyes:${id}`); await ctx.settle();
     assert.equal(ctx.deals.get(id).short_state, 'pending', 'one trader is not enough');
-    assert.match(JSON.stringify(room.sent.at(-1).embeds.map((e) => e.toJSON ? e.toJSON() : e)), /both traders must agree/);
+    assert.match(JSON.stringify(room.sent.at(-1).components.map((c) => c.toJSON())), /both traders must agree/);
     await click(ctx, A, `nx:am-shortyes:${id}`); await ctx.settle();
     const nd = ctx.deals.get(id); assert.equal(nd.short_state, 'accepted'); assert.equal(nd.received_crypto, '0.2'); assert.ok(Number(nd.send_usd) > 0 && Number(nd.send_usd) < 10);
     assert.match(text(await click(ctx, A, `nx:am-shortyes:${id}`)), /already made/); }
@@ -507,7 +507,7 @@ test('short payment: warning with the real amount; sender continues or cancels a
     const say = async (u, content) => { const m = { author: { id: u, bot: false }, guild: {}, channelId: room.id, content, channel: room, delete: async () => {}, reply: async () => {} }; await refundFromMessage(m, ctx); };
     await say(A, LTC); await click(ctx, A, `nx:am-refyes:${id}:${LTC}`); await ctx.settle();
     assert.deepEqual(swept, [[id, LTC]]); assert.equal(ctx.deals.get(id).status, 'cancelled');
-    assert.match(JSON.stringify(room.sent.map((m) => (m.embeds ?? []).map((e) => e.toJSON ? e.toJSON() : e))), /sender cancelled after sending less/); }
+    assert.match(JSON.stringify(room.sent.map((m) => (m.components ?? []).map((c) => c.toJSON()))), /sender cancelled after sending less/); }
 });
 
 test('welcome: posts to the welcome channel, mentions rules and auto MM channels; preview command is staff-only', async () => {
@@ -608,7 +608,7 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   // qualified: a private ticket opens and the balance is reserved
   const open = await press(RND, 'nx:st-payout'); assert.match(text(open), /Ticket opened/);
   const row = ctx.db.prepare('SELECT * FROM status_payouts WHERE id=1').get(); assert.equal(row.cents, 40); assert.equal(row.state, 'pending'); assert.ok(row.room_id);
-  const room = ctx.chans.get(row.room_id); assert.ok(room.opts.permissionOverwrites.some((o) => o.id === RND)); assert.match(JSON.stringify(room.sent[0].embeds[0].data), /LTC\) address/);
+  const room = ctx.chans.get(row.room_id); assert.ok(room.opts.permissionOverwrites.some((o) => o.id === RND)); assert.match(JSON.stringify(room.sent[0].components.map((c) => c.toJSON())), /LTC\) address/);
   assert.match(text(await press(RND, 'nx:st-payout')), /already have an open payout request/);
   // the address is typed in the room: bad ones are bounced, a good one asks for confirmation
   const { addressFromMessage } = await import('../src/discord/status.js');
@@ -622,14 +622,14 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   short = 2;
   assert.match(text(await press(RND, `nx:st-addryes:1:${LTC}`)), /Address confirmed/);
   assert.equal(sends.length, 0); assert.equal(ctx.db.prepare('SELECT state, send_state, notified FROM status_payouts WHERE id=1').get().notified, 1);
-  assert.match(JSON.stringify(ctx.chans.get('stq').sent.map((p) => p.embeds[0].data)), /Rewards wallet is short[\s\S]*ltc1qrewardswallet/);
+  assert.match(JSON.stringify(ctx.chans.get('stq').sent.map((p) => p.embeds?.[0]?.data ?? p.components.map((c) => c.toJSON()))), /Rewards wallet is short[\s\S]*ltc1qrewardswallet/);
   assert.match(text(await press(RND, `nx:st-addryes:1:${LTC}`)), /already confirmed/);
   const { payoutLoop } = await import('../src/discord/status.js');
   await payoutLoop(ctx); assert.equal(sends.length, 0, 'still short'); const stqBefore = ctx.chans.get('stq').sent.length;
   await payoutLoop(ctx); assert.equal(sends.length, 1, 'funded: sent once'); assert.deepEqual(sends[0], [LTC, 40]);
   await payoutLoop(ctx); assert.equal(sends.length, 1, 'never sent twice');
   const done = ctx.db.prepare('SELECT state, ref, send_state, handled_by FROM status_payouts WHERE id=1').get(); assert.equal(done.state, 'paid'); assert.equal(done.send_state, 'sent'); assert.equal(done.handled_by, 'system'); assert.match(done.ref, /^txtx/);
-  assert.match(JSON.stringify(room.sent.at(-1).embeds[0].data), /Payment sent/);
+  assert.match(JSON.stringify(room.sent.at(-1).embeds?.[0]?.data ?? room.sent.at(-1).components.map((c) => c.toJSON())), /Payment sent/);
   assert.match(text(await press(ADM, 'nx:st-rej:1', { roles: [ROLE.adm] })), /already handled/);
   // cancel returns the balance; a stranger cannot cancel
   ctx.db.prepare('UPDATE status_earn SET seconds=? WHERE user_id=?').run(4 * 86400 + 5, RND);

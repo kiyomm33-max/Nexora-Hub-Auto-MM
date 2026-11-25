@@ -109,7 +109,7 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'activated' || change === 'confirmed') return;
   await refreshStatus(ctx, deal, { bump: ['escrow', 'released'].includes(change) });
   const room = await fetchChannel(ctx, deal.channel_id);
-  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } }).catch(() => {});
+  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send(ui.asCard({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } })).catch(() => {});
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
   if (change === 'completed') {
     if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });

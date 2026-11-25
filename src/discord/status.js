@@ -74,7 +74,7 @@ async function updateCard(ctx, r) {
   await msg?.edit({ embeds: [ui.earnPayoutEmbed(ctx.cfg, r, earn.METHODS)], components: r.state === 'pending' ? ui.earnPayoutButtons(r.id) : [], allowedMentions: { parse: [] } }).catch(() => {});
 }
 async function closeRoom(ctx, r, ms) { const ch = await fetchCh(ctx, r.room_id); if (ch) setTimeout(() => ch.delete('Status payout finished').catch(() => {}), ms).unref?.(); }
-const say = (ctx, ch, title, text, extra = {}) => ch?.send({ embeds: [ui.base(ctx.cfg, title, text)], allowedMentions: { users: extra.ping ? [extra.ping] : [] }, content: extra.ping ? `<@${extra.ping}>` : undefined }).catch(() => {});
+const say = (ctx, ch, title, text, extra = {}) => ch?.send(ui.asCard({ embeds: [ui.base(ctx.cfg, title, text)], allowedMentions: { users: extra.ping ? [extra.ping] : [] }, content: extra.ping ? `<@${extra.ping}>` : undefined })).catch(() => {});
 
 export async function payout(i, ctx) {
   const ltc = ctx.provider?.ltc;
@@ -100,8 +100,8 @@ export async function payout(i, ctx) {
   }
   ctx.db.prepare('UPDATE status_payouts SET room_id=? WHERE id=?').run(room.id, r.id);
   audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.payout.requested', detail: { id: r.id, cents: r.cents, room: room.id } });
-  await room.send({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Status payout #${r.id}`, `You are claiming **${earn.usd(r.cents)}**.\n\n**Send your Litecoin (LTC) address** in this channel. I will ask you to confirm it, then send the payment.\n\n**Payments cannot be reversed.** Double-check the address.`)], components: ui.earnRoomButtons(r.id), allowedMentions: { users: [i.user.id] } }).catch((e) => log.error('payout intro failed', e));
-  return i.editReply({ embeds: [ui.base(ctx.cfg, 'Ticket opened', `Your payout request is open in <#${room.id}>. Send your LTC address there.`)] });
+  await room.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Status payout #${r.id}`, `You are claiming **${earn.usd(r.cents)}**.\n\n**Send your Litecoin (LTC) address** in this channel. I will ask you to confirm it, then send the payment.\n\n**Payments cannot be reversed.** Double-check the address.`)], components: ui.earnRoomButtons(r.id), allowedMentions: { users: [i.user.id] } })).catch((e) => log.error('payout intro failed', e));
+  return i.editReply(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Ticket opened', `Your payout request is open in <#${room.id}>. Send your LTC address there.`)] }));
 }
 
 /** The member types their address in their payout room; the bot asks them to confirm it. */
@@ -113,7 +113,7 @@ export async function addressFromMessage(msg, ctx) {
   try {
     const addr = V.payoutAddress('LTC', 'litecoin', raw);
     try { ctx.provider.ltc.validateAddress(addr); } catch (e) { throw new UserError(e.message); }
-    await msg.channel.send({ content: `<@${r.user_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your address', `**Payout address (LTC):**\n\`${addr}\`\n\n**Amount:** **${earn.usd(r.cents)}** in LTC at today's rate.\n**Payments cannot be reversed.** Confirm only if this is your own address.`)], components: ui.earnAddrButtons(r.id, addr), allowedMentions: { users: [r.user_id] } });
+    await msg.channel.send(ui.asCard({ content: `<@${r.user_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your address', `**Payout address (LTC):**\n\`${addr}\`\n\n**Amount:** **${earn.usd(r.cents)}** in LTC at today's rate.\n**Payments cannot be reversed.** Confirm only if this is your own address.`)], components: ui.earnAddrButtons(r.id, addr), allowedMentions: { users: [r.user_id] } }));
     await msg.delete().catch(() => {});
   } catch (e) {
     if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your LTC address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
@@ -129,7 +129,7 @@ export async function addrYes(i, ctx, [id, addr]) {
   const ok = ctx.db.prepare("UPDATE status_payouts SET details=?, address_ok=1 WHERE id=? AND state='pending' AND address_ok=0").run(addr, r.id).changes;
   if (!ok) throw new UserError('You already confirmed an address for this request.');
   audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.payout.address', detail: { id: r.id } });
-  await i.update({ embeds: [ui.base(ctx.cfg, 'Address confirmed', `**${addr}**`)], components: [] });
+  await i.update(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Address confirmed', `**${addr}**`)], components: [] }));
   await postCard(ctx, earn.getPayout(ctx.db, r.id));
   await sendPayout(ctx, r.id);
 }
@@ -137,7 +137,7 @@ export const addrNo = (i, ctx, [id]) => {
   const r = earn.getPayout(ctx.db, id);
   if (!r || r.state !== 'pending' || r.address_ok) throw new UserError('This request is already finished.');
   if (r.user_id !== i.user.id) throw new UserError('Only the member who requested this payout can do that.');
-  return i.update({ embeds: [ui.base(ctx.cfg, 'No problem', 'Send your LTC address again in this channel.')], components: [] });
+  return i.update(ui.asCard({ embeds: [ui.base(ctx.cfg, 'No problem', 'Send your LTC address again in this channel.')], components: [] }));
 };
 export async function cancel(i, ctx, [id], { isStaff = false } = {}) {
   const r = earn.getPayout(ctx.db, id);
@@ -146,7 +146,7 @@ export async function cancel(i, ctx, [id], { isStaff = false } = {}) {
   if (r.send_state) throw new UserError('The payment is already being sent.');
   const done = earn.handlePayout(ctx.db, r.id, 'rejected', i.user.id);
   audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.payout.cancelled', detail: { id: r.id } });
-  await i.update({ embeds: [ui.base(ctx.cfg, 'Request cancelled', `**${earn.usd(r.cents)}** is back in your balance. This ticket closes in a few seconds.`)], components: [] });
+  await i.update(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Request cancelled', `**${earn.usd(r.cents)}** is back in your balance. This ticket closes in a few seconds.`)], components: [] }));
   await updateCard(ctx, done); await closeRoom(ctx, done, 8000);
 }
 

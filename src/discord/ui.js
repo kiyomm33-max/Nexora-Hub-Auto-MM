@@ -450,7 +450,7 @@ function invoiceCard(cfg, d, { eur, qr }) {
 function shortCard(cfg, d, { eur, txUrl }) {
   const got = usdWorth(d, d.short_crypto); const needUsd = Math.max(0, Number(d.send_usd) - got);
   const needCrypto = Math.max(0, Number(d.pay_amount) - Number(d.short_crypto));
-  const box = new ContainerBuilder().setAccentColor(BRAND.red)
+  const box = new ContainerBuilder().setAccentColor(BRAND.danger)
     .addTextDisplayComponents(text(`## ${ge('hourglass', '⏳')} Partial Payment Detected\nDeal ${shortId(d)} | ${coinName(d)} on ${networkName(d)}`))
     .addSeparatorComponents(sep())
     .addTextDisplayComponents(text(`**Expected:** ${trio(d, d.pay_amount, d.send_usd, eur)}`))
@@ -562,6 +562,23 @@ export function dealCompletePayload(cfg, d, choices = {}) {
   return { flags: 1 << 15, components: [box], files: [lineFile()] };
 }
 
+/** Turns a classic message payload (one embed, optional ping content and button rows) into a Components V2 card in the same style as the deal cards. */
+export function asCard(p, { accent } = {}) {
+  const e = p.embeds?.[0]; if (!e) return p;
+  const data = e.data ?? e;
+  const title = data.title ? `## ${data.title}\n` : '';
+  const fields = (data.fields ?? []).map((f) => `**${f.name}:** ${f.value}`).join('\n');
+  const body = [data.description, fields].filter(Boolean).join('\n');
+  const color = accent ?? data.color ?? BLUE;
+  const box = new ContainerBuilder().setAccentColor(color).addTextDisplayComponents(text(`${title}${body}`.trim() || '-'));
+  const rows = (p.components ?? []).filter((c) => (c.toJSON ? c.toJSON() : c).type === 1);
+  if (rows.length) { box.addSeparatorComponents(sep()); for (const r of rows.slice(0, 4)) box.addActionRowComponents(r); }
+  box.addMediaGalleryComponents(lineGallery());
+  const out = { ...p, flags: ((p.flags ?? 0) & ~(1 << 15)) | (1 << 15), components: [...(p.content ? [text(p.content)] : []), box], files: [lineFile()] };
+  delete out.embeds; delete out.content; // V2 messages carry no content; the ping is the leading text component
+  return out;
+}
+
 /** V2 card for the phases that have one (invoice, short payment, funds secured); null for the others. */
 export function phasePayload(cfg, d, opts = {}) {
   const ph = phaseOf(d);
@@ -572,7 +589,7 @@ export function phasePayload(cfg, d, opts = {}) {
 
 /** The final release approval, shown only to the buyer (ephemeral). */
 export function releaseConfirmPayload(cfg, d) {
-  const box = new ContainerBuilder().setAccentColor(BRAND.red)
+  const box = new ContainerBuilder().setAccentColor(BRAND.danger)
     .addSectionComponents(new SectionBuilder()
       .addTextDisplayComponents(text(`## ${ge('lock', '🔓')} Confirm release\nBuyer <@${d.sender_id}>, this is the final release approval for deal ${shortId(d)}.`))
       .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575259368771948705.png?size=128')))
