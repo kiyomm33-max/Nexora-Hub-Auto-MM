@@ -104,6 +104,7 @@ test('setup: steps are ordered, only the right person can act, bad input rejecte
   assert.match(text(await sel(A, `nx:am-partner:${id}`, { opts: { user: { id: BOT } }, values: [] })), /Bots/);
   const typed = fake(ctx, 'modal', A, { customId: `nx:am-partnermodal:${id}`, fields: { uid: '<@' + B + '>' }, channel: ch }); await route(typed, ctx); // add by ID/ping
   assert.equal(ctx.deals.get(id).party_b, B); assert.ok(ch.perms.some(([u]) => u === B), 'partner granted channel access');
+  { const j = JSON.stringify(ctx.chans.get(ctx.room).sent.at(-1).components.map((c) => c.toJSON())); for (const m of [/Who is sending and receiving/, /1575262944063787161/, /1575100863473782855/, /I'm sending/, /I'm receiving/, /Cancel Deal/, /1575259368771948705/, /line\.png/, /nx:am-role:[^"]+:sender/, /nx:am-role:[^"]+:receiver/]) assert.match(j, m); }
   assert.match(text(await click(ctx, RND, `nx:am-role:${id}:sender`)), /Only the two traders/);
   await click(ctx, A, `nx:am-role:${id}:sender`);
   assert.match(text(await click(ctx, B, `nx:am-role:${id}:sender`)), /already taken/);

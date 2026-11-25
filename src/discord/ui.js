@@ -219,13 +219,23 @@ export function stepPayload(cfg, d, set) {
     }
     case 'roles': {
       const who = (r) => { const u = Object.keys(set.votes ?? {}).find((x) => set.votes[x] === r); return u ? `<@${u}>` : 'None'; };
-      const coin = coinName(d);
-      const pick = (label, r) => new SectionBuilder().addTextDisplayComponents(text(`**${label} ${coin}:** ${who(r)}`)).setButtonAccessory(btn(`nx:am-role:${d.id}:${r}`, 'Select', ButtonStyle.Primary));
+      const SENDER = '<:Sender:1575262944063787161>', RECEIVER = '<:download:1575100863473782855>';
+      const id = (m) => m.match(/:(\d+)>/)[1];
+      const pick = (icon, label, line, r, cta) => new SectionBuilder()
+        .addTextDisplayComponents(text(`### ${icon} ${label}: ${who(r)}\n${line}`))
+        .setButtonAccessory(btn(`nx:am-role:${d.id}:${r}`, cta, ButtonStyle.Primary).setEmoji(id(icon)));
       const box = new ContainerBuilder().setAccentColor(BLUE)
-        .addTextDisplayComponents(text('## Role Selection\nSelect **one of the following buttons** that corresponds to **your role** in this deal.'))
-        .addSeparatorComponents(new SeparatorBuilder()).addSectionComponents(pick('Sending', 'sender'))
-        .addSeparatorComponents(new SeparatorBuilder()).addSectionComponents(pick('Receiving', 'receiver'));
-      return { flags: 1 << 15, components: [text(`${parties(d)} Welcome! Select roles below.`), box, row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Danger))] };
+        .addSectionComponents(new SectionBuilder()
+          .addTextDisplayComponents(text(`## ${CARD_ICONS.title} Who is sending and receiving?\nChoose your own role. The other party must choose the opposite role before the deal can continue.`))
+          .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.discordapp.com/emojis/${id(CARD_ICONS.title)}.png?size=128`)))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addSectionComponents(pick(SENDER, 'Sender', `Sends ${coinName(d)} into the escrow wallet.`, 'sender', "I'm sending"))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addSectionComponents(pick(RECEIVER, 'Receiver', 'Receives the payout once the deal is released.', 'receiver', "I'm receiving"))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(row(btn(`nx:am-rolereset:${d.id}`, 'Reset', ButtonStyle.Secondary), btn(`nx:am-close:${d.id}`, 'Cancel Deal', ButtonStyle.Danger).setEmoji('1575259368771948705')))
+        .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+      return { flags: 1 << 15, components: [text(`${parties(d)} Welcome! Select roles below.`), box], files: [lineFile()] };
     }
     case 'describe': return { embeds: [e('Deal Details', `Before continuing, please write out **all deal details** such as usernames, amounts, and items being traded.\n\n**Sender:** <@${d.sender_id}>  **Receiver:** <@${d.receiver_id}>\n\n**Ex.** \`Brief summary of who sends what to whom\`\nThe other trader will then be asked to accept it.`)],
       components: [row(btn(`nx:am-describe:${d.id}`, 'Write deal details', ButtonStyle.Primary))] };
