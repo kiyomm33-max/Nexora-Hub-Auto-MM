@@ -113,7 +113,7 @@ async function callStaff(i, ctx, key, label) {
   const r = ctx.limiter.check(`callstaff:${key}`, 1, 300e3);
   if (!r.ok) throw new UserError(`Staff were already called. You can call again in ${Math.ceil(r.retryMs / 1000)}s.`);
   const ids = rooms.staffIds(ctx.cfg, LEVELS.admin);
-  await i.channel.send({ content: ids.map((x) => `<@&${x}>`).join(' ') || undefined, embeds: [ui.base(ctx.cfg, 'Staff assistance requested', `<@${i.user.id}> asked for help with ${label}.`)], allowedMentions: { roles: ids } });
+  await i.channel.send(ui.asCard({ content: ids.map((x) => `<@&${x}>`).join(' ') || undefined, embeds: [ui.base(ctx.cfg, 'Staff assistance requested', `<@${i.user.id}> asked for help with ${label}.`)], allowedMentions: { roles: ids } }));
   audit(ctx.db, { actor: i.user.id, action: 'staff.requested', detail: { label } });
   return say(ctx, i, 'Staff notified', 'A staff member will join shortly.');
 }
@@ -126,7 +126,7 @@ async function openTicket(i, ctx, subject, details) {
   const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: LEVELS.admin, topic: `Support ticket ${id}` });
   ctx.db.prepare('INSERT INTO tickets(id,kind,opener,channel_id,subject,created_at) VALUES(?,?,?,?,?,?)').run(id, 'support', i.user.id, ch.id, subject, new Date().toISOString());
   audit(ctx.db, { actor: i.user.id, action: 'ticket.opened', detail: { id } });
-  await ch.send({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } });
+  await ch.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } }));
   return say(ctx, i, 'Ticket opened', `Head to <#${ch.id}>.`);
 }
 async function closeTicket(i, ctx, id) {
@@ -479,7 +479,7 @@ const buttons = {
   'am-relno': (i) => am.releaseNo(i),
   'am-payaddr': (i, ctx, [id]) => am.payAddr(i, ctx, id),
   'am-payyes': (i, ctx, [id, addr]) => am.payAddrConfirm(i, ctx, id, addr),
-  'am-payno': async (i, ctx, [id]) => { if (ctx.deals.get(id)?.receiver_id !== i.user.id) throw new UserError('Only the receiver can do that.'); return i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', '**Send your address again** in this channel.')], components: [] }); },
+  'am-payno': async (i, ctx, [id]) => { if (ctx.deals.get(id)?.receiver_id !== i.user.id) throw new UserError('Only the receiver can do that.'); return i.update(ui.asCard({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', '**Send your address again** in this channel.')], components: [] })); },
   'am-cancelpaid': (i, ctx, [id]) => { accessDeal(i, ctx, id); return i.showModal(ui.disputeModal(id)); },
   'am-shortyes': (i, ctx, [id]) => am.shortYes(i, ctx, id),
   'am-shortno': (i, ctx, [id]) => am.shortNo(i, ctx, id),

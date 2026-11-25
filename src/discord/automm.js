@@ -56,7 +56,8 @@ export async function payloadFor(ctx, d) {
     return { ...p, components: [...(ping ? [ui.notice(ping)] : []), ...p.components], files: [...p.files, ...extra] };
   }
   const embeds = ui.statusEmbeds(ctx.cfg, d); const files = [];
-  return { content: ping, embeds, files, components: ui.roomButtons(d, ctx.cfg) };
+  const card = ui.asCard({ content: ping, embeds, files, components: ui.roomButtons(d, ctx.cfg) }, { accent: d.status === 'disputed' ? ui.BRAND.danger : undefined });
+  return { ...card, components: card.components };
 }
 
 async function privChoice(i, ctx, id, hidden) {
@@ -354,7 +355,7 @@ export async function closeDeal(i, ctx, id, { staffCan }) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`nx:am-closeyes:${id}`).setLabel('Agree to close').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`nx:am-closeno:${id}`).setLabel('Decline').setStyle(ButtonStyle.Secondary));
-    const m = await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Close request', `<@${i.user.id}> wants to **close this ${final ? 'room' : 'deal'}**.\n\n**Both traders must agree.** <@${o}>, do you agree?${final ? '' : '\nThe deal will be cancelled.'}`)], components: [row], allowedMentions: { users: [o] } });
+    const m = await i.channel.send(ui.asCard({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Close request', `<@${i.user.id}> wants to **close this ${final ? 'room' : 'deal'}**.\n\n**Both traders must agree.** <@${o}>, do you agree?${final ? '' : '\nThe deal will be cancelled.'}`)], components: [row], allowedMentions: { users: [o] } }));
     ctx.db.prepare('UPDATE close_req SET message_id=? WHERE deal_id=?').run(m.id, id);
     return i.reply({ flags: EPH, content: 'Close request sent. The other trader must agree.' });
   }
@@ -375,7 +376,7 @@ export async function closeNo(i, ctx, id) {
   audit(ctx.db, { actor: i.user.id, action: 'close.declined', dealId: id, detail: {} });
   await i.deferUpdate();
   if (req.message_id) await i.channel.messages.fetch(req.message_id).then((m) => m.delete()).catch(() => {});
-  await i.channel.send({ embeds: [ui.base(ctx.cfg, 'Close request declined', `<@${i.user.id}> declined. **The room stays open.**`)], allowedMentions: { parse: [] } });
+  await i.channel.send(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Close request declined', `<@${i.user.id}> declined. **The room stays open.**`)], allowedMentions: { parse: [] } }));
 }
 async function performClose(i, ctx, d, agreed) {
   const final = ['completed', 'cancelled'].includes(d.status);
@@ -450,7 +451,7 @@ export async function payAddrSubmit(i, ctx, id, raw) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`nx:am-payyes:${id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`nx:am-payno:${id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
-  return i.reply({ flags: EPH, embeds: [ui.base(ctx.cfg, 'Confirm your address', `Payout address (${d.asset} on ${d.network}):\n\`${addr}\`\n**Payouts cannot be reversed.** Confirm only if this is exactly your address.`, ui.BRAND.red)], components: [row] });
+  return i.reply(ui.asCard({ flags: EPH, embeds: [ui.base(ctx.cfg, 'Confirm your address', `Payout address (${d.asset} on ${d.network}):\n\`${addr}\`\n**Payouts cannot be reversed.** Confirm only if this is exactly your address.`, ui.BRAND.red)], components: [row] }));
 }
 export async function payAddrConfirm(i, ctx, id, raw) {
   const d = load(ctx, id);
@@ -458,7 +459,7 @@ export async function payAddrConfirm(i, ctx, id, raw) {
   if (d.payout_address) throw new UserError('The payout address is already confirmed.');
   const addr = V.payoutAddress(d.asset, d.network, raw);
   await locked(ctx, id, async () => ctx.deals.setPayout(id, i.user.id, addr));
-  await i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address confirmed', `Payout address: \`${addr}\`\nThe payout is being sent.`)], components: [] });
+  await i.update(ui.asCard({ content: null, embeds: [ui.base(ctx.cfg, 'Address confirmed', `Payout address: \`${addr}\`\nThe payout is being sent.`)], components: [] }));
   const fresh = ctx.deals.get(id);
   await rooms.refreshStatus(ctx, fresh);
   const res = await ctx.provider.requestPayout(fresh);
@@ -482,7 +483,7 @@ export async function payoutFromMessage(msg, ctx) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`nx:am-payyes:${d.id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`nx:am-payno:${d.id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
-    await msg.channel.send({ content: `<@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your address', `**Payout address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Payouts cannot be reversed.** Confirm only if this is **exactly your address**.`)], components: [row], allowedMentions: { users: [d.receiver_id] } });
+    await msg.channel.send(ui.asCard({ content: `<@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your address', `**Payout address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Payouts cannot be reversed.** Confirm only if this is **exactly your address**.`)], components: [row], allowedMentions: { users: [d.receiver_id] } }));
     await msg.delete().catch(() => {});
   } catch (e) {
     if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your ${d.asset} address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
@@ -500,7 +501,7 @@ export async function shortYes(i, ctx, id) {
   const o = other(d, i.user.id);
   if (!votes.includes(o)) {
     await i.deferUpdate();
-    await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Waiting for the other trader', `<@${i.user.id}> agreed to **continue with the smaller amount**.\n<@${o}>, **both traders must agree**. Press **Continue** above to agree, or ask the sender to cancel and refund.`)], allowedMentions: { users: [o] } });
+    await i.channel.send(ui.asCard({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Waiting for the other trader', `<@${i.user.id}> agreed to **continue with the smaller amount**.\n<@${o}>, **both traders must agree**. Press **Continue** above to agree, or ask the sender to cancel and refund.`)], allowedMentions: { users: [o] } }));
     return;
   }
   await i.deferUpdate();
@@ -523,7 +524,7 @@ export async function shortNo(i, ctx, id) {
   });
   if (!started) throw new UserError('A refund is already in progress for this deal.');
   await i.deferUpdate(); await i.message?.edit?.({ components: [] }).catch?.(() => {});
-  const m = await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Cancelled: type your address to get your money back', `<@${d.sender_id}>, **type your ${d.asset} address in this room**. The bot sends back **exactly what you sent** (\`${d.short_crypto}\` ${d.asset}), minus the network fee.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+  const m = await i.channel.send(ui.asCard({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Cancelled: type your address to get your money back', `<@${d.sender_id}>, **type your ${d.asset} address in this room**. The bot sends back **exactly what you sent** (\`${d.short_crypto}\` ${d.asset}), minus the network fee.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } }));
   ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
 }
 
@@ -550,7 +551,7 @@ export async function cancelAsk(i, ctx, id) {
     new ButtonBuilder().setCustomId(`nx:am-cancelyes:${id}`).setLabel('Agree to cancel').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`nx:am-cancelno:${id}`).setLabel('Decline').setStyle(ButtonStyle.Secondary));
   const o = other(d, i.user.id);
-  const m = await i.channel.send({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Cancel request', `<@${i.user.id}> wants to **cancel this deal and refund the sender**.\n\n**Both traders must agree.** <@${o}>, do you agree?\nThe funds go back to the sender, the receiver gets nothing.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [o] } });
+  const m = await i.channel.send(ui.asCard({ content: `<@${o}>`, embeds: [ui.base(ctx.cfg, 'Cancel request', `<@${i.user.id}> wants to **cancel this deal and refund the sender**.\n\n**Both traders must agree.** <@${o}>, do you agree?\nThe funds go back to the sender, the receiver gets nothing.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [o] } }));
   ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
   return i.reply({ flags: EPH, content: 'Cancel request sent. The other trader must agree.' });
 }
@@ -568,7 +569,7 @@ export async function cancelYes(i, ctx, id) {
     audit(ctx.db, { actor: i.user.id, action: 'cancel.agreed', dealId: id, detail: {} });
   });
   await i.deferUpdate(); await dropRequestMessage(ctx, i, c);
-  const m = await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Both traders agreed to cancel', `<@${d.sender_id}>, **type your ${d.asset} address in this room** to get your funds back.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+  const m = await i.channel.send(ui.asCard({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Both traders agreed to cancel', `<@${d.sender_id}>, **type your ${d.asset} address in this room** to get your funds back.\n\nCheck it carefully: **refunds are sent on-chain and cannot be reversed.**`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } }));
   ctx.db.prepare('UPDATE cancel_req SET message_id=? WHERE deal_id=?').run(m.id, id);
 }
 export async function cancelNo(i, ctx, id) {
@@ -577,7 +578,7 @@ export async function cancelNo(i, ctx, id) {
   if (!c || c.state === 'refunding') throw new UserError('There is no open cancel request.');
   await locked(ctx, id, async () => { ctx.db.prepare('DELETE FROM cancel_req WHERE deal_id=?').run(id); audit(ctx.db, { actor: i.user.id, action: 'cancel.declined', dealId: id, detail: {} }); });
   await i.deferUpdate(); await dropRequestMessage(ctx, i, c);
-  await i.channel.send({ embeds: [ui.base(ctx.cfg, 'Cancel request closed', `<@${i.user.id}> declined. **The deal continues** and the funds stay in escrow.`)], allowedMentions: { parse: [] } });
+  await i.channel.send(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Cancel request closed', `<@${i.user.id}> declined. **The deal continues** and the funds stay in escrow.`)], allowedMentions: { parse: [] } }));
 }
 /** After both agreed, the sender types their refund address in the room. The bot validates it and asks for confirmation. */
 export async function refundFromMessage(msg, ctx) {
@@ -591,7 +592,7 @@ export async function refundFromMessage(msg, ctx) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`nx:am-refyes:${d.id}:${addr}`).setLabel('Yes, this is correct').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`nx:am-refno:${d.id}`).setLabel('No, re-enter').setStyle(ButtonStyle.Secondary));
-    await msg.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your refund address', `**Refund address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Refunds cannot be reversed.** Confirm only if this is **exactly your address**.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [d.sender_id] } });
+    await msg.channel.send(ui.asCard({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Confirm your refund address', `**Refund address** (${d.asset} on ${d.network}):\n\`${addr}\`\n\n**Refunds cannot be reversed.** Confirm only if this is **exactly your address**.`, ui.BRAND.red)], components: [row], allowedMentions: { users: [d.sender_id] } }));
     await msg.delete().catch(() => {});
   } catch (e) {
     if (e instanceof UserError || e?.name === 'ValidationError' || e?.constructor?.name === 'ValidationError') await msg.reply({ content: `${e.message} Send your ${d.asset} address again.`, allowedMentions: { repliedUser: false } }).catch(() => {});
@@ -604,7 +605,7 @@ export async function refundYes(i, ctx, id, raw) {
   const addr = V.payoutAddress(d.asset, d.network, raw);
   const claim = ctx.db.prepare("UPDATE cancel_req SET state='refunding', address=? WHERE deal_id=? AND state='address'").run(addr, id);
   if (!claim.changes) throw new UserError('This refund is already being processed, or was not agreed by both traders.');
-  await i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Sending your refund', `Sending the funds to \`${addr}\`...`)], components: [], allowedMentions: { parse: [] } });
+  await i.update(ui.asCard({ content: null, embeds: [ui.base(ctx.cfg, 'Sending your refund', `Sending the funds to \`${addr}\`...`)], components: [], allowedMentions: { parse: [] } }));
   try {
     cancelable(d);
     const short = d.short_state === 'pending';
@@ -612,15 +613,15 @@ export async function refundYes(i, ctx, id, raw) {
     ctx.db.prepare('DELETE FROM cancel_req WHERE deal_id=?').run(id);
     ctx.deals.refundCancel(id, i.user.id, { txid, address: addr, short });
     const url = ctx.provider.explorerTx?.(txid, d);
-    await i.channel.send({ content: `<@${d.sender_id}> <@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Deal cancelled and refunded', `${short ? 'The sender cancelled after sending less than the deal amount.' : 'Both traders agreed to cancel.'} The funds were sent back to the sender.\n\n**Refund address:** \`${addr}\`\n**TXID:** \`${txid}\`${url ? `\n[View on explorer](${url})` : ''}`)], allowedMentions: { users: [d.sender_id, d.receiver_id] } });
+    await i.channel.send(ui.asCard({ content: `<@${d.sender_id}> <@${d.receiver_id}>`, embeds: [ui.base(ctx.cfg, 'Deal cancelled and refunded', `${short ? 'The sender cancelled after sending less than the deal amount.' : 'Both traders agreed to cancel.'} The funds were sent back to the sender.\n\n**Refund address:** \`${addr}\`\n**TXID:** \`${txid}\`${url ? `\n[View on explorer](${url})` : ''}`)], allowedMentions: { users: [d.sender_id, d.receiver_id] } }));
   } catch (e) {
     ctx.db.prepare("UPDATE cancel_req SET state='address', address=NULL WHERE deal_id=? AND state='refunding'").run(id);
     log.error('refund failed', { deal: id, err: String(e?.message ?? e) });
-    await i.channel.send({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Refund failed', `${e instanceof UserError || e?.userFacing ? e.message : 'The refund could not be sent. Nothing was moved. Type your address again to retry, or ask an admin.'}`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } });
+    await i.channel.send(ui.asCard({ content: `<@${d.sender_id}>`, embeds: [ui.base(ctx.cfg, 'Refund failed', `${e instanceof UserError || e?.userFacing ? e.message : 'The refund could not be sent. Nothing was moved. Type your address again to retry, or ask an admin.'}`, ui.BRAND.red)], allowedMentions: { users: [d.sender_id] } }));
   }
 }
 export async function refundNo(i, ctx, id) {
   const d = load(ctx, id);
   if (d.sender_id !== i.user.id) throw new UserError('Only the sender can do that.');
-  return i.update({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', `Type your ${d.asset} refund address in the room again.`)], components: [], allowedMentions: { parse: [] } });
+  return i.update(ui.asCard({ content: null, embeds: [ui.base(ctx.cfg, 'Address not confirmed', `Type your ${d.asset} refund address in the room again.`)], components: [], allowedMentions: { parse: [] } }));
 }
