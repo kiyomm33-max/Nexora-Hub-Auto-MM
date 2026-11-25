@@ -54,8 +54,7 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
 export async function completedPayload(ctx, deal, names, info, { test = false } = {}) {
   const embed = completedEmbed(ctx.cfg, deal, names, info, { test });
   const files = []; const components = [];
-  const icon = new URL(`../../assets/coins/done-${String(deal.asset).toLowerCase()}.png`, import.meta.url);
-  if (existsSync(icon)) { files.push(new AttachmentBuilder(fileURLToPath(icon), { name: 'coin.png' })); embed.setThumbnail('attachment://coin.png'); }
+  files.push(new AttachmentBuilder(fileURLToPath(new URL('../../assets/logo.png', import.meta.url)), { name: 'logo.png' })); embed.setThumbnail('attachment://logo.png');
   const crow = new ActionRowBuilder();
   if (info?.url) crow.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url));
   if (crow.components.length) components.push(crow);
