@@ -566,14 +566,16 @@ export function dealCompletePayload(cfg, d, choices = {}) {
 }
 
 /** Turns a classic message payload (one embed, optional ping content and button rows) into a Components V2 card in the same style as the deal cards. */
-export function asCard(p, { accent } = {}) {
+export function asCard(p, { accent, thumb } = {}) {
   const e = p.embeds?.[0]; if (!e) return p;
   const data = e.data ?? e;
   const title = data.title ? `## ${data.title}\n` : '';
   const fields = (data.fields ?? []).map((f) => `**${f.name}:** ${f.value}`).join('\n');
   const body = [data.description, fields].filter(Boolean).join('\n');
   const color = accent ?? data.color ?? BLUE;
-  const box = new ContainerBuilder().setAccentColor(color).addTextDisplayComponents(text(`${title}${body}`.trim() || '-'));
+  const box = new ContainerBuilder().setAccentColor(color);
+  const main = text(`${title}${body}`.trim() || '-');
+  if (thumb) box.addSectionComponents(new SectionBuilder().addTextDisplayComponents(main).setThumbnailAccessory(new ThumbnailBuilder({ media: { url: thumb } }))); else box.addTextDisplayComponents(main);
   const rows = (p.components ?? []).filter((c) => (c.toJSON ? c.toJSON() : c).type === 1);
   if (rows.length) { box.addSeparatorComponents(sep()); for (const r of rows.slice(0, 4)) box.addActionRowComponents(r); }
   box.addMediaGalleryComponents(lineGallery());

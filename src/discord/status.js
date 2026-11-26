@@ -110,7 +110,7 @@ export async function payout(i, ctx) {
   }
   ctx.db.prepare('UPDATE status_payouts SET room_id=? WHERE id=?').run(room.id, r.id);
   audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.payout.requested', detail: { id: r.id, cents: r.cents, room: room.id } });
-  await room.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Status payout #${r.id}`, `You are claiming **${earn.usd(r.cents)}**.\n\n**Send your Litecoin (LTC) address** in this channel. I will ask you to confirm it, then send the payment.\n\n**Payments cannot be reversed.** Double-check the address.`)], components: ui.earnRoomButtons(r.id), allowedMentions: { users: [i.user.id] } })).catch((e) => log.error('payout intro failed', e));
+  await room.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `<:lock:1575100909191430197> Status payout #${r.id}`, `You are claiming **${earn.usd(r.cents)}**.\n\n**Send your Litecoin (LTC) address** in this channel. I will ask you to confirm it, then send the payment.\n\n**Payments cannot be reversed.** Double-check the address.`)], components: ui.earnRoomButtons(r.id), allowedMentions: { users: [i.user.id] } }, { thumb: 'https://cdn.discordapp.com/emojis/1575122530015125585.png?size=128' })).catch((e) => log.error('payout intro failed', e));
   return i.editReply(ui.asCard({ embeds: [ui.base(ctx.cfg, 'Ticket opened', `Your payout request is open in <#${room.id}>. Send your LTC address there.`)] }));
 }
 
