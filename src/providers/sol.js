@@ -1,5 +1,6 @@
 // Self-custody Solana wallet (native SOL). One deal = one address derived from the shared recovery phrase (SLIP-10 ed25519, m/44'/501'/idx'/0').
 import crypto from 'node:crypto';
+import { dealCapFor } from '../core/fees.js';
 import * as bip39 from 'bip39';
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { log } from '../logger.js';
@@ -71,7 +72,7 @@ export class SolWallet {
   async usdRate(d) { return ['USDT', 'USDC'].includes(d.asset) ? 1 : this.rate(); }
   async createEscrow(deal) {
     const usd = Number(deal.send_usd);
-    if (usd > this.cfg.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }
+    if (usd > dealCapFor(this.cfg, deal.asset, this.cfg.maxDealUsd)) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }
     const rate = await this.rate(); const e6 = BigInt(Math.ceil((usd / rate) * 1e6)); const expected = e6 * 1000n;
     const idx = Number(this.db.prepare("SELECT COALESCE(MAX(idx),-1)+1 AS n FROM xwallet WHERE family='sol'").get().n);
     const address = this.#kp(idx).publicKey.toBase58();

@@ -46,7 +46,8 @@ test('deposit addresses are deterministic, unique per deal, on the right network
 });
 test('deal size cap and bad addresses are rejected', async () => {
   const c = setup();
-  await assert.rejects(() => c.w.createEscrow({ id: 'NXH-TOOBIG01', send_usd: '5000' }), /limited to \$100/);
+  await assert.rejects(() => c.w.createEscrow({ id: 'NXH-TOOBIG01', asset: 'USDT', send_usd: '5000' }), /limited to \$100/); // fee-paying coins keep the cap
+  assert.ok((await c.w.createEscrow({ id: 'NXH-NOLIMIT1', asset: 'LTC', send_usd: '5000' })).address, 'LTC has no deal limit');
   assert.throws(() => c.w.validateAddress('not-an-address'), /valid Litecoin/);
   assert.throws(() => c.w.validateAddress('ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9x'), /valid Litecoin/, 'mainnet address on testnet');
   assert.equal(c.w.validateAddress(RECV), RECV);
@@ -116,7 +117,7 @@ test('mainnet: falls back to Blockbook when the primary chain API is down, inclu
   assert.equal(w.treasury, 'LQmitT8afJrMAiRV8XGm1EtCP5TpiKuLnU');
   const c = { db, svc, w, emit: (e) => svc.applyProviderEvent(e) };
   const d = await newDeal(c, { send: '2.00', receive: '2.00' }); assert.match(d.esc.address, /^ltc1q/);
-  await assert.rejects(() => c.w.createEscrow({ id: 'NXH-BIG00001', send_usd: '10' }), /limited to \$3/);
+  await assert.rejects(() => c.w.createEscrow({ id: 'NXH-BIG00001', asset: 'USDT', send_usd: '10' }), /limited to \$3/);
   const RECV_MAIN = 'ltc1q6rz28mcfaxtmd6v789l9rrlrusdprr9pesrjxk'.replace(/^ltc1q6rz.*/, c.w.treasury);
   await c.w.scan(c.emit); const row = svc.get(d.id); assert.equal(row.confirmations, 3);
   assert.equal(svc.get(d.id).tx_hash, 'e'.repeat(64));

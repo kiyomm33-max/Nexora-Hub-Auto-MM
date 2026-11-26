@@ -724,29 +724,32 @@ export const earnPayoutButtons = (id) => [row(btn(`nx:st-paid:${id}`, 'Mark paid
 // ---------------- fee explainer ----------------
 export function feesPanelPayload(cfg) {
   const f = cfg.fee; const m = (n) => `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-  const flat = Number(f.usd); const pct = f.percent;
+  const flat = Number(f.usd); const pct = f.percent; const cap = cfg.maxDealUsd;
+  const paid = (cfg.feeAssets ?? []).join(', ');
   const ex = (a) => { const fee = a > f.percentOver ? a * pct / 100 : a > f.threshold ? flat : 0; return fee; };
   const line = (a) => `**${m(a)}** deal: fee **${ex(a) ? m(ex(a)) : 'free'}**`;
-  if (!Number(f.usd) && !Number(f.percent)) {
-    const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-      .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\n**Every deal is free.** The **Nexora Hub** auto middleman charges **no service fee** on any coin.'))
-        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+  const gallery = () => new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } });
+  const free = `### <:checkmark:1575069601312808970> LTC, ETH AND SOL\n**No fee at all** and **no deal limit**. Trade any amount.`;
+  const stable = Number(f.usd) || Number(f.percent)
+    ? `### <:Simbol_de_dolar_blau_neo_metalli:1575122530015125585> STABLECOINS (${paid})\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal\nStablecoin deals are limited to **${m(cap)}**.`
+    : '';
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text('## <:Simbol_de_dolar_blau_neo_metalli:1575122530015125585> Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575069601312808970.png?size=128' } })))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text(free));
+  if (stable) {
+    box.addSeparatorComponents(new SeparatorBuilder()).addTextDisplayComponents(text(stable))
       .addSeparatorComponents(new SeparatorBuilder())
-      .addTextDisplayComponents(text(`**Good to know**\nThe deal limit is **${m(cfg.maxDealUsd ?? 400)}**.\nCrypto **network fees** are paid to the blockchain, not to us. If a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**`));
-    return { flags: 1 << 15, components: [c] };
+      .addTextDisplayComponents(text(`### <:tasks:1575100811950821467> EXAMPLES (${paid})\n${[f.threshold, f.threshold + 50, f.percentOver, cap].filter((x, i, arr) => arr.indexOf(x) === i).map(line).join('\n')}`));
   }
-  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Middleman Fees\nHere is exactly what the **Nexora Hub** auto middleman costs. The bot shows the final amounts before anything is confirmed.'))
-      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+  box.addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text('### <:Members:1575208406531444906> WHO PAYS?\nWhen a fee applies, the **Sender** chooses: **Sender pays**, **Receiver pays**, or **Split 50/50**. The **Receiver** must then confirm. Nothing is charged until they agree.'))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**LTC, SOL and ETH**\n**Free** on every deal.\n\n**Stablecoins (${(cfg.feeAssets ?? []).join(', ')})**\n**Up to ${m(f.threshold)}:** free\n**Over ${m(f.threshold)}:** flat **${m(flat)}**\n**Over ${m(f.percentOver)}:** **${pct}%** of the deal`))
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**Examples**\n${[f.threshold, f.threshold + 50, f.percentOver, 400].map(line).join('\n')}`))
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text('**Who pays?**\nThe **Sender** chooses: **Sender pays**, **Receiver pays**, or **Split 50/50**. The **Receiver** must then confirm. Nothing is charged until they agree.'))
-    .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**Good to know**\nThe deal limit is **${m(cfg.maxDealUsd ?? 400)}**.\nCrypto **network fees** for sending the payout are separate and paid by the blockchain, not by us.\nIf a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**`));
-  return { flags: 1 << 15, components: [c] };
+    .addTextDisplayComponents(text('### <:Sheild:1575197569808728104> GOOD TO KNOW\nCrypto **network fees** for sending the payout are separate and paid by the blockchain, not by us.\nIf a deal is cancelled and refunded, the sender gets the funds back **minus the network fee**.\nQuestions? **Open a support ticket.**'))
+    .addMediaGalleryComponents(gallery());
+  return { flags: 1 << 15, components: [box], files: [lineFile()], allowedMentions: { parse: [] } };
 }
 
 // ---------------- giveaways ----------------
