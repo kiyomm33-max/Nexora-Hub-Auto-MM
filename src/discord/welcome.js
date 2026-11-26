@@ -1,22 +1,28 @@
+import { ContainerBuilder, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder, MediaGalleryBuilder } from 'discord.js';
 import { isPaused } from '../core/pause.js';
-import { EmbedBuilder } from 'discord.js';
-import { BRAND } from './ui.js';
+import { BRAND, lineFile } from './ui.js';
 
 const chan = (id, fallback) => (id ? `<#${id}>` : fallback);
+const t = (s) => new TextDisplayBuilder().setContent(s);
 
 export function welcomePayload(cfg, user) {
-  const e = new EmbedBuilder().setColor(BRAND.blue)
-    .setTitle('Welcome to Nexora Hub')
-    .setDescription([
-      `Welcome <@${user.id}>! **Nexora Hub** is a safe, automated **crypto middleman** for Roblox trades.`,
+  const box = new ContainerBuilder().setAccentColor(BRAND.blue)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(t([
+        '## <:Sender:1575262944063787161> Welcome to Nexora Hub',
+        `Welcome <@${user.id}>! **Nexora Hub** is a safe, automated **crypto middleman** for Roblox trades.`,
+      ].join('\n')))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575069932130140220.png?size=128' } })))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(t([
+      `**<:aaaaaaaaaaaaa:1575248196471492618> 1. Read the rules**\nin ${chan(cfg.channels.rules, '**#rules**')}. Every trader must follow them.`,
       '',
-      `**1. Read the rules** in ${chan(cfg.channels.rules, '**#rules**')}. Every trader must follow them.`,
-      `**2. Start a deal** in ${chan(cfg.channels.panel, '**the auto MM channel**')}. Pick your coin and the bot walks you through it.`,
-      '',
-      '**Stay safe:** staff and the bot will **never DM you first** and will **never ask** for your password, 2FA code or seed phrase.',
-    ].join('\n'))
-    .setThumbnail(user.displayAvatarURL?.({ size: 256 }) ?? null);
-  return { content: `<@${user.id}>`, embeds: [e], allowedMentions: { users: [user.id] } };
+      `**<:cube:1575100667901648968> 2. Start a deal**\nin ${chan(cfg.channels.panel, '**the auto MM channel**')}. Pick your coin and the bot walks you through it.`,
+    ].join('\n')))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(t('**Stay safe:** staff and the bot will **never DM you first** and will **never ask** for your password, 2FA code or seed phrase.'))
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+  return { flags: 1 << 15, components: [t(`<@${user.id}>`), box], files: [lineFile()], allowedMentions: { users: [user.id] } };
 }
 
 export async function sendWelcome(ctx, member) {
