@@ -44,7 +44,7 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
   if (deal.card_message_id) { // the card at the top of the room follows the deal
     try { const card = await ch.messages.fetch(deal.card_message_id); await card.edit(dealCard(ctx.cfg, deal, ctx.deals.setup(deal))); } catch (e) { log.warn('deal card update failed', { err: String(e?.message ?? e) }); }
   }
-  if (deal.status === 'completed') { // the Deal completed status card is gone: the Deal complete card and the #completed post replace it
+  if (['completed', 'cancelled'].includes(deal.status)) { // no status card once a deal is over: the one closing notice replaces it
     if (deal.status_message_id) { try { await (await ch.messages.fetch(deal.status_message_id)).delete(); } catch { /* already gone */ } ctx.deals.setChannel(deal.id, 'status_message_id', null); }
     return;
   }
@@ -98,7 +98,7 @@ const NOTICE = {
   observed: (d) => `Provider reported a payment observation (${d.confirmations} conf.). This is a blockchain observation, **not** escrow confirmation.`,
   escrow: () => 'The escrow provider has **confirmed the funds are held in escrow**.',
   completed: () => 'This ticket closes in **5 minutes**.',
-  cancelled: () => 'This deal was cancelled.',
+  cancelled: () => 'This ticket closes in **5 minutes**.',
   claimed: (d) => `<@${d.middleman_id}> is now the assigned middleman.`,
   evidence: () => 'New evidence was added to the deal record.',
   released: (d) => `The sender released the payment. <@${d.receiver_id}>, provide your ${d.asset} address to receive the payout.`,
@@ -109,7 +109,7 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'activated' || change === 'confirmed') return;
   await refreshStatus(ctx, deal, { bump: ['escrow', 'released'].includes(change) });
   const room = await fetchChannel(ctx, deal.channel_id);
-  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send(ui.asCard({ embeds: [base(ctx.cfg, change === 'completed' ? 'Ticket closing' : 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } })).catch(() => {});
+  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send(ui.asCard({ embeds: [base(ctx.cfg, change === 'completed' ? 'Deal completed' : change === 'cancelled' ? 'Deal cancelled' : 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } })).catch(() => {});
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
   if (change === 'completed') {
     if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });
