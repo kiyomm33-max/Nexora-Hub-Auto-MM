@@ -1006,3 +1006,14 @@ test('status rewards: enrolled members missing from the cache are fetched with p
   assert.deepEqual(calls[0].user, [A]); assert.equal(calls[0].withPresences, true);
   assert.equal(ctx.db.prepare('SELECT since FROM status_earn WHERE user_id=?').get(A).since !== null, true);
 });
+
+test('.statuscheck: says tracking is off when the bot has no presence intent, and lists why members do not count when on', async () => {
+  const { statusReport } = await import('../src/discord/status.js'); const earn = await import('../src/core/earn.js');
+  const ctx = setup(); ctx.presenceTracking = false; ctx.intentLevel = 1;
+  assert.match(await statusReport(ctx), /Tracking is OFF[\s\S]*Presence Intent/);
+  ctx.presenceTracking = true; earn.enroll(ctx.db, A);
+  const cache = new Map([[A, { id: A, roles: { cache: new Map([[ctx.cfg.statusRoleId, 1]]) }, presence: { status: 'idle', activities: [] } }]]);
+  ctx.client = { guilds: { cache: new Map([[ctx.cfg.guildId, { members: { cache, fetch: async () => {} } }]]) } };
+  assert.match(await statusReport(ctx), /Tracking is ON[\s\S]*0 of 1[\s\S]*status is idle/);
+  const deny = fake(ctx, 'cmd', RND, { command: 'statuscheck' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+});

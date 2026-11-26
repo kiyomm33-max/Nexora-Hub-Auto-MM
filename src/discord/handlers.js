@@ -378,6 +378,11 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'supportpanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Support panel posted', `Posted in <#${target.id}>.`);
   },
+  async statuscheck(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const rep = await st.statusReport(ctx);
+    return say(ctx, i, 'Status tracking check', rep);
+  },
   async clearpayouts(i, ctx) {
     need(i, ctx, 'panel.post');
     const n = await st.clearPending(ctx, i.user.id);
