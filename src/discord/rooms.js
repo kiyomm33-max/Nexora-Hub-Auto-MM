@@ -39,7 +39,19 @@ export async function staffLog(ctx, embed) {
 
 /** Re-render the live status message in the deal room. */
 const lastPhase = new Map();
-export async function refreshStatus(ctx, deal, { bump = false } = {}) {
+// One refresh at a time per deal: two overlapping ones (a chain event and the poller) used to post a card, then the
+// second one tried to edit the card the first had just replaced, failed, and posted the same card again.
+const queues = new Map();
+export function refreshStatus(ctx, deal, opts = {}) {
+  const prev = queues.get(deal.id) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(async () => {
+    let fresh = deal; try { fresh = ctx.deals.get?.(deal.id) ?? deal; } catch { /* keep the deal we were given */ }
+    return refreshStatusNow(ctx, fresh, opts);
+  });
+  queues.set(deal.id, run); run.finally(() => { if (queues.get(deal.id) === run) queues.delete(deal.id); }).catch(() => {});
+  return run;
+}
+async function refreshStatusNow(ctx, deal, { bump = false } = {}) {
   const ch = await fetchChannel(ctx, deal.channel_id);
   if (!ch) return;
   if (deal.card_message_id) { // the card at the top of the room follows the deal

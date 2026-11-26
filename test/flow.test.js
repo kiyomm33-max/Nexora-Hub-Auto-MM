@@ -1034,3 +1034,17 @@ test('trust roles: highest tier role is given, lower tier roles are removed, not
   const r = await sweepTrustRoles(ctx, { pause: 0 }); assert.equal(r.users, 2); assert.equal(r.changed, 1); // B moved Moon -> Earth
   assert.ok(member.state.get(B).roles.cache.has(R.Earth) && !member.state.get(B).roles.cache.has(R.Moon));
 });
+
+test('transaction detected: events that arrive back to back leave exactly one card in the room', async () => {
+  const ctx = setup(); const id = await runToRoom(ctx, { amount: '2' }); const room = ctx.chans.get(ctx.room);
+  await refreshStatus(ctx, ctx.deals.get(id));
+  const slow = (o, k) => { const f = o[k].bind(o); o[k] = async (...x) => { await new Promise((r) => setTimeout(r, 15)); return f(...x); }; }; // real Discord calls take time
+  slow(room, 'send'); slow(room.messages, 'fetch');
+  const ref = ctx.deals.get(id).provider_ref; let n = 0;
+  const ev = (type, confirmations) => ctx.deals.applyProviderEvent({ id: `t-${type}-${n++}`, type, reference: ref, confirmations, txid: 'DEMO-TX-12345', amount: '0.04850860', required_confirmations: 15 }, { simulated: true });
+  ev('funds.observed', 15); ev('funds.confirmed_on_chain', 15); ev('funds.observed', 15); // the chain poller emits these together, each with a snapshot taken before any card was posted
+  await ctx.settle();
+  const cards = [...room.msgs.values()].filter((m) => JSON.stringify((m.components ?? []).map((c) => c.toJSON?.() ?? c)).includes('Transaction Detected'));
+  assert.equal(cards.length, 1, 'one Transaction Detected card, not one per event');
+  assert.equal(room.msgs.get(ctx.deals.get(id).status_message_id)?.id, cards[0].id, 'and it is the one the deal points at');
+});
