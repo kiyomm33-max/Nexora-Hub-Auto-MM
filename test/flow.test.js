@@ -647,6 +647,14 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   // .rewards: staff only
   const rw = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'rewards' }); await route(rw, ctx); assert.match(text(rw), /ltc1qrewardswallet[\s\S]*Owed to members/);
   const rwd = fake(ctx, 'cmd', RND, { command: 'rewards' }); await route(rwd, ctx); assert.match(text(rwd), /do not have permission/);
+  // .clearpayouts: staff only, rejects the open request (balance back), a new request works afterwards
+  ctx.db.prepare('UPDATE status_earn SET seconds=seconds+? WHERE user_id=?').run(3 * 86400, RND);
+  const pend = await press(RND, 'nx:st-payout'); assert.match(text(pend), /Ticket opened/);
+  const open2 = ctx.db.prepare("SELECT COUNT(*) n FROM status_payouts WHERE state='pending'").get().n;
+  const dn = fake(ctx, 'cmd', RND, { command: 'clearpayouts' }); await route(dn, ctx); assert.match(text(dn), /do not have permission/);
+  const cl = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'clearpayouts' }); await route(cl, ctx);
+  assert.ok(open2 >= 1); assert.match(text(cl), /Cleared \*\*1\*\*/); assert.equal(ctx.db.prepare("SELECT COUNT(*) n FROM status_payouts WHERE state='pending'").get().n, 0);
+  const again = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'clearpayouts' }); await route(again, ctx); assert.match(text(again), /no open payout requests/);
 });
 
 test('fee panel: staff-only, shows the tiers from config', async () => {

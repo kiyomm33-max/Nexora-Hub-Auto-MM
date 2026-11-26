@@ -371,6 +371,11 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'supportpanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Support panel posted', `Posted in <#${target.id}>.`);
   },
+  async clearpayouts(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const n = await st.clearPending(ctx, i.user.id);
+    return say(ctx, i, 'Payout requests cleared', n ? `Cleared **${n}** open payout request${n === 1 ? '' : 's'}. The balances are back with the members and their request rooms are closed.` : 'There were no open payout requests.');
+  },
   async status(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.statusPanel)) ?? i.channel;
