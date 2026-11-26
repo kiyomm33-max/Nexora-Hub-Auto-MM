@@ -22,10 +22,10 @@ export async function closeIdleDeals(ctx, now = Date.now()) {
 }
 
 export const FINISHED_MS = 5 * 60 * 1000;
-/** Remove the room of a completed deal 5 minutes after completion (transcript saved first). */
+/** Remove the room of a completed or cancelled deal 5 minutes after it ended (transcript saved first). */
 export async function closeFinishedRooms(ctx, now = Date.now()) {
   const cutoff = new Date(now - FINISHED_MS).toISOString();
-  const rows = ctx.db.prepare("SELECT * FROM deals WHERE status='completed' AND channel_id IS NOT NULL AND completed_at < ? AND completed_at > ?")
+  const rows = ctx.db.prepare("SELECT * FROM deals WHERE status IN ('completed','cancelled') AND channel_id IS NOT NULL AND COALESCE(completed_at, cancelled_at) < ? AND COALESCE(completed_at, cancelled_at) > ?")
     .all(cutoff, new Date(now - 7 * 864e5).toISOString());
   let n = 0;
   for (const d of rows) {
@@ -34,7 +34,7 @@ export async function closeFinishedRooms(ctx, now = Date.now()) {
       if (!ch) continue; // already removed
       if (!ctx.db.prepare('SELECT 1 FROM transcripts WHERE ticket_id=?').get(d.id)) await rooms.saveTranscript(ctx, d.id, ch, 'system');
       audit(ctx.db, { actor: 'system', action: 'room.auto_closed', dealId: d.id, detail: { after: '5 minutes' } });
-      await ch.delete('Deal completed 5 minutes ago');
+      await ch.delete('Deal ended 5 minutes ago');
       n++;
     } catch (e) { log.error(`finished room close failed for ${d.id}: ${e?.message ?? e}`); }
   }
