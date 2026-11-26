@@ -64,7 +64,7 @@ export async function refreshStatus(ctx, deal, { bump = false } = {}) {
 export async function completedPayload(ctx, deal, names, info, { test = false } = {}) {
   const embed = completedEmbed(ctx.cfg, deal, names, info, { test });
   const files = []; const components = [];
-  files.push(new AttachmentBuilder(fileURLToPath(new URL('../../assets/logo.png', import.meta.url)), { name: 'logo.png' })); embed.setThumbnail('attachment://logo.png');
+  embed.setThumbnail('https://cdn.discordapp.com/emojis/1575100909191430197.png?size=128'); // lock emoji from the Nexora server
   const crow = new ActionRowBuilder();
   if (info?.url) crow.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(`View on ${info.explorerName}`).setURL(info.url));
   if (crow.components.length) components.push(crow);
