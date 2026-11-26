@@ -126,7 +126,7 @@ async function openTicket(i, ctx, subject, details) {
   const ch = await rooms.createPrivateChannel(i.guild, ctx.cfg, { name: `ticket-${id.slice(4).toLowerCase()}`, parent: ctx.cfg.channels.ticketCategory, members: [i.user.id], minStaff: LEVELS.admin, topic: `Support ticket ${id}` });
   ctx.db.prepare('INSERT INTO tickets(id,kind,opener,channel_id,subject,created_at) VALUES(?,?,?,?,?,?)').run(id, 'support', i.user.id, ch.id, subject, new Date().toISOString());
   audit(ctx.db, { actor: i.user.id, action: 'ticket.opened', detail: { id } });
-  await ch.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } }));
+  await ch.send(ui.asCard({ content: `<@${i.user.id}>`, embeds: [ui.base(ctx.cfg, `<:Members:1575208406531444906> Support  •  ${id}`, `**${subject}**\n${details}\n\nA staff member will assist you. Never share passwords, 2FA codes or seed phrases.`)], components: ui.ticketButtons(id), allowedMentions: { users: [i.user.id] } }, { thumb: 'https://cdn.discordapp.com/emojis/1575071699693478018.png?size=128' }));
   return say(ctx, i, 'Ticket opened', `Head to <#${ch.id}>.`);
 }
 async function closeTicket(i, ctx, id) {
