@@ -87,7 +87,7 @@ export function loadConfig(e = env) {
     fee: { threshold: Number(e.FEE_THRESHOLD_USD || 50), usd: Number(e.FEE_USD || 2), percentOver: Number(e.FEE_PERCENT_OVER_USD || 250), percent: Number(e.FEE_PERCENT || 2) },
     feeAssets: (e.FEE_ASSETS ?? 'USDT,USDC').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean), // only these coins pay the service fee
     releaseDelaySec: Number(e.RELEASE_DELAY_SEC || 60),
-    privacyChoiceSec: Number(e.PRIVACY_CHOICE_SEC ?? 180), // how long the completed-deal post waits for both traders to pick Show on Profile / Keep Anonymous
+    privacyChoiceSec: Number(e.PRIVACY_CHOICE_SEC ?? 0), // how long the completed-deal post waits for both traders to pick Show on Profile / Keep Anonymous
     brandLogo: e.BRAND_LOGO_URL,
   };
 }

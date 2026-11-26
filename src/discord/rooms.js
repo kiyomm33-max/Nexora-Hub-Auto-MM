@@ -97,7 +97,7 @@ export async function publishCompleted(ctx, deal, { force = false } = {}) {
 const NOTICE = {
   observed: (d) => `Provider reported a payment observation (${d.confirmations} conf.). This is a blockchain observation, **not** escrow confirmation.`,
   escrow: () => 'The escrow provider has **confirmed the funds are held in escrow**.',
-  completed: () => 'The payout was sent and this deal is **complete**. This room closes automatically in 5 minutes and a transcript is saved.',
+  completed: () => 'This ticket closes in **5 minutes**.',
   cancelled: () => 'This deal was cancelled.',
   claimed: (d) => `<@${d.middleman_id}> is now the assigned middleman.`,
   evidence: () => 'New evidence was added to the deal record.',
@@ -109,7 +109,7 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'activated' || change === 'confirmed') return;
   await refreshStatus(ctx, deal, { bump: ['escrow', 'released'].includes(change) });
   const room = await fetchChannel(ctx, deal.channel_id);
-  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send(ui.asCard({ embeds: [base(ctx.cfg, 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } })).catch(() => {});
+  if (room && NOTICE[change] && !['observed', 'escrow', 'released'].includes(change) && !(change === 'completed' && ctx.cfg.privacyChoiceSec > 0)) await room.send(ui.asCard({ embeds: [base(ctx.cfg, change === 'completed' ? 'Ticket closing' : 'Deal update', NOTICE[change](deal), deal.status === 'disputed' ? BRAND.red : BRAND.purple)], allowedMentions: { parse: [] } })).catch(() => {});
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
   if (change === 'completed') {
     if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });
