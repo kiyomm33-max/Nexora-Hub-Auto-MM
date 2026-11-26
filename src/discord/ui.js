@@ -139,12 +139,15 @@ export const statsEmbed = (name, avatarUrl, st) => new EmbedBuilder().setColor(B
 
 /** Components V2 support panel: one button that opens the ticket form. */
 export function supportPanelPayload() {
-  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-    .addTextDisplayComponents(text('## Nexora Hub Support\nIf anything goes wrong, **open a support ticket** and our staff will help you. Your ticket is **private**: only you and the admins can see it.\n\n**Never** share passwords, 2FA codes or seed phrases. Staff will never ask for them.'))
+  const c = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text('## <:aaaaaaaa:1575247365198061638> Nexora Hub Support\nIf anything goes wrong, **open a support ticket** and our staff will help you. Your ticket is **private**: only you and the admins can see it.\n\n**Never** share passwords, 2FA codes or seed phrases. Staff will never ask for them.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575197569808728104.png?size=128' } })))
     .addSeparatorComponents(new SeparatorBuilder())
     .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('**Need help?** Describe the problem and we will take it from there.'))
-      .setButtonAccessory(new ButtonBuilder().setCustomId('nx:ticket-start').setLabel('Open Ticket').setStyle(ButtonStyle.Primary)));
-  return { flags: 1 << 15, components: [c] };
+      .setButtonAccessory(new ButtonBuilder().setCustomId('nx:ticket-start').setLabel('Open Ticket').setStyle(ButtonStyle.Primary).setEmoji('1575100909191430197')))
+    .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+  return { flags: 1 << 15, components: [c], files: [lineFile()] };
 }
 // Icons of the deal card: custom emojis from the Nexora server. Change an ID here to swap one.
 export const CARD_ICONS = { title: '<:add:1575069932130140220>', sender: '<:bluestar:1575122626307948614>', receiver: '<:bluediamond:1575122581525237841>', instruction: '<:tasks:1575100811950821467>', amount: '<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585>', thumb: 'https://cdn.discordapp.com/emojis/1575069932130140220.png?size=128' };
