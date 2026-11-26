@@ -1017,3 +1017,20 @@ test('.statuscheck: says tracking is off when the bot has no presence intent, an
   assert.match(await statusReport(ctx), /Tracking is ON[\s\S]*0 of 1[\s\S]*status is idle/);
   const deny = fake(ctx, 'cmd', RND, { command: 'statuscheck' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
 });
+
+test('trust roles: highest tier role is given, lower tier roles are removed, nothing below $1, sweep covers both parties', async () => {
+  const { syncTrustRoles, sweepTrustRoles } = await import('../src/discord/trustroles.js');
+  const ctx = setup(); const R = ctx.cfg.trustRoles;
+  const mk = (amount) => { const d = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: String(amount), currency: 'USD', asset: 'LTC', network: 'litecoin' }); ctx.db.prepare("UPDATE deals SET status='completed', mode='live', escrow_status='provider_confirmed', sender_id=?, receiver_id=? WHERE id=?").run(A, B, d.id); };
+  const roles = new Map(); const log = [];
+  const member = (id, have = []) => ({ id, user: { bot: false }, roles: { cache: new Map(have.map((r) => [r, 1])), add: async (r) => { log.push(['add', id, r.id ?? r]); member.state.get(id).roles.cache.set(r.id ?? r, 1); }, remove: async (r) => { log.push(['remove', id, r]); member.state.get(id).roles.cache.delete(r); } } });
+  member.state = new Map([[A, member(A, [R.Moon])], [B, member(B)]]);
+  const guild = { roles: { cache: new Map(Object.values(R).map((id) => [id, { id, position: 1 }])), fetch: async () => null, everyone: { id: 'e' } }, members: { me: { roles: { highest: { position: 10 } } }, fetch: async (id) => member.state.get(id) } };
+  ctx.client = { guilds: { fetch: async () => guild } };
+  mk(30); assert.deepEqual((await syncTrustRoles(ctx, B)).added, [R.Moon]);        // $30: Moon ($1+)
+  mk(30); assert.deepEqual((await syncTrustRoles(ctx, A)).added, [R.Earth]);       // $60 total: Earth, Moon removed
+  assert.deepEqual(log.filter((l) => l[1] === A).map((l) => l[0] + l[2]).sort(), ['add' + R.Earth, 'remove' + R.Moon].sort());
+  assert.deepEqual(await syncTrustRoles(ctx, A), { added: [], removed: [] });      // nothing more to do
+  const r = await sweepTrustRoles(ctx, { pause: 0 }); assert.equal(r.users, 2); assert.equal(r.changed, 1); // B moved Moon -> Earth
+  assert.ok(member.state.get(B).roles.cache.has(R.Earth) && !member.state.get(B).roles.cache.has(R.Moon));
+});

@@ -45,6 +45,7 @@ export const SPEC = {
   rules: { desc: 'Post the server rules', args: [] },
   trustpanel: { desc: 'Post the trust system panel', args: [], textOnly: true },
   status: { desc: 'Post the Status Rewards panel', args: [] },
+  synctrust: { desc: 'Give every member the role for their trust tier now', args: [], textOnly: true },
   statuscheck: { desc: 'Show why status reward time is or is not counting for each member', args: [], textOnly: true },
   clearpayouts: { desc: 'Reject all open status payout requests and close their rooms', args: [], textOnly: true },
   supportpanel: { desc: 'Post the support panel', args: [] },
