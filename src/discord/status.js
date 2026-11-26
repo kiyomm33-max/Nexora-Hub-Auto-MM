@@ -45,6 +45,16 @@ export function startStatusLoop(client, ctx) {
 
 export async function postPanel(ctx, channel) { return channel.send(ui.statusPanelPayload(ctx.cfg)); }
 
+/** Rejects every open payout request (the balances go back to the members), updates the staff cards and deletes the request rooms. Returns how many were cleared. */
+export async function clearPending(ctx, staffId) {
+  const open = earn.pendingPayouts(ctx.db); let n = 0;
+  for (const r of open) {
+    try { const done = earn.handlePayout(ctx.db, r.id, 'rejected', staffId); n++; await updateCard(ctx, done); await closeRoom(ctx, done, 0); audit(ctx.db, { category: 'status', actor: staffId, action: 'status.payout.cleared', detail: { id: r.id, cents: r.cents } }); }
+    catch (e) { log.warn('clear payout failed', { id: r.id, err: String(e?.message ?? e) }); }
+  }
+  return n;
+}
+
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
   const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);

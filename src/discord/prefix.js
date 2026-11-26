@@ -44,6 +44,7 @@ export const SPEC = {
   fees: { desc: 'Post the fee explanation panel', args: [] },
   rules: { desc: 'Post the server rules', args: [] },
   status: { desc: 'Post the Status Rewards panel', args: [] },
+  clearpayouts: { desc: 'Reject all open status payout requests and close their rooms', args: [], textOnly: true },
   supportpanel: { desc: 'Post the support panel', args: [] },
   staff: {
     desc: 'Staff tools',
