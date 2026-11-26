@@ -38,6 +38,24 @@ export async function loadEnrolled(ctx) {
     catch (e) { if (!warnedFetch) { warnedFetch = true; log.warn('status tracking: could not load members and presences', { err: String(e?.message ?? e) }); } }
   }
 }
+/** Why each enrolled member is or is not counting, for staff. */
+export async function statusReport(ctx) {
+  const lines = [];
+  if (!ctx.presenceTracking) {
+    return `**Tracking is OFF.** The bot connected ${ctx.intentLevel === 2 ? 'without the **Presence Intent**' : 'without the **Server Members Intent** and **Presence Intent**'}, so it cannot see anyone's status and **nothing counts**.\n\nFix: Discord Developer Portal > your application > **Bot** > **Privileged Gateway Intents**: turn on **Presence Intent**, **Server Members Intent** and **Message Content Intent**, save, then restart the bot (redeploy).`;
+  }
+  await loadEnrolled(ctx);
+  const g = guildOf(ctx); const ids = earn.enrolled(ctx.db); let counting = 0;
+  for (const uid of ids) {
+    const m = g?.members?.cache?.get(uid); const p = m?.presence; const phrase = ctx.cfg.statusPhrase.toLowerCase();
+    const custom = (p?.activities ?? []).find((a) => a.type === 4);
+    const why = !m ? 'not found in the server' : !p ? 'no presence (offline or invisible)' : !['online', 'dnd'].includes(p.status) ? `status is ${p.status} (needs Online or Do Not Disturb)` : !hasRole(m, ctx.cfg) ? 'missing the status role' : !custom ? 'no custom status set' : !String(custom.state ?? '').toLowerCase().includes(phrase) ? `custom status is "${String(custom.state ?? '').slice(0, 40)}" (must contain .${ctx.cfg.statusPhrase})` : 'counting';
+    if (why === 'counting') counting++;
+    if (lines.length < 20) lines.push(`<@${uid}>: ${why}`);
+  }
+  return `**Tracking is ON.** ${counting} of ${ids.length} enrolled member${ids.length === 1 ? '' : 's'} counting right now.\n\n${lines.join('\n') || 'Nobody has pressed Start Earning yet.'}`;
+}
+
 export function tick(ctx, at = Date.now()) {
   if (!ctx.presenceTracking) return;
   const g = guildOf(ctx); if (!g) return;
@@ -73,6 +91,7 @@ export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
   const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
   if (!hasRole(m, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to earn from your status.`);
+  if (!ctx.presenceTracking) throw new UserError('Status tracking is switched off because the bot cannot see statuses yet. Staff need to turn on the **Presence Intent** and **Server Members Intent** in the Discord Developer Portal and restart the bot.');
   if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
   const fresh = earn.enroll(ctx.db, i.user.id);
   earn.setQualifying(ctx.db, i.user.id, true);

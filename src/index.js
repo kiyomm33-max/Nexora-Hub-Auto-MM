@@ -61,7 +61,8 @@ function boot(level) {
   ctx.client = client; cfg.messageContent = withMessages;
   if (level >= 2) client.on(Events.GuildMemberAdd, (m) => { sendWelcome(ctx, m).catch((e) => log.error('welcome failed', e)); pingNewMember(ctx, m).catch((e) => log.error('join ping failed', e)); giveAutoRole(ctx, m).catch((e) => log.error('auto role failed', e)); });
   if (withMessages) client.on(Events.MessageCreate, (m) => { countFromMessage(m, ctx); return Promise.all([commandFromMessage(m, ctx), partnerFromMessage(m, ctx), payoutFromMessage(m, ctx), refundFromMessage(m, ctx), statusAddressFromMessage(m, ctx)]).catch((e) => log.error('message handler failed', e)); });
-  ctx.presenceTracking = level >= 3;
+  ctx.presenceTracking = level >= 3; ctx.intentLevel = level;
+  log.info(level >= 3 ? 'status tracking ON (Server Members and Presence intents are enabled)' : `status tracking OFF: the bot connected without ${level >= 2 ? 'the Presence intent' : 'the Server Members and Presence intents'}. Turn them on in the Discord Developer Portal (Bot > Privileged Gateway Intents).`);
   startStatusLoop(client, ctx);
   startGiveawayLoop(client, ctx);
   startPollLoop(client, ctx);
