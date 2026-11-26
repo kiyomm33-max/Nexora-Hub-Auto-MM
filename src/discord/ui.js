@@ -772,7 +772,23 @@ export function feesPanelPayload(cfg) {
 
 // ---------------- giveaways ----------------
 export const reqText = (g) => (g.req_kind ? `Invite ${g.req_n} new member${g.req_n === 1 ? '' : 's'} after this giveaway started` : 'None, everyone can enter');
+/** Giveaway as a compact V2 card (no blue line, so it keeps its size). Messages posted before this layout stay classic embeds: use giveawayLegacyPayload for them. */
 export function giveawayPayload(cfg, g, entries) {
+  const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
+  const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
+  const body = ended
+    ? `**Giveaway ended**\n\n**Winner:** ${winner}\n**Hosted by:** <@${g.host_id}>\n**Entries:** ${entries}\n**Giveaway ID:** ${g.id}`
+    : `Press **Enter** to join.\n\n**Ends:** <t:${ts}:R> (<t:${ts}:f>)\n**Hosted by:** <@${g.host_id}>\n**Requirement:** ${reqText(g)}\n**Entries:** ${entries}\n**Giveaway ID:** ${g.id}`;
+  const enter = btn(`nx:gw-enter:${g.id}`, ended ? 'Ended' : 'Enter', ButtonStyle.Primary).setDisabled(ended);
+  if (!ended) enter.setEmoji({ id: '1575069932130140220', name: 'add' });
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:aaaaaaaa:1575247365198061638> ${g.prize}\n${body}`))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575197569808728104.png?size=128' } })))
+    .addActionRowComponents(row(enter));
+  return { flags: 1 << 15, components: [box], allowedMentions: { parse: [] } };
+}
+export function giveawayLegacyPayload(cfg, g, entries) {
   const ts = Math.floor(g.ends_at / 1000); const ended = g.state === 'ended';
   const winner = g.winner_id ? `<@${g.winner_id}> (picked at random)` : 'No valid entries';
   const e = base(cfg, g.prize, ended
