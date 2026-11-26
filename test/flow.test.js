@@ -516,7 +516,7 @@ test('welcome: posts to the welcome channel, mentions rules and auto MM channels
   const sent = []; ctx.client = { channels: { fetch: async () => ({ send: async (p) => sent.push(p) }) } };
   await sendWelcome(ctx, { user: { id: '555', bot: true } }); assert.equal(sent.length, 0, 'bots are not welcomed');
   await sendWelcome(ctx, { user: { id: '555', displayAvatarURL: () => 'https://x/p.png' } });
-  const e = sent[0].embeds[0].toJSON(); assert.match(e.description, /<#111>/); assert.match(e.description, /<#222>/); assert.equal(e.thumbnail.url, 'https://x/p.png'); assert.match(sent[0].content, /<@555>/);
+  const w = JSON.stringify(sent[0].components.map((c) => c.toJSON())); assert.match(w, /<#111>/); assert.match(w, /<#222>/); assert.match(w, /1575069932130140220/); assert.match(w, /Welcome to Nexora Hub[\s\S]*Read the rules[\s\S]*Start a deal/); assert.match(w, /<@555>/); assert.match(w, /line\.png/);
   ctx.cfg.channels.welcome = 'wc2'; ctx.chans.set('wc2', { id: 'wc2', sent: [], async send(p) { this.sent.push(p); } });
   const deny = fake(ctx, 'cmd', RND, { command: 'welcome' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   const ok = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'welcome' }); await route(ok, ctx); assert.equal(sent.length, 2, 'preview posted to the welcome channel');
