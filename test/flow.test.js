@@ -657,6 +657,15 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   const again = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'clearpayouts' }); await route(again, ctx); assert.match(text(again), /no open payout requests/);
 });
 
+test('trust panel: staff-only, posts the tiers from the trust system in the trust channel', async () => {
+  const ctx = setup(); ctx.cfg.channels.trustPanel = 'tpch'; ctx.chans.set('tpch', { id: 'tpch', sent: [], async send(p) { this.sent.push(p); } });
+  const deny = fake(ctx, 'cmd', RND, { command: 'trustpanel' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
+  await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'trustpanel' }), ctx);
+  const p = ctx.chans.get('tpch').sent[0]; const j = JSON.stringify(p.components.map((c) => c.toJSON()));
+  assert.match(j, /NEXORA TRUST SYSTEM[\s\S]*HOW IT WORKS[\s\S]*TRUST TIER RANKINGS[\s\S]*SUN[\s\S]*\$5,000\+[\s\S]*PLUTO[\s\S]*Starting tier[\s\S]*IMPORTANT INFORMATION/);
+  assert.match(j, /1575440289987039272/); assert.match(j, /1575247365198061638/); assert.match(j, /1575431881489514597/); assert.equal((j.match(/line\.png/g) ?? []).length, 3);
+});
+
 test('fee panel: staff-only, shows the tiers from config', async () => {
   const ctx = setup(); ctx.cfg.fee = { threshold: 50, usd: 2, percentOver: 250, percent: 2 }; ctx.cfg.feeAssets = ['USDT', 'USDC']; ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
   const deny = fake(ctx, 'cmd', RND, { command: 'fees' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
