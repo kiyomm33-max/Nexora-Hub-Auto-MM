@@ -26,6 +26,18 @@ export function qualifies(member, cfg) {
 }
 const guildOf = (ctx) => ctx.client?.guilds?.cache?.get(ctx.cfg.guildId) ?? ctx.client?.guilds?.cache?.first();
 
+/** Enrolled members are often not in the cache (large server, restart, members list not loaded), and then nobody counts.
+ *  Ask Discord for exactly those members, with their presence, so the next tick can see their status. */
+let warnedFetch = false;
+export async function loadEnrolled(ctx) {
+  if (!ctx.presenceTracking) return;
+  const g = guildOf(ctx); if (!g?.members?.fetch) return;
+  const ids = earn.enrolled(ctx.db);
+  for (let k = 0; k < ids.length; k += 100) {
+    try { await g.members.fetch({ user: ids.slice(k, k + 100), withPresences: true, time: 20_000 }); warnedFetch = false; }
+    catch (e) { if (!warnedFetch) { warnedFetch = true; log.warn('status tracking: could not load members and presences', { err: String(e?.message ?? e) }); } }
+  }
+}
 export function tick(ctx, at = Date.now()) {
   if (!ctx.presenceTracking) return;
   const g = guildOf(ctx); if (!g) return;
@@ -40,7 +52,8 @@ export function startStatusLoop(client, ctx) {
   client.once(Events.ClientReady, () => {
     sweepRooms(ctx).catch(() => {});
     try { earn.closeStale(ctx.db); } catch (e) { log.error('status closeStale failed', e); }
-    setTimeout(() => { tick(ctx); setInterval(() => { try { tick(ctx); } catch (e) { log.error('status tick failed', e); } payoutLoop(ctx).catch((e) => log.error('payout loop failed', e)); sweepRooms(ctx).catch((e) => log.error('room sweep failed', e)); }, 60_000).unref?.(); }, 20_000).unref?.();
+    const run = async () => { await loadEnrolled(ctx); tick(ctx); };
+    setTimeout(() => { run().catch((e) => log.error('status tick failed', e)); setInterval(() => { run().catch((e) => log.error('status tick failed', e)); payoutLoop(ctx).catch((e) => log.error('payout loop failed', e)); sweepRooms(ctx).catch((e) => log.error('room sweep failed', e)); }, 60_000).unref?.(); }, 20_000).unref?.();
   });
 }
 

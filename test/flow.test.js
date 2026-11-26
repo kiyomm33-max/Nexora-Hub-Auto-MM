@@ -995,3 +995,14 @@ test('status payout rooms close from the database, so a restart cannot leave one
   await sweepRooms(ctx);
   assert.equal(deleted.length, 1); assert.equal(ctx.db.prepare('SELECT room_id FROM status_payouts').get().room_id, null);
 });
+
+test('status rewards: enrolled members missing from the cache are fetched with presences before each tick', async () => {
+  const { loadEnrolled, tick } = await import('../src/discord/status.js'); const earn = await import('../src/core/earn.js');
+  const ctx = setup(); ctx.presenceTracking = true; earn.enroll(ctx.db, A);
+  const cache = new Map(); const calls = [];
+  const guild = { members: { cache, fetch: async (o) => { calls.push(o); cache.set(A, { id: A, roles: { cache: new Map([[ctx.cfg.statusRoleId, 1]]) }, presence: { status: 'online', activities: [{ type: 4, state: `Best Auto MM - .${ctx.cfg.statusPhrase}` }] } }); } } };
+  ctx.client = { guilds: { cache: new Map([[ctx.cfg.guildId, guild]]) } };
+  await loadEnrolled(ctx); tick(ctx);
+  assert.deepEqual(calls[0].user, [A]); assert.equal(calls[0].withPresences, true);
+  assert.equal(ctx.db.prepare('SELECT since FROM status_earn WHERE user_id=?').get(A).since !== null, true);
+});
