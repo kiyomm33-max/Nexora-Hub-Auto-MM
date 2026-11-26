@@ -586,7 +586,7 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   const deny = fake(ctx, 'cmd', RND, { command: 'status' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'status' }), ctx);
   const p = ctx.chans.get('stp').sent[0]; const j = JSON.stringify(p.components.map((c) => c.toJSON()));
-  assert.ok(j.includes('nx:st-start') && j.includes('nx:st-payout') && j.includes('Status Rewards')); assert.equal(p.files.length, 1);
+  assert.ok(j.includes('nx:st-start') && j.includes('nx:st-payout') && j.includes('Status Rewards')); assert.match(j, /line\.png/);
   // not showing the status: refused
   ctx.cfg.statusRoleId = 'ROLE_X';
   const norole = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); norole.member.presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(norole, ctx); assert.match(text(norole), /role to earn/);

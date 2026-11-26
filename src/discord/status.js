@@ -43,7 +43,7 @@ export function startStatusLoop(client, ctx) {
   });
 }
 
-export async function postPanel(ctx, channel) { return channel.send({ ...ui.statusPanelPayload(ctx.cfg), files: [logoFile()] }); }
+export async function postPanel(ctx, channel) { return channel.send(ui.statusPanelPayload(ctx.cfg)); }
 
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
@@ -87,7 +87,7 @@ export async function payout(i, ctx) {
   const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
   if (!qualifies(m, ctx.cfg)) throw new UserError(`To request a payout your custom status must say **Best Auto MM - .${ctx.cfg.statusPhrase}** and you must be **Online** or **Do Not Disturb**. Fix that, then press Request Payout again.`);
   if (s.available < ctx.cfg.statusPay.minPayoutCents) throw new UserError(`You need at least **${earn.usd(ctx.cfg.statusPay.minPayoutCents)}** to request a payout. You have **${earn.usd(s.available)}** available.`);
-  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  await i.deferReply({ flags: MessageFlags.Ephemeral | (1 << 15) });
   let r;
   try { r = earn.requestPayout(ctx.db, i.user.id, { method: 'ltc', details: '', pay: ctx.cfg.statusPay }); }
   catch (e) { if (e instanceof earn.PayoutError) throw new UserError(e.message); throw e; }

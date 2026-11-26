@@ -677,17 +677,18 @@ const cusd = (c) => `$${(c / 100).toFixed(2)}`;
 const dur = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return [d && `${d}d`, (d || h) && `${h}h`, `${m}m`].filter(Boolean).join(' '); };
 export const statusPanelPayload = (cfg) => {
   const p = cfg.statusPay; const week = 7 * p.dailyCents + p.weekBonusCents;
-  const c = new ContainerBuilder().setAccentColor(BRAND.purple)
-    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## Status Rewards\nGet paid for your Discord status.'))
-      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'attachment://status.png' } })))
+  const c = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder().addTextDisplayComponents(text('## <:Simbol_de_dolar_blau_neo_metalli:1575122530015125585> Status Rewards\nGet paid for your Discord status.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575071649328406611.png?size=128' } })))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**How it works**\n**1.** Copy this exact custom status:\n\`\`\`\nBest Auto MM - .${cfg.statusPhrase}\n\`\`\`\n**2.** Stay **Online** or **Do Not Disturb** and set the expiry to **Don't clear**.\n**3.** Press **Start Earning**. Your time adds up across sessions.\n**4.** Press **Request Payout**, choose a payment method and enter your details.`))
+    .addTextDisplayComponents(text(`**<:Questionmark:1575431881489514597> How it works**\n**1.** Copy this exact custom status:\n\`\`\`\nBest Auto MM - .${cfg.statusPhrase}\n\`\`\`\n**2.** Stay **Online** or **Do Not Disturb** and set the expiry to **Don't clear**.\n**3.** Press **Start Earning**. Your time adds up across sessions.\n**4.** Press **Request Payout**. A private ticket opens: send your **Litecoin (LTC) address** there and confirm it.`))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**Pay**\n**24 hours online:** ${cusd(p.dailyCents)}\n**7 days online:** +${cusd(p.weekBonusCents)} bonus\n**Full week:** ${cusd(week)} total`))
+    .addTextDisplayComponents(text(`**<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585> Pay**\n**24 hours online:** ${cusd(p.dailyCents)}\n**7 days online:** +${cusd(p.weekBonusCents)} bonus\n**Full week:** ${cusd(week)} total`))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(text(`**Minimum payout:** ${cusd(p.minPayoutCents)}  |  PayPal, Litecoin, Solana or Ethereum\nPayouts are sent by staff by hand. Idle or offline time does not count.`))
-    .addActionRowComponents(row(btn('nx:st-start', 'Start Earning', ButtonStyle.Primary), btn('nx:st-time', 'Online Time'), btn('nx:st-payout', 'Request Payout')));
-  return { flags: 1 << 15, components: [c] };
+    .addTextDisplayComponents(text(`**<:tasks:1575100811950821467> Minimum payout:** ${cusd(p.minPayoutCents)}  |  paid in Litecoin (LTC)\nIdle or offline time does not count. Payouts above ${cusd(p.autoMaxCents ?? 1000)} are checked by staff first.`))
+    .addActionRowComponents(row(btn('nx:st-start', 'Start Earning', ButtonStyle.Primary).setEmoji('1575262944063787161'), btn('nx:st-time', 'Online Time'), btn('nx:st-payout', 'Request Payout')))
+    .addMediaGalleryComponents(lineGallery());
+  return { flags: 1 << 15, components: [c], files: [lineFile()] };
 };
 export const earnTimeEmbed = (cfg, s) => base(cfg, 'Online Time', !s.enrolled ? 'You have not started yet. Press **Start Earning** on the panel.' :
   `**Status:** ${s.counting ? 'counting now' : 'not counting (status or presence is not matching)'}\n**Time online:** **${dur(s.seconds)}**\n**Earned:** **${cusd(s.earned)}**\n**Pending payout:** ${cusd(s.pending)}\n**Paid out:** ${cusd(s.paid)}\n**Available:** **${cusd(s.available)}**\n\nNext day in ${dur(s.nextDayIn)}, week bonus in ${dur(s.nextWeekIn)}.`);
