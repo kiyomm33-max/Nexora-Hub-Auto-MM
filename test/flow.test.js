@@ -671,7 +671,7 @@ test('fee panel: staff-only, shows the tiers from config', async () => {
   const deny = fake(ctx, 'cmd', RND, { command: 'fees' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
   const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON()));
-  assert.equal(ctx.chans.get('feech').sent[0].files.length, 1); assert.ok(j.includes('attachment://status.png') && j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
+  assert.equal(ctx.chans.get('feech').sent[0].files.length, 1); assert.ok(j.includes('1575069601312808970') && j.includes('line.png') && j.includes('Middleman Fees') && j.includes('Up to $50') && j.includes('2%'));
 });
 
 test('giveaway: /giveaway create, new-invite requirement gates entry, winner is random', async () => {
@@ -723,7 +723,7 @@ test('fees: LTC, SOL and ETH are free by default, USDT and USDC keep the tiers',
   for (const a of ['USDT', 'USDC']) { assert.equal(calcFee(50, feeCfgFor(cfg, a)), 0); assert.equal(calcFee(100, feeCfgFor(cfg, a)), 2); assert.equal(calcFee(300, feeCfgFor(cfg, a)), 6); }
   const ctx = setup(); ctx.cfg.fee = cfg.fee; ctx.cfg.feeAssets = cfg.feeAssets; ctx.cfg.channels.fees = 'feech'; ctx.chans.set('feech', { id: 'feech', sent: [], async send(p) { this.sent.push(p); } });
   await route(fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'fees' }), ctx);
-  const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON())); assert.ok(j.includes('LTC, SOL and ETH') && j.includes('Free') && j.includes('USDT, USDC') && j.includes('2%'));
+  const j = JSON.stringify(ctx.chans.get('feech').sent[0].components.map((c) => c.toJSON())); assert.ok(j.includes('LTC, ETH AND SOL') && j.includes('No fee at all') && j.includes('no deal limit') && j.includes('USDT, USDC') && j.includes('2%'));
 });
 
 test('.check lists everyone who entered the current giveaway, staff only', async () => {

@@ -254,7 +254,7 @@ const commands = {
   async fees(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.fees)) ?? i.channel;
-    await target.send({ ...ui.feesPanelPayload(ctx.cfg), files: [st.logoFile()] });
+    await target.send(ui.feesPanelPayload(ctx.cfg));
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'feespanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Fee panel posted', `Posted in <#${target.id}>.`);
   },

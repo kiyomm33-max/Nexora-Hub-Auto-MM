@@ -2,6 +2,7 @@
 // chain through the public litecoinspace.org API (Esplora), and signs + broadcasts the payout itself.
 // RISK: the seed controls every deposit. Keep it out of logs/code, back it up offline, and cap deal size.
 import fs from 'node:fs';
+import { dealCapFor } from '../core/fees.js';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -124,7 +125,7 @@ export class LtcWallet {
   async usdRate() { return this.rate(); }
   async createEscrow(deal) {
     const usd = Number(deal.send_usd);
-    if (usd > this.cfg.ltc.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.ltc.maxDealUsd} for now.`); e.userFacing = true; throw e; }
+    if (usd > dealCapFor(this.cfg, deal.asset, this.cfg.ltc.maxDealUsd)) { const e = new Error(`Deals are limited to $${this.cfg.ltc.maxDealUsd} for now.`); e.userFacing = true; throw e; }
     const rate = await this.rate();
     const sat = Math.ceil((usd / rate) * SAT);
     const row = this.db.prepare('INSERT INTO ltc_wallet(idx,deal_id,address,created_at,expected_sat,required_conf,rate_usd) VALUES(?,?,?,?,?,?,?)');

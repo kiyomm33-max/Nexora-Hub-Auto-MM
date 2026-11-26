@@ -1,6 +1,7 @@
 // Self-custody wallet for EVM chains (Ethereum, BNB Smart Chain): native coin and ERC-20/BEP-20 tokens.
 // One HD wallet; every deal gets its own address (m/44'/60'/0'/0/idx). Same recovery phrase as LTC.
 import crypto from 'node:crypto';
+import { dealCapFor } from '../core/fees.js';
 import { HDNodeWallet, Mnemonic, JsonRpcProvider, Network, Interface, isAddress, getAddress, formatUnits, zeroPadValue, id as keccakId } from 'ethers';
 import { log } from '../logger.js';
 import { audit } from '../core/audit.js';
@@ -86,7 +87,7 @@ export class EvmWallet {
   async usdRate(d) { return this.rate(this.#meta(d)); }
   async createEscrow(deal) {
     const m = this.#meta(deal); const usd = Number(deal.send_usd);
-    if (usd > this.cfg.maxDealUsd) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }
+    if (usd > dealCapFor(this.cfg, deal.asset, this.cfg.maxDealUsd)) { const e = new Error(`Deals are limited to $${this.cfg.maxDealUsd} for now.`); e.userFacing = true; throw e; }
     const rate = await this.rate(m);
     let expected; let payAmount;
     if (m.token) { expected = BigInt(Math.round(usd * 100)) * pow10(m.decimals - 2); payAmount = usd.toFixed(2); }

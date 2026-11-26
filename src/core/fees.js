@@ -11,6 +11,8 @@ export function calcFee(amountUsd, { threshold = 50, usd = 2, percentOver = 250,
   return a > threshold ? usd : 0;
 }
 /** Fee settings for a coin: the configured tiers if the coin is in `cfg.feeAssets`, otherwise free. */
+/** Deal cap in USD for a coin: free coins (not in `cfg.feeAssets`) have none, fee-paying stablecoins keep `capUsd`. */
+export const dealCapFor = (cfg, asset, capUsd) => ((cfg.feeAssets ?? []).includes(String(asset).toUpperCase()) ? capUsd : Infinity);
 export const feeCfgFor = (cfg, asset) => ((cfg.feeAssets ?? []).includes(String(asset).toUpperCase()) ? cfg.fee : { ...cfg.fee, usd: 0, percent: 0 });
 /** sender sends `send`, receiver gets `receive`, difference is the fee. */
 export function calcTotals(amountUsd, feeUsd, payer) {
