@@ -1,4 +1,4 @@
-import { AttachmentBuilder, MediaGalleryBuilder, UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { AttachmentBuilder, FileBuilder, MediaGalleryBuilder, UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { TRUST_TIERS } from '../core/trust.js';
 import { fileURLToPath } from 'node:url';
 import { usdWorth, calcFee, feeCfgFor } from '../core/fees.js';
@@ -126,6 +126,24 @@ export function panelPayload(cfg, mode) {
 }
 const usdFmt = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const trustBar = (p) => { const n = Math.round(p * 10); return `${'▰'.repeat(n)}${'▱'.repeat(10 - n)}`; };
+/** The transcript card sent by DM to the people in a room, and to staff. The HTML file goes in the same message as `fileName`. */
+export function transcriptCard(meta, fileName, { generatedAt = new Date(), staffNote } = {}) {
+  const ts = Math.floor(generatedAt.getTime() / 1000);
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:tasks:1575100811950821467> Transcript\n**${meta.title}** | HTML transcript\n${staffNote ? 'Staff copy of the closed room.' : `Your private copy of the completed ${meta.kind === 'Deal' ? 'deal' : 'ticket'} is ready.`}`))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575100584103780362.png?size=128' } })))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`<:time:1575071649328406611> **Generated:** <t:${ts}:F>${staffNote ? `\n${staffNote}` : ''}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('### <:download:1575100863473782855> Download your record\nOpen the attached file in any modern browser; no special viewer or account is required.'))
+    .addFileComponents(new FileBuilder().setURL(`attachment://${fileName}`))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('### <:lock:1575100909191430197> Private record\nThis file may include Discord identities, wallet addresses, and case evidence. Store it securely and share it only when you intend to.'))
+    .addMediaGalleryComponents(lineGallery());
+  return { flags: 1 << 15, components: [box], allowedMentions: { parse: [] } };
+}
+
 /** The trust system explainer, posted once in the trust channel. Tiers come from core/trust.js so the panel and /trust never disagree. */
 export function trustPanelPayload(cfg) {
   const tiers = TRUST_TIERS.map((t) => `${t.emoji} **${t.name.toUpperCase()}** - ${t.min ? `${usdFmt(t.min).replace('.00', '')}+` : 'Starting tier'}`).join('\n');

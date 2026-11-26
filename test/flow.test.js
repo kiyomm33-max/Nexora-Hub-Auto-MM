@@ -831,14 +831,18 @@ test('.invites @user: staff see who that member invited (alt check), members onl
   const pub = await run('.invites <@410000000000000001>', false); assert.ok(!pub.fields.some((x) => x.name === 'Invited members'));
 });
 
-test('transcripts: saved to the staff channel as a summary with a text file, nobody is DMed, old View Transcript buttons say it is off', async () => {
+test('transcripts: saved to the staff channel as a summary with a text file, each trader is DMed the HTML once, old View Transcript buttons say it is off', async () => {
   const rooms = await import('../src/discord/rooms.js'); const { parseBody } = await import('../src/discord/transcript.js');
   const ctx = setup(); const d = ctx.deals.create({ creator: A, partner: B, robloxA: 'Alice_1', robloxB: 'Bob22', item: 'x', amount: '99', currency: 'USD', asset: 'LTC', network: 'litecoin' });
   const dms = []; const posted = []; ctx.client.users.fetch = async (id) => ({ id, send: async (p) => { dms.push([id, p]); } });
   ctx.chans.set('tlog', { id: 'tlog', send: async (p) => { posted.push(p); } }); ctx.cfg.channels.transcripts = 'tlog';
   const ch = { id: 'room', messages: { fetch: async ({ before }) => (before ? new Map() : Object.assign(new Map([['2', { id: '2', createdTimestamp: 2000, author: { username: 'Bob', id: B }, content: 'line one\nline two', embeds: [] }], ['1', { id: '1', createdTimestamp: 1000, author: { username: 'Alice', id: A }, content: 'hi', embeds: [] }]]), { last: () => ({ id: '1' }) })) } };
   await rooms.saveTranscript(ctx, d.id, ch, 'system');
-  assert.equal(dms.length, 0); assert.equal(posted.length, 1); assert.ok(!posted[0].components); assert.match(posted[0].files[0].name, /\.txt$/); assert.match(posted[0].embeds[0].data.description, /Messages:\*\* 2/);
+  assert.equal(posted.length, 1); assert.match(posted[0].files[0].name, /^transcript_room\.html$/); const pj = JSON.stringify(posted[0].components.map((c) => c.toJSON()));
+  assert.ok(pj.includes('1575100584103780362') && pj.includes('Download your record') && pj.includes('Private record') && pj.includes('line.png') && /Messages:\*\* 2/.test(pj));
+  assert.deepEqual(dms.map((x) => x[0]).sort(), [A, B].sort()); assert.ok(!JSON.stringify(dms[0][1].components.map((c) => c.toJSON())).includes('SHA-256'));
+  const html = dms[0][1].files[0].attachment.toString(); assert.match(html, /Welcome to #nxh-/i); assert.match(html, /line one<br>line two/); assert.match(html, /This transcript was generated on/);
+  await rooms.saveTranscript(ctx, d.id, ch, 'system'); assert.equal(dms.length, 2, 'DMs go out once');
   const body = ctx.db.prepare('SELECT body FROM transcripts WHERE ticket_id=?').get(d.id).body; assert.equal(parseBody(body).length, 2);
   const click = fake(ctx, 'btn', A, { customId: `nx:tview:${d.id}` }); await route(click, ctx); assert.match(text(click), /turned off/);
 });
