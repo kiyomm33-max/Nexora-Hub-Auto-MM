@@ -244,6 +244,13 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'welcome.previewed', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Welcome preview posted', `Posted in <#${target.id}> with you as the new member.`);
   },
+  async trustpanel(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.trustPanel)) ?? i.channel;
+    await target.send(ui.trustPanelPayload(ctx.cfg));
+    audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'trustpanel.posted', detail: { staff: true, channel: target.id } });
+    return say(ctx, i, 'Trust panel posted', `Posted in <#${target.id}>.`);
+  },
   async fees(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.fees)) ?? i.channel;

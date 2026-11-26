@@ -1,4 +1,5 @@
 import { AttachmentBuilder, MediaGalleryBuilder, UserSelectMenuBuilder, ContainerBuilder, SectionBuilder, ThumbnailBuilder, TextDisplayBuilder, SeparatorBuilder, StringSelectMenuBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { TRUST_TIERS } from '../core/trust.js';
 import { fileURLToPath } from 'node:url';
 import { usdWorth, calcFee, feeCfgFor } from '../core/fees.js';
 import { STATUS } from '../core/deals.js';
@@ -125,6 +126,25 @@ export function panelPayload(cfg, mode) {
 }
 const usdFmt = (n) => `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const trustBar = (p) => { const n = Math.round(p * 10); return `${'▰'.repeat(n)}${'▱'.repeat(10 - n)}`; };
+/** The trust system explainer, posted once in the trust channel. Tiers come from core/trust.js so the panel and /trust never disagree. */
+export function trustPanelPayload(cfg) {
+  const tiers = TRUST_TIERS.map((t) => `${t.emoji} **${t.name.toUpperCase()}** - ${t.min ? `${usdFmt(t.min).replace('.00', '')}+` : 'Starting tier'}`).join('\n');
+  const gallery = () => new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } });
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text('## <:aaaaaaaa:1575247365198061638> NEXORA TRUST SYSTEM\nYour trading journey defines your place in the Nexora universe.'))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575440289987039272.png?size=128' } })))
+    .addSeparatorComponents(new SeparatorBuilder())
+    .addTextDisplayComponents(text('### <:Questionmark:1575431881489514597> HOW IT WORKS\nEvery successfully completed and verified trade through our middleman bot adds to your total trading volume.\n\nReach new milestones to unlock higher Trust Tiers. Check yours any time with `.trust`.'))
+    .addMediaGalleryComponents(gallery());
+  const ranks = new ContainerBuilder().setAccentColor(BLUE)
+    .addTextDisplayComponents(text(`### <:bluestar:1575122626307948614> TRUST TIER RANKINGS\n${tiers}`))
+    .addMediaGalleryComponents(gallery());
+  const info = new ContainerBuilder().setAccentColor(BLUE)
+    .addTextDisplayComponents(text('### <:Sheild:1575197569808728104> IMPORTANT INFORMATION\n- Only **completed and verified** trades count. Demo deals and cancelled or disputed deals do not.\n- Each deal counts once per member, and your volume is what the bot recorded, never a screenshot.\n- If you choose **Keep Anonymous** on a finished deal, it stays out of your public trust and statistics.\n- Staff cannot edit trust tiers by hand.'))
+    .addMediaGalleryComponents(gallery());
+  return { flags: 1 << 15, components: [box, ranks, info], files: [lineFile()], allowedMentions: { parse: [] } };
+}
 export const trustEmbed = (name, avatarUrl, t) => {
   const e = new EmbedBuilder().setColor(BLUE).setTitle('Nexora Hub Trust Profile').setAuthor({ name, iconURL: avatarUrl ?? undefined }).setThumbnail(avatarUrl ?? null);
   const head = `## ${t.tier.emoji} ${t.tier.name} Tier`;

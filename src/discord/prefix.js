@@ -43,6 +43,7 @@ export const SPEC = {
   welcome: { desc: 'Post a welcome message preview', args: [] },
   fees: { desc: 'Post the fee explanation panel', args: [] },
   rules: { desc: 'Post the server rules', args: [] },
+  trustpanel: { desc: 'Post the trust system panel', args: [], textOnly: true },
   status: { desc: 'Post the Status Rewards panel', args: [] },
   clearpayouts: { desc: 'Reject all open status payout requests and close their rooms', args: [], textOnly: true },
   supportpanel: { desc: 'Post the support panel', args: [] },
