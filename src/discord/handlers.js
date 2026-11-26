@@ -5,7 +5,7 @@ import { DealError } from '../core/deals.js';
 import { addVouch } from '../core/vouches.js';
 import { audit, dealHistory, staffActivity, verifyAuditChain } from '../core/audit.js';
 import { welcomePayload } from './welcome.js';
-import { rulesPayload } from './rules.js';
+import { rulesPayloads } from './rules.js';
 import { userStats } from '../core/stats.js';
 import * as act from '../core/activity.js';
 import { staffRole, can, CAPS, LEVELS } from '../core/permissions.js';
@@ -360,7 +360,7 @@ const commands = {
   async rules(i, ctx) {
     need(i, ctx, 'panel.post');
     const target = (await rooms.fetchChannel(ctx, ctx.cfg.channels.rules)) ?? i.channel;
-    await target.send(rulesPayload());
+    for (const p of rulesPayloads()) await target.send(p);
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'rules.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Rules posted', `Posted in <#${target.id}>.`);
   },
