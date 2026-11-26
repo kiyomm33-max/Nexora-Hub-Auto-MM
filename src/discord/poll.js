@@ -5,7 +5,6 @@ import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
 import { UserError } from './automm.js';
-import { logoFile } from './status.js';
 
 const wrap = (fn) => { try { return fn(); } catch (e) { if (e instanceof P.PollError || e instanceof GiveawayError) throw new UserError(e.message); throw e; } };
 const chanOf = async (ctx, id) => ctx.client?.channels?.cache?.get(id) ?? await ctx.client?.channels?.fetch(id).catch(() => null);
@@ -15,7 +14,7 @@ const render = (ctx, p) => ui.pollPayload(ctx.cfg, p, P.tally(ctx.db, p.id));
 async function refresh(ctx, p) {
   const ch = await chanOf(ctx, p.channel_id); if (!ch || !p.message_id) return;
   const msg = await ch.messages.fetch(p.message_id).catch(() => null);
-  await msg?.edit(render(ctx, p)).catch((e) => log.error('poll edit failed', e));
+  await msg?.edit({ content: null, embeds: [], ...render(ctx, p), files: [ui.lineFile()] }).catch((e) => log.error('poll edit failed', e));
 }
 
 export async function create(i, ctx, { channel, question, duration, options }) {
@@ -23,7 +22,7 @@ export async function create(i, ctx, { channel, question, duration, options }) {
   const ch = await chanOf(ctx, channel.id);
   if (!ch || !ch.isTextBased?.() || !ch.guild || ch.guild.id !== i.guild?.id) throw new UserError('I cannot find that text channel in this server.');
   const p = wrap(() => P.create(ctx.db, { channelId: ch.id, hostId: i.user.id, question, options, endsAt: Date.now() + ms }));
-  try { const msg = await ch.send({ ...render(ctx, p), files: [logoFile()] }); P.setMessage(ctx.db, p.id, msg.id); }
+  try { const msg = await ch.send({ ...render(ctx, p), files: [ui.lineFile()] }); P.setMessage(ctx.db, p.id, msg.id); }
   catch (e) { P.remove(ctx.db, p.id); log.error('poll post failed', e); throw new UserError(`I could not post in <#${ch.id}>. Check my permissions there.`); }
   audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'poll.created', detail: { staff: true, id: p.id, channel: ch.id } });
   const ts = Math.floor(p.ends_at / 1000);
