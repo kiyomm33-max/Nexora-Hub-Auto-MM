@@ -378,6 +378,11 @@ const commands = {
     audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'supportpanel.posted', detail: { staff: true, channel: target.id } });
     return say(ctx, i, 'Support panel posted', `Posted in <#${target.id}>.`);
   },
+  async synctrust(i, ctx) {
+    need(i, ctx, 'panel.post');
+    const { sweepTrustRoles } = await import('./trustroles.js'); const r = await sweepTrustRoles(ctx);
+    return say(ctx, i, 'Trust roles synced', `Checked **${r.users}** member${r.users === 1 ? '' : 's'} with verified deals and updated **${r.changed}**. If a role did not change, move the bot role above the trust roles.`);
+  },
   async statuscheck(i, ctx) {
     need(i, ctx, 'panel.post');
     const rep = await st.statusReport(ctx);

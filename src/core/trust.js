@@ -13,6 +13,12 @@ export function tierFor(volume) {
   const progress = next ? Math.min(1, Math.max(0, (volume - tier.min) / (next.min - tier.min))) : 1;
   return { tier, next, progress, remaining: next ? +(next.min - volume).toFixed(2) : 0, max: !next };
 }
+/** Every member who has a verified live deal, as a party. */
+export function trustUserIds(db) {
+  const ids = new Set();
+  for (const r of db.prepare(`SELECT party_a a, party_b b FROM deals WHERE ${VERIFIED}`).all()) { if (r.a) ids.add(r.a); if (r.b) ids.add(r.b); }
+  return [...ids];
+}
 export function trustOf(db, userId) {
   const r = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(CAST(amount AS REAL)),0) v FROM deals WHERE ${VERIFIED} AND (party_a=@u OR party_b=@u) AND NOT EXISTS (SELECT 1 FROM deal_privacy p WHERE p.deal_id=deals.id AND p.user_id=@u AND p.hidden=1)`).get({ u: String(userId) });
   const volume = +Number(r.v).toFixed(2);

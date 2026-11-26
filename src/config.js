@@ -19,6 +19,11 @@ export function loadConfig(e = env) {
     token: e.DISCORD_TOKEN,
     clientId: e.DISCORD_CLIENT_ID,
     guildId: e.GUILD_ID,
+    trustRoles: { // one role per trust tier, given at that tier's volume (verified deals, sender or receiver)
+      Moon: '1575487992875843706', Earth: '1575488668968165448', Venus: '1575491212797022219', Mars: '1575492881555394681',
+      Saturn: '1575493236212895795', Jupiter: '1575493347974320280', Sun: '1575493695837446255',
+      ...(e.TRUST_ROLES_OFF === '1' ? { Moon: '', Earth: '', Venus: '', Mars: '', Saturn: '', Jupiter: '', Sun: '' } : {}),
+    },
     autoRoleId: (e.AUTO_ROLE_ID === 'off' ? '' : e.AUTO_ROLE_ID || '1573327824188735658'), // given to every member, new and existing (set AUTO_ROLE_ID=off to disable)
     port: Number(e.PORT || 8080),
     dataDir: e.DATA_DIR || './data',

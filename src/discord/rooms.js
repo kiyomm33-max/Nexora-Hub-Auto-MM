@@ -9,6 +9,7 @@ import * as ui from './ui.js';
 import { base, dealEmbed, completedEmbed, dealCard, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
 import { hiddenFor, ANON } from '../core/privacy.js';
+import { syncTrustRoles } from './trustroles.js';
 import { metaOf, parseBody, renderHtml } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
@@ -114,6 +115,7 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'completed') {
     if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });
     await publishCompleted(ctx, deal);
+    for (const uid of new Set([deal.party_a, deal.party_b, deal.sender_id, deal.receiver_id].filter(Boolean))) syncTrustRoles(ctx, uid).catch((e) => log.warn('trust role sync failed', { uid, err: String(e?.message ?? e) }));
   }
   if (['disputed', 'completed', 'cancelled'].includes(change))
     await staffLog(ctx, base(ctx.cfg, `Deal ${change}`, `\`${deal.id}\` is now **${deal.status}**.`));
