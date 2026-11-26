@@ -5,7 +5,7 @@ import * as ui from './ui.js';
 import { log } from '../logger.js';
 
 const PUBLIC = new Set(['trust', 'stats', 'help', 'leaderboard', 'messages', 'invites', 'inviteboard']);
-const ALIASES = { invite: 'invites', top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages' };
+const ALIASES = { invite: 'invites', top: 'leaderboard', lb: 'leaderboard', msgs: 'messages', mymessages: 'messages', statuspanel: 'status', rewards: 'status' };
 
 // arg: [name, type, required]. Types: string, int, user, rest (everything that is left).
 const D = ['deal_id', 'string', true];
