@@ -4,7 +4,6 @@ import { audit } from '../core/audit.js';
 import { log } from '../logger.js';
 import * as ui from './ui.js';
 import { UserError } from './automm.js';
-import { logoFile } from './status.js';
 
 const wrap = (fn) => { try { return fn(); } catch (e) { if (e instanceof G.GiveawayError) throw new UserError(e.message); throw e; } };
 const chanOf = async (ctx, id) => ctx.client?.channels?.cache?.get(id) ?? await ctx.client?.channels?.fetch(id).catch(() => null);
@@ -13,7 +12,8 @@ const eph = { flags: 64, allowedMentions: { parse: [] } };
 async function refresh(ctx, g) {
   const ch = await chanOf(ctx, g.channel_id); if (!ch || !g.message_id) return;
   const msg = await ch.messages.fetch(g.message_id).catch(() => null);
-  await msg?.edit(ui.giveawayPayload(ctx.cfg, g, G.entryCount(ctx.db, g.id))).catch((e) => log.error('giveaway edit failed', e));
+  const v2 = msg && (msg.flags?.has?.(1 << 15) ?? false);
+  await msg?.edit(v2 ? { content: null, ...ui.giveawayPayload(ctx.cfg, g, G.entryCount(ctx.db, g.id)) } : ui.giveawayLegacyPayload(ctx.cfg, g, G.entryCount(ctx.db, g.id))).catch((e) => log.error('giveaway edit failed', e));
 }
 async function announce(ctx, g, { rerolled = false } = {}) {
   const ch = await chanOf(ctx, g.channel_id); if (!ch) return;
@@ -41,7 +41,7 @@ export async function create(i, ctx, { channel, duration, prize, invites }) {
   const g = G.create(ctx.db, { channelId: ch.id, hostId: i.user.id, prize, req: invites ? { kind: 'invites', n: invites } : null, endsAt: Date.now() + ms });
   if (baseline) G.setBaseline(ctx.db, g.id, baseline);
   try {
-    const msg = await ch.send({ ...ui.giveawayPayload(ctx.cfg, g, 0), files: [logoFile()] }); G.setMessage(ctx.db, g.id, msg.id);
+    const msg = await ch.send(ui.giveawayPayload(ctx.cfg, g, 0)); G.setMessage(ctx.db, g.id, msg.id);
   } catch (e) { G.remove(ctx.db, g.id); log.error('giveaway post failed', e); throw new UserError(`I could not post in <#${ch.id}>. Check my permissions there.`); }
   audit(ctx.db, { category: 'staff', actor: i.user.id, action: 'giveaway.created', detail: { staff: true, id: g.id, prize, channel: ch.id, invites: invites ?? 0 } });
   const ts = Math.floor(g.ends_at / 1000);
