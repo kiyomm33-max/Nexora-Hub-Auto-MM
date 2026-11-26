@@ -38,8 +38,9 @@ export function tick(ctx, at = Date.now()) {
 }
 export function startStatusLoop(client, ctx) {
   client.once(Events.ClientReady, () => {
+    sweepRooms(ctx).catch(() => {});
     try { earn.closeStale(ctx.db); } catch (e) { log.error('status closeStale failed', e); }
-    setTimeout(() => { tick(ctx); setInterval(() => { try { tick(ctx); } catch (e) { log.error('status tick failed', e); } payoutLoop(ctx).catch((e) => log.error('payout loop failed', e)); }, 60_000).unref?.(); }, 20_000).unref?.();
+    setTimeout(() => { tick(ctx); setInterval(() => { try { tick(ctx); } catch (e) { log.error('status tick failed', e); } payoutLoop(ctx).catch((e) => log.error('payout loop failed', e)); sweepRooms(ctx).catch((e) => log.error('room sweep failed', e)); }, 60_000).unref?.(); }, 20_000).unref?.();
   });
 }
 
@@ -83,7 +84,25 @@ async function updateCard(ctx, r) {
   const ch = await fetchCh(ctx, r.channel_id); const msg = await ch?.messages?.fetch(r.message_id).catch(() => null);
   await msg?.edit({ embeds: [ui.earnPayoutEmbed(ctx.cfg, r, earn.METHODS)], components: r.state === 'pending' ? ui.earnPayoutButtons(r.id) : [], allowedMentions: { parse: [] } }).catch(() => {});
 }
-async function closeRoom(ctx, r, ms) { const ch = await fetchCh(ctx, r.room_id); if (ch) setTimeout(() => ch.delete('Status payout finished').catch(() => {}), ms).unref?.(); }
+/** Rooms are closed from the database, not a timer, so a restart or deploy cannot leave one open. */
+async function closeRoom(ctx, r, ms) {
+  if (!r.room_id) return;
+  ctx.db.prepare('UPDATE status_payouts SET close_at=? WHERE id=?').run(Date.now() + ms, r.id);
+  if (ms <= 0) await sweepRooms(ctx);
+}
+let sweeping = false;
+export async function sweepRooms(ctx) {
+  if (sweeping) return; sweeping = true;
+  try {
+    const due = ctx.db.prepare("SELECT id, room_id FROM status_payouts WHERE close_at IS NOT NULL AND close_at<=? AND room_id IS NOT NULL").all(Date.now());
+    for (const r of due) {
+      const ch = await fetchCh(ctx, r.room_id);
+      try { if (ch) await ch.delete('Status payout finished'); ctx.db.prepare('UPDATE status_payouts SET close_at=NULL, room_id=NULL WHERE id=?').run(r.id); }
+      catch (e) { if (e?.code === 10003) ctx.db.prepare('UPDATE status_payouts SET close_at=NULL, room_id=NULL WHERE id=?').run(r.id); else log.error('status payout room delete failed (needs Manage Channels)', { id: r.id, err: String(e) }); }
+      if (!ch) ctx.db.prepare('UPDATE status_payouts SET close_at=NULL, room_id=NULL WHERE id=?').run(r.id);
+    }
+  } finally { sweeping = false; }
+}
 const say = (ctx, ch, title, text, extra = {}) => ch?.send(ui.asCard({ embeds: [ui.base(ctx.cfg, title, text)], allowedMentions: { users: extra.ping ? [extra.ping] : [] }, content: extra.ping ? `<@${extra.ping}>` : undefined })).catch(() => {});
 
 export async function payout(i, ctx) {

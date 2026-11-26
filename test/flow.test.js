@@ -981,3 +981,13 @@ test('amount step: only the sender enters the price; USD, EUR and crypto units c
   await submit(ctx, A, `nx:am-amountmodal:${id}:crypto`, { amount: '1' }); g = ctx.deals.get(id); assert.equal(g.amount, '41.23', 'crypto at the demo rate');
   await click(ctx, A, `nx:am-amtno:${id}`); assert.match(text(await submit(ctx, A, `nx:am-amountmodal:${id}:eur`, { amount: 'abc' })), /Enter a number/);
 });
+
+test('status payout rooms close from the database, so a restart cannot leave one open', async () => {
+  const { sweepRooms } = await import('../src/discord/status.js');
+  const ctx = setup(); const deleted = [];
+  ctx.chans.set('room1', { id: 'room1', async delete(r) { deleted.push(r); } });
+  ctx.client = { channels: { cache: { get: (id) => ctx.chans.get(id) }, fetch: async (id) => ctx.chans.get(id) ?? null } };
+  ctx.db.prepare("INSERT INTO status_payouts(user_id, method, details, cents, state, created_at, room_id, close_at) VALUES('u','ltc','x',40,'paid',1,'room1',?)").run(Date.now() - 1000);
+  await sweepRooms(ctx);
+  assert.equal(deleted.length, 1); assert.equal(ctx.db.prepare('SELECT room_id FROM status_payouts').get().room_id, null);
+});
