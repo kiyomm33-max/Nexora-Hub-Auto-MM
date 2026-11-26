@@ -9,7 +9,7 @@ import * as ui from './ui.js';
 import { base, dealEmbed, completedEmbed, dealCard, BRAND, phaseOf } from './ui.js';
 import { payloadFor, pingIds, putStep, markPosted } from './automm.js';
 import { hiddenFor, ANON } from '../core/privacy.js';
-import { metaOf, parseBody } from './transcript.js';
+import { metaOf, parseBody, renderHtml } from './transcript.js';
 
 const ALLOW = [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks];
 
@@ -149,17 +149,24 @@ export async function collectMessages(channel, max = 2000) {
   }
   return all.reverse();
 }
-/** Store the transcript (immutable hash) and send it to the staff transcript channel. */
+/** Store the transcript (immutable hash), send it to the staff transcript channel, and DM each person in the room their copy once. */
 export async function saveTranscript(ctx, refId, channel, by) {
-  const body = renderTranscript(await collectMessages(channel)) || '(empty)';
+  const messages = await collectMessages(channel);
+  const body = renderTranscript(messages) || '(empty)';
   const sha = crypto.createHash('sha256').update(body).digest('hex');
-  ctx.db.prepare('INSERT OR IGNORE INTO transcripts(ticket_id,body,sha256,created_at) VALUES(?,?,?,?)').run(refId, body, sha, new Date().toISOString());
+  const fresh = ctx.db.prepare('INSERT OR IGNORE INTO transcripts(ticket_id,body,sha256,created_at) VALUES(?,?,?,?)').run(refId, body, sha, new Date().toISOString()).changes === 1;
   audit(ctx.db, { category: 'staff', actor: by, action: 'transcript.saved', detail: { refId, sha256: sha, channel: channel.id } });
-  const meta = metaOf(ctx.db, refId); const n = parseBody(body).length;
-  const names = meta.parties.map((u) => `<@${u}>`).join(', ') || 'none';
-  const embed = base(ctx.cfg, `${meta.kind} Transcript`, [`**ID:** \`${refId}\``, `**Participants:** ${names}`, `**Status:** ${meta.status ?? 'closed'}`, meta.amount ? `**Deal amount:** $${meta.amount}` : null, `**Messages:** ${n}`, `**SHA-256:** \`${sha}\``].filter(Boolean).join('\n'));
+  const meta = metaOf(ctx.db, refId); const now = new Date();
+  const fileName = `transcript_${channel.id}.html`;
+  const html = renderHtml(messages, { title: meta.title, channelName: channel.name ?? String(refId).toLowerCase(), generatedAt: now });
+  const files = () => [new AttachmentBuilder(Buffer.from(html), { name: fileName }), ui.lineFile()];
   const out = await fetchChannel(ctx, ctx.cfg.channels.transcripts);
-  if (out) await out.send({ embeds: [embed], files: [new AttachmentBuilder(Buffer.from(body), { name: `${refId}.txt` })], allowedMentions: { parse: [] } }).catch((e) => log.error('transcript post failed', e));
+  const note = `**Participants:** ${meta.parties.map((u) => `<@${u}>`).join(', ') || 'none'} | **Status:** ${meta.status ?? 'closed'}${meta.amount ? ` | **Deal amount:** $${meta.amount}` : ''}\n**Messages:** ${parseBody(body).length} | **SHA-256:** \`${sha}\``;
+  if (out) await out.send({ ...ui.transcriptCard(meta, fileName, { generatedAt: now, staffNote: note }), files: files() }).catch((e) => log.error('transcript post failed', e));
+  if (fresh) for (const uid of meta.parties) {
+    try { const u = await ctx.client.users.fetch(uid); await u.send({ ...ui.transcriptCard(meta, fileName, { generatedAt: now }), files: files() }); }
+    catch (e) { log.warn?.('transcript DM failed (DMs closed?)', { user: uid, err: String(e.message ?? e).slice(0, 80) }); }
+  }
   return sha;
 }
 
