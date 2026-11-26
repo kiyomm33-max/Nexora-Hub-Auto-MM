@@ -745,10 +745,21 @@ const bar = (pct) => { const n = Math.round(pct / 10); return '▰'.repeat(n) + 
 export function pollPayload(cfg, p, counts) {
   const opts = JSON.parse(p.options); const total = counts.reduce((a, b) => a + b, 0); const ended = p.state === 'ended';
   const ts = Math.floor(p.ends_at / 1000); const top = Math.max(...counts);
-  const lines = opts.map((o, k) => { const pct = total ? Math.round(counts[k] * 100 / total) : 0; return `**${k + 1}. ${o}**${ended && total && counts[k] === top ? '  (winner)' : ''}\n${bar(pct)}  **${pct}%**  (${counts[k]} vote${counts[k] === 1 ? '' : 's'})`; });
-  const e = base(cfg, p.question, `${lines.join('\n\n')}\n\n**${ended ? 'Poll ended' : 'Ends'}:** ${ended ? `<t:${ts}:f>` : `<t:${ts}:R> (<t:${ts}:f>)`}\n**Hosted by:** <@${p.host_id}>\n**Total votes:** ${total}${ended ? '' : '\nPress a button to vote. You can change your vote, or press your choice again to remove it.'}`)
-    .setThumbnail('attachment://status.png');
-  return { embeds: [e], components: [row(...opts.map((o, k) => btn(`nx:pl-vote:${p.id}:${k}`, `${k + 1}. ${o}`.slice(0, 80), ButtonStyle.Primary).setDisabled(ended)))], allowedMentions: { parse: [] } };
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:settings:1575071771529322606> ${p.question}\n${ended ? 'This poll has ended.' : 'Press **Vote** next to your choice. You can change your vote, or press your choice again to remove it.'}`))
+      .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575431881489514597.png?size=128' } })));
+  opts.forEach((o, k) => {
+    const pct = total ? Math.round(counts[k] * 100 / total) : 0;
+    box.addSeparatorComponents(sep())
+      .addSectionComponents(new SectionBuilder()
+        .addTextDisplayComponents(text(`**${k + 1}. ${o}**${ended && total && counts[k] === top ? '  (winner)' : ''}\n${bar(pct)}  **${pct}%**  (${counts[k]} vote${counts[k] === 1 ? '' : 's'})`))
+        .setButtonAccessory(btn(`nx:pl-vote:${p.id}:${k}`, 'Vote', ButtonStyle.Primary).setDisabled(ended)));
+  });
+  box.addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`**${ended ? 'Poll ended' : 'Ends'}:** ${ended ? `<t:${ts}:f>` : `<t:${ts}:R> (<t:${ts}:f>)`}\n**Hosted by:** <@${p.host_id}>\n**Total votes:** ${total}`))
+    .addMediaGalleryComponents(lineGallery());
+  return { flags: 1 << 15, components: [box], allowedMentions: { parse: [] } };
 }
 
 export function invitesEmbed(cfg, name, avatarUrl, st, list) {

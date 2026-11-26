@@ -692,7 +692,7 @@ test('poll: /poll create posts buttons, votes update the card, /poll end posts t
   const posted = ch.sent[0]; assert.equal(posted.files.length, 1); assert.ok(JSON.stringify(posted.components.map((c) => c.toJSON())).includes('nx:pl-vote:1:1'));
   const v = async (u, n) => { const i = fake(ctx, 'btn', u, { customId: `nx:pl-vote:1:${n}` }); await route(i, ctx); return i; };
   assert.match(text(await v(A, 1)), /Vote counted/); await v(B, 1); assert.match(text(await v(A, 0)), /changed/);
-  assert.match(JSON.stringify(edits.at(-1).embeds[0].toJSON()), /\*\*50%\*\*/);
+  assert.match(JSON.stringify(edits.at(-1).components.map((c) => c.toJSON())), /\*\*50%\*\*/);
   const who = mk(ADM, [ROLE.adm], 'votes', {}); await route(who, ctx); const wt = text(who); assert.match(wt, new RegExp(`Adopt Me[\\s\\S]*<@${A}>`)); assert.match(wt, new RegExp(`Blox Fruits[\\s\\S]*<@${B}>`));
   const whoDeny = mk(RND, [], 'votes', {}); await route(whoDeny, ctx); assert.match(text(whoDeny), /do not have permission/);
   const end = mk(ADM, [ROLE.adm], 'end', { id: 1 }); await route(end, ctx); assert.match(text(end), /Poll ended/);
