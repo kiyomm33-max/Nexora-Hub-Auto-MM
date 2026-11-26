@@ -1,5 +1,5 @@
-import { EmbedBuilder } from 'discord.js';
-import { BRAND } from './ui.js';
+import { ContainerBuilder, TextDisplayBuilder, MediaGalleryBuilder } from 'discord.js';
+import { BRAND, lineFile } from './ui.js';
 
 const SECTIONS = [
   ['Nexora Hub Rules', 'By using this server or the auto middleman you agree to every rule below. **Not knowing the rules is not an excuse.** Staff decisions are final unless an owner overturns them.'],
@@ -54,8 +54,14 @@ const SECTIONS = [
   ]],
 ];
 
-export const rulesPayload = () => ({
-  embeds: SECTIONS.map(([title, body], n) => new EmbedBuilder().setColor(BRAND.blue).setTitle(title)
-    .setDescription(Array.isArray(body) ? body.map((x) => `- ${x}`).join('\n') : body)),
+const ICONS = ['<:aaaaaaaa:1575247365198061638>', '<:Members:1575208406531444906>', '<:Sheild:1575197569808728104>', '<:cube:1575100667901648968>', '<:Simbol_de_dolar_blau_neo_metalli:1575122530015125585>', '<:lock:1575100909191430197>', '<:Cross:1575259368771948705>'];
+const card = ([title, body], n) => new ContainerBuilder().setAccentColor(BRAND.blue)
+  .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${ICONS[n]} ${title}\n${Array.isArray(body) ? body.map((x) => `- ${x}`).join('\n') : body}`))
+  .addMediaGalleryComponents(new MediaGalleryBuilder().addItems({ media: { url: 'attachment://line.png' } }));
+/** The rules as two messages (Discord allows 4000 characters of text per message): the title, then one card per section. */
+export const rulesPayloads = () => [SECTIONS.slice(0, 4), SECTIONS.slice(4)].map((part, k) => ({
+  flags: 1 << 15,
+  components: part.map((sec, j) => card(sec, k * 4 + j)),
+  files: [lineFile()],
   allowedMentions: { parse: [] },
-});
+}));

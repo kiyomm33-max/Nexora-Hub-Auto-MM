@@ -433,8 +433,10 @@ test('rules: staff-only, posted to the rules channel as embeds within Discord li
   const ctx = setup(); ctx.cfg.channels.rules = 'rulesch'; ctx.chans.set('rulesch', { id: 'rulesch', sent: [], async send(p) { this.sent.push(p); } });
   const deny = fake(ctx, 'cmd', RND, { command: 'rules' }); await route(deny, ctx); assert.match(text(deny), /do not have permission/);
   const i = fake(ctx, 'cmd', ADM, { roles: [ROLE.adm], command: 'rules' }); await route(i, ctx);
-  const p = ctx.chans.get('rulesch').sent[0]; assert.ok(p.embeds.length >= 6 && p.embeds.length <= 10);
-  let total = 0; for (const e of p.embeds) { const j = e.toJSON(); assert.ok(j.description.length <= 4096); total += j.title.length + j.description.length; } assert.ok(total <= 6000, `total ${total}`);
+  const sent = ctx.chans.get('rulesch').sent; assert.equal(sent.length, 2);
+  const all = JSON.stringify(sent.map((p) => p.components.map((c) => c.toJSON())));
+  assert.match(all, /## <:aaaaaaaa:1575247365198061638> Nexora Hub Rules/); assert.equal((all.match(/line\.png/g) ?? []).length, 7);
+  for (const p of sent) { assert.ok(p.components.length <= 10); const t = (JSON.stringify(p.components.map((c) => c.toJSON())).match(/"content":"(?:[^"\\]|\\.)*"/g) ?? []).join('').length; assert.ok(t <= 4000, `text ${t}`); }
 });
 
 test('every step posts a NEW message that pings the right person, and the previous one is deleted', async () => {
