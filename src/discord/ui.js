@@ -749,17 +749,17 @@ export function pollPayload(cfg, p, counts) {
   const ts = Math.floor(p.ends_at / 1000); const top = Math.max(...counts);
   const box = new ContainerBuilder().setAccentColor(BLUE)
     .addSectionComponents(new SectionBuilder()
-      .addTextDisplayComponents(text(`## <:settings:1575071771529322606> ${p.question}\n${ended ? 'This poll has ended.' : 'Press **Vote** next to your choice. You can change your vote, or press your choice again to remove it.'}`))
+      .addTextDisplayComponents(text(`## <:settings:1575071771529322606> ${p.question}\n${ended ? 'Poll ended' : 'Select one answer'}${ended ? '' : '\nPress **Vote** next to your choice. Press it again to remove your vote.'}`))
       .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://cdn.discordapp.com/emojis/1575431881489514597.png?size=128' } })));
   opts.forEach((o, k) => {
     const pct = total ? Math.round(counts[k] * 100 / total) : 0;
     box.addSeparatorComponents(sep())
       .addSectionComponents(new SectionBuilder()
-        .addTextDisplayComponents(text(`**${k + 1}. ${o}**${ended && total && counts[k] === top ? '  (winner)' : ''}\n${bar(pct)}  **${pct}%**  (${counts[k]} vote${counts[k] === 1 ? '' : 's'})`))
+        .addTextDisplayComponents(text(`**${o}**${ended && total && counts[k] === top ? '  (winner)' : ''}\n${bar(pct)}  **${pct}%**  |  ${counts[k]} vote${counts[k] === 1 ? '' : 's'}`))
         .setButtonAccessory(btn(`nx:pl-vote:${p.id}:${k}`, 'Vote', ButtonStyle.Primary).setDisabled(ended)));
   });
   box.addSeparatorComponents(sep())
-    .addTextDisplayComponents(text(`**${ended ? 'Poll ended' : 'Ends'}:** ${ended ? `<t:${ts}:f>` : `<t:${ts}:R> (<t:${ts}:f>)`}\n**Hosted by:** <@${p.host_id}>\n**Total votes:** ${total}`))
+    .addTextDisplayComponents(text(`**${total} vote${total === 1 ? '' : 's'}**  |  ${ended ? `ended <t:${ts}:f>` : `ends <t:${ts}:R>`}  |  hosted by <@${p.host_id}>`))
     .addMediaGalleryComponents(lineGallery());
   return { flags: 1 << 15, components: [box], allowedMentions: { parse: [] } };
 }
