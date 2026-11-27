@@ -37,7 +37,7 @@ test('discord side: tag needs this server and enabled; status needs the phrase a
   assert.equal(memberState(mem({ ...on, identityGuildId: 'other' }, null), cfg).tag, false);
   assert.equal(memberState(mem(null, null), cfg).tag, false);
   const pres = (status, state) => ({ status, activities: [{ type: 4, state }] });
-  assert.equal(memberState(mem(null, pres('online', '.gg/Nexorra | best mm')), cfg).status, true);
+  assert.equal(memberState(mem(null, pres('online', '.gg/Nexora | best mm')), cfg).status, true);
   assert.equal(memberState(mem(null, pres('idle', 'discord.gg/nexora')), cfg).status, true);
   assert.equal(memberState(mem(null, pres('online', 'hello')), cfg).status, false);
   assert.equal(memberState(mem(null, { status: 'online', activities: [{ type: 0, name: '.gg/nexora' }] }), cfg).status, false, 'only the custom status counts');

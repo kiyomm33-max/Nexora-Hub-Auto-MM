@@ -44,7 +44,7 @@ test('payout reserves the balance once; reject returns it; handled once', () => 
 test('qualifies: online or dnd with the phrase in a custom status', () => {
   const cfg = { statusPhrase: 'gg/nexora', statusRoleId: 'R' };
   const m = (status, state, type = 4) => ({ roles: { cache: new Map([['R', 1]]) }, presence: { status, activities: [{ type, state }] } });
-  assert.equal(qualifies(m('online', '.gg/Nexorra'), cfg), true);
+  assert.equal(qualifies(m('online', '.gg/Nexora'), cfg), true);
   assert.equal(qualifies(m('dnd', 'join .gg/nexora now'), cfg), true);
   assert.equal(qualifies(m('idle', '.gg/nexora'), cfg), false);
   assert.equal(qualifies(m('offline', '.gg/nexora'), cfg), false);
