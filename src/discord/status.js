@@ -25,13 +25,20 @@ export function qualifies(member, cfg) {
   return (p.activities ?? []).some((a) => a.type === 4 && String(a.state ?? '').toLowerCase().includes(phrase));
 }
 /** The member that comes with a button click has no presence, so Start Earning always said "set your status". Look the member
- *  up in the guild instead (cache first, then Discord with presences), and keep the click's member for its roles. */
+ *  up in the guild instead: the cache, the guild's presence cache, then Discord (with a time limit, a slow lookup must not eat the 3 seconds a reply gets). */
+const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 export async function memberWithPresence(ctx, i) {
-  const g = guildOf(ctx); let m = g?.members?.cache?.get(i.user.id);
-  if (!m?.presence && g?.members?.fetch) m = (await g.members.fetch({ user: i.user.id, withPresences: true, force: true }).catch(() => null)) ?? m;
-  if (!m) return i.member;
-  if (!m.presence && i.member?.presence) return i.member;
-  return m.roles?.cache?.size || !i.member ? m : Object.assign(Object.create(m), { roles: i.member.roles });
+  const g = guildOf(ctx); const id = i.user.id; let m = g?.members?.cache?.get(id);
+  if (!m?.presence && !g?.presences?.cache?.get?.(id) && g?.members?.fetch) m = (await within(g.members.fetch({ user: id, withPresences: true, force: true }).catch(() => null), 4000)) ?? m;
+  const presence = m?.presence ?? g?.presences?.cache?.get?.(id) ?? i.member?.presence ?? null;
+  const roles = i.member?.roles?.cache?.size ? i.member.roles : (m?.roles ?? i.member?.roles);
+  return { id, roles, presence, found: !!m, seen: m ? 'member' : g?.presences?.cache?.get?.(id) ? 'presence' : 'none' };
+}
+/** What the bot sees, in words the member can compare with their own status. */
+export function seenText(m) {
+  if (!m.presence) return 'I cannot see your status at all right now (Discord has not sent it to the bot).';
+  const custom = (m.presence.activities ?? []).find((a) => a.type === 4);
+  return `I see you as **${m.presence.status}** with ${custom ? `the custom status "${String(custom.state ?? '').slice(0, 60)}"` : 'no custom status'}.`;
 }
 const guildOf = (ctx) => ctx.client?.guilds?.cache?.get(ctx.cfg.guildId) ?? ctx.client?.guilds?.cache?.first();
 
@@ -98,14 +105,15 @@ export async function clearPending(ctx, staffId) {
 
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
   const m = await memberWithPresence(ctx, i);
   if (!hasRole(m, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to earn from your status.`);
   if (!ctx.presenceTracking) throw new UserError('Status tracking is switched off because the bot cannot see statuses yet. Staff need to turn on the **Presence Intent** and **Server Members Intent** in the Discord Developer Portal and restart the bot.');
-  if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
+  if (!qualifies(m, ctx.cfg)) { log.info('start earning refused', { user: i.user.id, source: m.seen, status: m.presence?.status ?? null, custom: (m.presence?.activities ?? []).filter((a) => a.type === 4).map((a) => a.state) }); throw new UserError(`${seenText(m)}\nSet your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`); }
   const fresh = earn.enroll(ctx.db, i.user.id);
   earn.setQualifying(ctx.db, i.user.id, true);
   if (fresh) audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.enrolled', detail: {} });
-  return i.reply(eph(ctx, { embeds: [ui.base(ctx.cfg, 'Earning started', fresh ? 'Your time is now being counted. Keep the status on and stay Online or Do Not Disturb.' : 'You are already earning. Your time keeps adding up.')] }));
+  return i.editReply({ embeds: [ui.base(ctx.cfg, 'Earning started', fresh ? 'Your time is now being counted. Keep the status on and stay Online or Do Not Disturb.' : 'You are already earning. Your time keeps adding up.')] });
 }
 export function time(i, ctx) {
   return i.reply(eph(ctx, { embeds: [ui.earnTimeEmbed(ctx.cfg, earn.summary(ctx.db, i.user.id, ctx.cfg.statusPay))] }));
