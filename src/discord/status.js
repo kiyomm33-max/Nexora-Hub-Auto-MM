@@ -29,7 +29,9 @@ export function qualifies(member, cfg) {
 const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 export async function memberWithPresence(ctx, i) {
   const g = guildOf(ctx); const id = i.user.id; let m = g?.members?.cache?.get(id); let fetched = 'skipped';
-  if (!m?.presence && !g?.presences?.cache?.get?.(id) && g?.members?.fetch) {
+  const hasCustom = (pr) => (pr?.activities ?? []).some((x) => x.type === 4);
+  // a cached presence without a custom status is often the thin copy Discord sends at startup: ask for the full one
+  if (!hasCustom(m?.presence ?? g?.presences?.cache?.get?.(id)) && g?.members?.fetch) {
     const r = await within(g.members.fetch({ user: id, withPresences: true, force: true }).then((x) => x, (e) => ({ err: String(e?.message ?? e).slice(0, 60) })), 4000);
     fetched = r === null ? 'timeout' : r?.err ? `error ${r.err}` : 'ok'; if (r && !r.err) m = r;
   }
