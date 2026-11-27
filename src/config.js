@@ -24,6 +24,7 @@ export function loadConfig(e = env) {
       Saturn: '1575493236212895795', Jupiter: '1575493347974320280', Sun: '1575493695837446255',
       ...(e.TRUST_ROLES_OFF === '1' ? { Moon: '', Earth: '', Venus: '', Mars: '', Saturn: '', Jupiter: '', Sun: '' } : {}),
     },
+    vouchTargetId: (e.VOUCH_TARGET_ID === 'off' ? '' : e.VOUCH_TARGET_ID || '1388903925184331848'), // who traders vouch for with the vouch bot (the middleman); VOUCH_TARGET_ID=off hides the vouch card
     autoRoleId: (e.AUTO_ROLE_ID === 'off' ? '' : e.AUTO_ROLE_ID || '1573327824188735658'), // given to every member, new and existing (set AUTO_ROLE_ID=off to disable)
     port: Number(e.PORT || 8080),
     dataDir: e.DATA_DIR || './data',
