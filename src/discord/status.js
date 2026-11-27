@@ -24,6 +24,15 @@ export function qualifies(member, cfg) {
   if (!hasRole(member, cfg)) return false;
   return (p.activities ?? []).some((a) => a.type === 4 && String(a.state ?? '').toLowerCase().includes(phrase));
 }
+/** The member that comes with a button click has no presence, so Start Earning always said "set your status". Look the member
+ *  up in the guild instead (cache first, then Discord with presences), and keep the click's member for its roles. */
+export async function memberWithPresence(ctx, i) {
+  const g = guildOf(ctx); let m = g?.members?.cache?.get(i.user.id);
+  if (!m?.presence && g?.members?.fetch) m = (await g.members.fetch({ user: i.user.id, withPresences: true, force: true }).catch(() => null)) ?? m;
+  if (!m) return i.member;
+  if (!m.presence && i.member?.presence) return i.member;
+  return m.roles?.cache?.size || !i.member ? m : Object.assign(Object.create(m), { roles: i.member.roles });
+}
 const guildOf = (ctx) => ctx.client?.guilds?.cache?.get(ctx.cfg.guildId) ?? ctx.client?.guilds?.cache?.first();
 
 /** Enrolled members are often not in the cache (large server, restart, members list not loaded), and then nobody counts.
@@ -89,7 +98,7 @@ export async function clearPending(ctx, staffId) {
 
 export async function start(i, ctx) {
   if (!ctx.presenceTracking) throw new UserError('Status tracking is not available right now. Ask staff.');
-  const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
+  const m = await memberWithPresence(ctx, i);
   if (!hasRole(m, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to earn from your status.`);
   if (!ctx.presenceTracking) throw new UserError('Status tracking is switched off because the bot cannot see statuses yet. Staff need to turn on the **Presence Intent** and **Server Members Intent** in the Discord Developer Portal and restart the bot.');
   if (!qualifies(m, ctx.cfg)) throw new UserError(`Set your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`);
@@ -145,7 +154,7 @@ export async function payout(i, ctx) {
   if (!hasRole(i.member, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to request a payout.`);
   const open = ctx.db.prepare("SELECT room_id FROM status_payouts WHERE user_id=? AND state='pending'").get(i.user.id);
   if (open) throw new UserError(`You already have an open payout request${open.room_id ? ` in <#${open.room_id}>` : ''}. Finish or cancel it first.`);
-  const m = i.member ?? await guildOf(ctx)?.members.fetch(i.user.id);
+  const m = await memberWithPresence(ctx, i);
   if (!qualifies(m, ctx.cfg)) throw new UserError(`To request a payout your custom status must say **Best Auto MM - .${ctx.cfg.statusPhrase}** and you must be **Online** or **Do Not Disturb**. Fix that, then press Request Payout again.`);
   if (s.available < ctx.cfg.statusPay.minPayoutCents) throw new UserError(`You need at least **${earn.usd(ctx.cfg.statusPay.minPayoutCents)}** to request a payout. You have **${earn.usd(s.available)}** available.`);
   await i.deferReply({ flags: MessageFlags.Ephemeral | (1 << 15) });
