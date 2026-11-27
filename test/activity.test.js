@@ -29,7 +29,7 @@ test('perk sessions: start once, end once, totals and longest', () => {
   assert.equal(act.duration(93784000), '1d 2h 3m'); assert.equal(act.duration(5000), '5s');
 });
 test('discord side: tag needs this server and enabled; status needs the phrase and a visible presence; bots and webhooks are not counted', () => {
-  const cfg = { guildId: 'G', statusPhrase: 'gg/nexorra' };
+  const cfg = { guildId: 'G', statusPhrase: 'gg/nexora' };
   const mem = (pg, presence, bot = false) => ({ user: { id: 'u1', bot, primaryGuild: pg }, presence });
   const on = { identityGuildId: 'G', identityEnabled: true };
   assert.equal(memberState(mem(on, null), cfg).tag, true);
@@ -37,15 +37,15 @@ test('discord side: tag needs this server and enabled; status needs the phrase a
   assert.equal(memberState(mem({ ...on, identityGuildId: 'other' }, null), cfg).tag, false);
   assert.equal(memberState(mem(null, null), cfg).tag, false);
   const pres = (status, state) => ({ status, activities: [{ type: 4, state }] });
-  assert.equal(memberState(mem(null, pres('online', '.gg/Nexorra | best mm')), cfg).status, true);
-  assert.equal(memberState(mem(null, pres('idle', 'discord.gg/nexorra')), cfg).status, true);
+  assert.equal(memberState(mem(null, pres('online', '.gg/Nexora | best mm')), cfg).status, true);
+  assert.equal(memberState(mem(null, pres('idle', 'discord.gg/nexora')), cfg).status, true);
   assert.equal(memberState(mem(null, pres('online', 'hello')), cfg).status, false);
-  assert.equal(memberState(mem(null, { status: 'online', activities: [{ type: 0, name: '.gg/nexorra' }] }), cfg).status, false, 'only the custom status counts');
+  assert.equal(memberState(mem(null, { status: 'online', activities: [{ type: 0, name: '.gg/nexora' }] }), cfg).status, false, 'only the custom status counts');
   assert.equal(memberState(mem(null, pres('offline', '')), cfg).status, null, 'offline hides the status: unknown');
   assert.equal(memberState(mem(null, null), cfg).status, null);
   // syncing: an offline member does not end a status session
   const db = openDb(':memory:'); const ctx = { db, cfg };
-  assert.deepEqual(syncMember(ctx, mem(on, pres('online', '.gg/nexorra'))).map((x) => x[1]), ['started', 'started']);
+  assert.deepEqual(syncMember(ctx, mem(on, pres('online', '.gg/nexora'))).map((x) => x[1]), ['started', 'started']);
   assert.deepEqual(syncMember(ctx, mem(on, pres('offline', ''))), [], 'offline changes nothing');
   assert.deepEqual(syncMember(ctx, mem(null, pres('online', 'bye'))).map((x) => `${x[0]}:${x[1]}`), ['tag:ended', 'status:ended']);
   assert.deepEqual(syncMember(ctx, mem(on, null, true)), [], 'bots are ignored');
