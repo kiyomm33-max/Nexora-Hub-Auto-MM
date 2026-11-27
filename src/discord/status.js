@@ -22,18 +22,23 @@ export function qualifies(member, cfg) {
   if (!p || !['online', 'dnd'].includes(p.status)) return false;
   const phrase = cfg.statusPhrase.toLowerCase();
   if (!hasRole(member, cfg)) return false;
-  return (p.activities ?? []).some((a) => a.type === 4 && String(a.state ?? '').toLowerCase().includes(phrase));
+  return (p.activities ?? []).some((a) => (a.type === 4 || /custom/i.test(String(a.name ?? ''))) && `${a.state ?? ''} ${a.name ?? ''}`.toLowerCase().includes(phrase));
 }
 /** The member that comes with a button click has no presence, so Start Earning always said "set your status". Look the member
  *  up in the guild instead: the cache, the guild's presence cache, then Discord (with a time limit, a slow lookup must not eat the 3 seconds a reply gets). */
 const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 export async function memberWithPresence(ctx, i) {
-  const g = guildOf(ctx); const id = i.user.id; let m = g?.members?.cache?.get(id);
-  if (!m?.presence && !g?.presences?.cache?.get?.(id) && g?.members?.fetch) m = (await within(g.members.fetch({ user: id, withPresences: true, force: true }).catch(() => null), 4000)) ?? m;
+  const g = guildOf(ctx); const id = i.user.id; let m = g?.members?.cache?.get(id); let fetched = 'skipped';
+  if (!m?.presence && !g?.presences?.cache?.get?.(id) && g?.members?.fetch) {
+    const r = await within(g.members.fetch({ user: id, withPresences: true, force: true }).then((x) => x, (e) => ({ err: String(e?.message ?? e).slice(0, 60) })), 4000);
+    fetched = r === null ? 'timeout' : r?.err ? `error ${r.err}` : 'ok'; if (r && !r.err) m = r;
+  }
   const presence = m?.presence ?? g?.presences?.cache?.get?.(id) ?? i.member?.presence ?? null;
   const roles = i.member?.roles?.cache?.size ? i.member.roles : (m?.roles ?? i.member?.roles);
-  return { id, roles, presence, found: !!m, seen: m ? 'member' : g?.presences?.cache?.get?.(id) ? 'presence' : 'none' };
+  return { id, roles, presence, found: !!m, fetched, seen: m ? 'member' : g?.presences?.cache?.get?.(id) ? 'presence' : 'none' };
 }
+/** Every activity the bot was sent, as plain text: the member's own status text is theirs to see. */
+export const activityList = (p) => (p?.activities ?? []).map((a) => `type ${a.type} "${String(a.name ?? '').slice(0, 30)}" / "${String(a.state ?? '').slice(0, 60)}"`).join('; ') || 'none';
 /** What the bot sees, in words the member can compare with their own status. */
 export function seenText(m) {
   if (!m.presence) return 'I cannot see your status at all right now (Discord has not sent it to the bot).';
@@ -109,7 +114,7 @@ export async function start(i, ctx) {
   const m = await memberWithPresence(ctx, i);
   if (!hasRole(m, ctx.cfg)) throw new UserError(`You need the <@&${ctx.cfg.statusRoleId}> role to earn from your status.`);
   if (!ctx.presenceTracking) throw new UserError('Status tracking is switched off because the bot cannot see statuses yet. Staff need to turn on the **Presence Intent** and **Server Members Intent** in the Discord Developer Portal and restart the bot.');
-  if (!qualifies(m, ctx.cfg)) { log.info('start earning refused', { user: i.user.id, source: m.seen, status: m.presence?.status ?? null, custom: (m.presence?.activities ?? []).filter((a) => a.type === 4).map((a) => a.state) }); throw new UserError(`${seenText(m)}\nSet your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`); }
+  if (!qualifies(m, ctx.cfg)) { log.info(`start earning refused: source ${m.seen}, lookup ${m.fetched}, status ${m.presence?.status ?? 'none'}, activities ${activityList(m.presence)}`); throw new UserError(`${seenText(m)}\n-# Bot check: source ${m.seen}, lookup ${m.fetched}, activities ${activityList(m.presence)}\nSet your custom status to **Best Auto MM - .${ctx.cfg.statusPhrase}**, stay **Online** or **Do Not Disturb**, then press Start Earning again.`); }
   const fresh = earn.enroll(ctx.db, i.user.id);
   earn.setQualifying(ctx.db, i.user.id, true);
   if (fresh) audit(ctx.db, { category: 'status', actor: i.user.id, action: 'status.enrolled', detail: {} });
