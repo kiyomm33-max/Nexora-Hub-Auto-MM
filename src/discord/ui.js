@@ -594,7 +594,8 @@ export function vouchLine(cfg, d) {
   const money = Number.isInteger(amt) ? String(amt) : amt.toFixed(2);
   let item = String(d.item ?? '').replace(/<[@#&!:][^>]*>/g, '').replace(/[`*_~|>\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
   if (item.length < 3) item = 'Roblox item trade';
-  return `+rep ${cfg.vouchTargetId} [$${money}] Automated middleman used for ${item}`;
+  const coin = String(d.asset ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10); // the original currency of the deal, as the vouch rules ask
+  return `+rep ${cfg.vouchTargetId} [$${money}] Automated middleman used for ${item}${coin ? `, paid in ${coin}` : ''}`;
 }
 export function vouchCardPayload(cfg, d) {
   const line = vouchLine(cfg, d); if (!line) return null;
