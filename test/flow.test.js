@@ -1066,3 +1066,13 @@ test('start earning: a button click carries no presence, so the status is read f
   ctx.client.guilds.cache = new Map([[ctx.cfg.guildId, { members: { cache: new Map(), fetch: async () => null }, presences: { cache: new Map([[RND, { status: 'online', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] }]]) } }]]);
   await route(i, ctx); assert.match(text(i), /Earning started|already earning/);
 });
+
+test('start earning: a cached presence with no custom status is refreshed from Discord before refusing', async () => {
+  const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexora'; ctx.cfg.statusRoleId = 'ROLE_X';
+  const role = { cache: new Map([['ROLE_X', 1]]) };
+  const thin = { id: RND, roles: role, presence: { status: 'online', activities: [] } };
+  const full = { id: RND, roles: role, presence: { status: 'online', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] } };
+  const i = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); delete i.member.presence;
+  ctx.client.guilds.cache = new Map([[ctx.cfg.guildId, { members: { cache: new Map([[RND, thin]]), fetch: async () => full } }]]);
+  await route(i, ctx); assert.match(text(i), /Earning started|already earning/);
+});
