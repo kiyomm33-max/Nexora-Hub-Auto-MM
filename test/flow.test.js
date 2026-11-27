@@ -561,7 +561,7 @@ test('text commands: .help lists them, staff commands need a role, replies stay 
 test('text commands: .leaderboard and .messages are public, .tag and .tags are staff only', async () => {
   const { commandFromMessage } = await import('../src/discord/prefix.js');
   const act = await import('../src/core/activity.js');
-  const ctx = setup(); ctx.cfg.statusPhrase = 'gg/nexorra'; const lobby = fake(ctx, 'btn', A).channel;
+  const ctx = setup(); ctx.cfg.statusPhrase = 'gg/nexora'; const lobby = fake(ctx, 'btn', A).channel;
   const msg = (author, content, { admin = false } = {}) => { const out = [];
     return { out, author: { id: author, bot: false, displayAvatarURL: () => null }, guild: ctx.guild, channel: lobby, channelId: 'lobby', client: ctx.client, content, member: { displayName: 'Tester', roles: { cache: new Map() }, permissions: { has: (p) => admin && p === 'Administrator' } },
       mentions: { users: new Map() }, attachments: { first: () => undefined }, delete: async () => {}, reply: async (p) => { out.push(p); return { edit: async () => {} }; } }; };
@@ -579,7 +579,7 @@ test('text commands: .leaderboard and .messages are public, .tag and .tags are s
 });
 
 test('status rewards: panel is staff-only; start, request and staff payout flow', async () => {
-  const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexorra';
+  const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexora';
   ctx.cfg.statusPay = { dailyCents: 20, weekBonusCents: 120, minPayoutCents: 20, autoMaxCents: 1000 };
   ctx.cfg.channels.statusPanel = 'stp'; ctx.cfg.channels.statusPayouts = 'stq';
   ctx.chans.set('stp', { id: 'stp', sent: [], async send(p) { this.sent.push(p); } }); ctx.chans.set('stq', { id: 'stq', sent: [], async send(p) { this.sent.push(p); return { id: 'm1' }; } });
@@ -589,13 +589,13 @@ test('status rewards: panel is staff-only; start, request and staff payout flow'
   assert.ok(j.includes('nx:st-start') && j.includes('nx:st-payout') && j.includes('Status Rewards')); assert.match(j, /line\.png/);
   // not showing the status: refused
   ctx.cfg.statusRoleId = 'ROLE_X';
-  const norole = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); norole.member.presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(norole, ctx); assert.match(text(norole), /role to earn/);
+  const norole = fake(ctx, 'btn', RND, { customId: 'nx:st-start' }); norole.member.presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexora' }] }; await route(norole, ctx); assert.match(text(norole), /role to earn/);
   const no = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); no.member.presence = { status: 'idle', activities: [] }; await route(no, ctx); assert.match(text(no), /Set your custom status/);
-  const ok = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); ok.member.presence = { status: 'dnd', activities: [{ type: 4, state: '.gg/nexorra' }] }; await route(ok, ctx); assert.match(text(ok), /Earning started/);
+  const ok = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); ok.member.presence = { status: 'dnd', activities: [{ type: 4, state: '.gg/nexora' }] }; await route(ok, ctx); assert.match(text(ok), /Earning started/);
   // two days of time, then request
   ctx.db.prepare('UPDATE status_earn SET seconds=?, since=NULL WHERE user_id=?').run(2 * 86400 + 5, RND);
   const t = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-time' }); await route(t, ctx); assert.match(text(t), /\$0\.40/);
-  const presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexorra' }] };
+  const presence = { status: 'online', activities: [{ type: 4, state: '.gg/nexora' }] };
   const press = async (u, id, { pres = presence, roles = ['ROLE_X'] } = {}) => { const i = fake(ctx, 'btn', u, { roles, customId: id }); i.member.presence = pres; await route(i, ctx); return i; };
   // no wallet (demo): refused
   assert.match(text(await press(RND, 'nx:st-payout')), /not available/);
