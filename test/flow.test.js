@@ -1059,4 +1059,10 @@ test('start earning: a button click carries no presence, so the status is read f
   const role = { cache: new Map([['ROLE_X', 1]]) };
   assert.match(await press({ id: RND, roles: role, presence: { status: 'online', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] } }), /Earning started/);
   assert.match(await press({ id: RND, roles: role, presence: { status: 'online', activities: [{ type: 4, state: 'something else' }] } }), /Set your custom status/);
+  assert.match(await press({ id: RND, roles: role, presence: { status: 'idle', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] } }), /I see you as \*\*idle\*\* with the custom status .{1,3}Best Auto MM - \.gg\/nexora/);
+  assert.match(await press(null), /cannot see your status at all/);
+  // the member is not in the member cache, but the guild still holds the presence Discord sent
+  const i = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); delete i.member.presence;
+  ctx.client.guilds.cache = new Map([[ctx.cfg.guildId, { members: { cache: new Map(), fetch: async () => null }, presences: { cache: new Map([[RND, { status: 'online', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] }]]) } }]]);
+  await route(i, ctx); assert.match(text(i), /Earning started|already earning/);
 });
