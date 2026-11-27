@@ -1048,3 +1048,15 @@ test('transaction detected: events that arrive back to back leave exactly one ca
   assert.equal(cards.length, 1, 'one Transaction Detected card, not one per event');
   assert.equal(room.msgs.get(ctx.deals.get(id).status_message_id)?.id, cards[0].id, 'and it is the one the deal points at');
 });
+
+test('start earning: a button click carries no presence, so the status is read from the guild member', async () => {
+  const ctx = setup(); ctx.presenceTracking = true; ctx.cfg.statusPhrase = 'gg/nexora'; ctx.cfg.statusRoleId = 'ROLE_X';
+  const press = async (guildMember) => {
+    const i = fake(ctx, 'btn', RND, { roles: ['ROLE_X'], customId: 'nx:st-start' }); delete i.member.presence; // what Discord really sends
+    ctx.client.guilds.cache = new Map([[ctx.cfg.guildId, { members: { cache: new Map(guildMember ? [[RND, guildMember]] : []), fetch: async () => guildMember ?? null } }]]);
+    await route(i, ctx); return text(i);
+  };
+  const role = { cache: new Map([['ROLE_X', 1]]) };
+  assert.match(await press({ id: RND, roles: role, presence: { status: 'online', activities: [{ type: 4, state: 'Best Auto MM - .gg/nexora' }] } }), /Earning started/);
+  assert.match(await press({ id: RND, roles: role, presence: { status: 'online', activities: [{ type: 4, state: 'something else' }] } }), /Set your custom status/);
+});
