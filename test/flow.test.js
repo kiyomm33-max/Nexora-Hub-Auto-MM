@@ -1084,12 +1084,12 @@ test('vouch: a finished live deal gets a vouch line for the middleman that follo
   assert.equal(ctx.cfg.vouchTargetId, MMID);
   ctx.db.prepare("UPDATE deals SET item=?, mode='live' WHERE id=?").run('Clash of Clans Account Trade', id);
   const d = ctx.deals.get(id);
-  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '50.00' }), `+rep ${MMID} [$50] Middleman used for Clash of Clans Account Trade`);
-  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '12.5', item: '<@123> **x**\nnew line  ' }), `+rep ${MMID} [$12.50] Middleman used for x new line`);
+  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '50.00' }), `+rep ${MMID} [$50] Automated middleman used for Clash of Clans Account Trade`);
+  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '12.5', item: '<@123> **x**\nnew line  ' }), `+rep ${MMID} [$12.50] Automated middleman used for x new line`);
   assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '0.50' }), null, 'under $1 the vouch bot refuses it');
   assert.equal(ui.vouchLine({ ...ctx.cfg, vouchTargetId: '' }, d), null);
   const j = JSON.stringify(ui.vouchCardPayload(ctx.cfg, { ...d, receive_usd: '50.00' }).components.map((c) => c.toJSON()));
-  assert.match(j, /Vouch for this deal[\s\S]*in this ticket[\s\S]*\+rep 1388903925184331848 \[\$50\] Middleman used for[\s\S]*One vouch per deal[\s\S]*72 hours[\s\S]*nx:am-copyvouch/); assert.match(j, /1575100811950821467/);
+  assert.match(j, /Vouch for this deal[\s\S]*in this ticket[\s\S]*\+rep 1388903925184331848 \[\$50\] Automated middleman used for[\s\S]*One vouch per deal[\s\S]*72 hours[\s\S]*nx:am-copyvouch/); assert.match(j, /1575100811950821467/);
   const copy = await click(ctx, A, `nx:am-copyvouch:${id}`); assert.match(JSON.stringify(copy.out ?? text(copy)), /\+rep 1388903925184331848/);
   assert.match(text(await click(ctx, RND, `nx:am-copyvouch:${id}`)), /Only the two traders/);
   // posted in the room when the deal completes (live deals only)
