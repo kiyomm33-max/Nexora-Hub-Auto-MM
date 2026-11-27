@@ -1084,8 +1084,9 @@ test('vouch: a finished live deal gets a vouch line for the middleman that follo
   assert.equal(ctx.cfg.vouchTargetId, MMID);
   ctx.db.prepare("UPDATE deals SET item=?, mode='live' WHERE id=?").run('Clash of Clans Account Trade', id);
   const d = ctx.deals.get(id);
-  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '50.00' }), `+rep ${MMID} [$50] Automated middleman used for Clash of Clans Account Trade`);
-  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '12.5', item: '<@123> **x**\nnew line  ' }), `+rep ${MMID} [$12.50] Automated middleman used for x new line`);
+  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '50.00' }), `+rep ${MMID} [$50] Automated middleman used for Clash of Clans Account Trade, paid in ${d.asset}`);
+  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '12.5', item: '<@123> **x**\nnew line  ' }), `+rep ${MMID} [$12.50] Automated middleman used for x new line, paid in ${d.asset}`);
+  assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '20', asset: 'USDT' }).endsWith(', paid in USDT'), true);
   assert.equal(ui.vouchLine(ctx.cfg, { ...d, receive_usd: '0.50' }), null, 'under $1 the vouch bot refuses it');
   assert.equal(ui.vouchLine({ ...ctx.cfg, vouchTargetId: '' }, d), null);
   const j = JSON.stringify(ui.vouchCardPayload(ctx.cfg, { ...d, receive_usd: '50.00' }).components.map((c) => c.toJSON()));
