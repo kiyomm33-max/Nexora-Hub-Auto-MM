@@ -588,6 +588,29 @@ function payingCard(cfg, d, { eur, info }) {
 }
 
 /** Posted in the room when the payout went out: each trader picks whether this deal counts on their public profile. */
+/** The vouch line a trader sends for the vouch bot: it names the middleman in full words, what the deal was and the amount held. */
+export function vouchLine(cfg, d) {
+  const amt = Number(d.receive_usd ?? d.amount); if (!cfg.vouchTargetId || !(amt >= 1)) return null; // the vouch bot refuses anything under $1
+  const money = Number.isInteger(amt) ? String(amt) : amt.toFixed(2);
+  let item = String(d.item ?? '').replace(/<[@#&!:][^>]*>/g, '').replace(/[`*_~|>\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (item.length < 3) item = 'Roblox item trade';
+  return `+rep ${cfg.vouchTargetId} [$${money}] Middleman used for ${item}`;
+}
+export function vouchCardPayload(cfg, d) {
+  const line = vouchLine(cfg, d); if (!line) return null;
+  const box = new ContainerBuilder().setAccentColor(BLUE)
+    .addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(text(`## <:checkmark:1575069601312808970> Vouch for this deal\nBoth traders: send the line below **in this ticket**, one message each, so your vouch counts.`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL('https://cdn.discordapp.com/emojis/1575100811950821467.png?size=128')))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text(`<@${d.sender_id}> <@${d.receiver_id}>\n\`\`\`\n${line}\n\`\`\``))
+    .addSeparatorComponents(sep())
+    .addTextDisplayComponents(text('## <:Sheild:1575197569808728104> Before you send it\n**One vouch per deal.** A second vouch within 15 minutes is a duplicate and is denied.\n**Vouching is voluntary.** Never pressure the other trader to vouch.\n**Proof:** the vouch bot can ask for proof of any vouch, and a vouch with no proof within 72 hours is denied.'))
+    .addActionRowComponents(row(btn(`nx:am-copyvouch:${d.id}`, 'Copy my vouch', ButtonStyle.Primary)))
+    .addMediaGalleryComponents(lineGallery());
+  return { flags: 1 << 15, components: [box], files: [lineFile()] };
+}
+
 export function dealCompletePayload(cfg, d, choices = {}) {
   const st = (id) => (choices[id] === undefined || choices[id] === null ? `${ge('hourglass', '⏳')} Pending` : choices[id] ? 'Keep Anonymous' : 'Show on Profile');
   const box = new ContainerBuilder().setAccentColor(GREEN)

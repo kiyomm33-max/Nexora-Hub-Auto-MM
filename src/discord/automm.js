@@ -258,6 +258,7 @@ export const handlers = {
   privshow: (i, ctx, [id]) => privChoice(i, ctx, id, false),
   privanon: (i, ctx, [id]) => privChoice(i, ctx, id, true),
   copyaddr: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); if (!d.pay_address) throw new UserError('There is no address yet.'); return i.reply({ flags: EPH, content: d.pay_address, allowedMentions: { parse: [] } }); },
+  copyvouch: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); const l = ui.vouchLine(ctx.cfg, d); if (!l) throw new UserError('There is no vouch line for this deal.'); return i.reply({ flags: EPH, content: l, allowedMentions: { parse: [] } }); },
   copyamt: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); if (!d.pay_amount) throw new UserError('There is no amount yet.'); return i.reply({ flags: EPH, content: String(d.pay_amount), allowedMentions: { parse: [] } }); },
   amount: (i, ctx, [id]) => { const d = load(ctx, id); trader(ctx, d, i); stepIs(ctx, d, 'amount'); return i.showModal(ui.amountModal(id)); }, // legacy button
   amountunit: (i, ctx, [id]) => {

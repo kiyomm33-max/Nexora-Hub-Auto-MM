@@ -126,6 +126,7 @@ export async function syncDeal(ctx, deal, change) {
   if (change === 'disputed') await ensureDisputeChannel(ctx, deal);
   if (change === 'completed') {
     if (room && ctx.cfg.privacyChoiceSec > 0) await room.send({ ...ui.dealCompletePayload(ctx.cfg, deal), allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } });
+    if (room && deal.mode === 'live') { const v = ui.vouchCardPayload(ctx.cfg, deal); if (v) await room.send({ ...v, allowedMentions: { users: [deal.sender_id, deal.receiver_id].filter(Boolean) } }).catch((e) => log.warn('vouch card failed', { err: String(e?.message ?? e) })); }
     await publishCompleted(ctx, deal);
     for (const uid of new Set([deal.party_a, deal.party_b, deal.sender_id, deal.receiver_id].filter(Boolean))) syncTrustRoles(ctx, uid).catch((e) => log.warn('trust role sync failed', { uid, err: String(e?.message ?? e) }));
   }
